@@ -27,11 +27,13 @@ export function FileDropZone({
     
     const acceptTypes = accept.split(",").map(t => t.trim());
     const fileType = file.type;
-    const fileExtension = `.${file.name.split(".").pop()?.toLowerCase()}`;
+    const nameParts = file.name.split(".");
+    const fileExtension = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : "";
     
     return acceptTypes.some(acceptType => {
       if (acceptType.startsWith(".")) {
-        // Extension match
+        // Extension match - skip if file has no extension
+        if (!fileExtension) return false;
         return fileExtension === acceptType.toLowerCase();
       } else if (acceptType.endsWith("/*")) {
         // Wildcard match (e.g., image/*)
@@ -42,6 +44,26 @@ export function FileDropZone({
         return fileType === acceptType;
       }
     });
+  }, [accept]);
+
+  // Generate human-readable file types description from accept prop
+  const getSupportedTypesDescription = useCallback(() => {
+    if (!accept) return "All files are supported";
+    
+    const acceptTypes = accept.split(",").map(t => t.trim());
+    const typeNames: string[] = [];
+    
+    acceptTypes.forEach(t => {
+      if (t === "image/*") typeNames.push("Images");
+      else if (t === "application/pdf") typeNames.push("PDFs");
+      else if (t.startsWith(".")) typeNames.push(t.toUpperCase().slice(1) + " files");
+      else if (t.startsWith("text/")) typeNames.push("Text files");
+    });
+    
+    // Remove duplicates and join
+    const unique = [...new Set(typeNames)];
+    if (unique.length === 0) return "Various file types are supported";
+    return unique.join(", ") + " are supported";
   }, [accept]);
 
   const handleDragEnter = useCallback((e: DragEvent) => {
@@ -132,7 +154,7 @@ export function FileDropZone({
                   Drop files here
                 </h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Images, PDFs, and text files are supported
+                  {getSupportedTypesDescription()}
                 </p>
               </div>
             </motion.div>

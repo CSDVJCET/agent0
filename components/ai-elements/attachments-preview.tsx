@@ -38,6 +38,18 @@ function getFileIcon(type: string) {
   return <FileIcon className="size-4 text-muted-foreground" />;
 }
 
+function getFileTypeLabel(mimeType: string): string {
+  if (!mimeType || typeof mimeType !== "string") return "File";
+  
+  const parts = mimeType.split("/");
+  if (parts.length < 2) return "File";
+  
+  const subtype = parts[1];
+  if (!subtype || subtype.trim() === "") return "File";
+  
+  return subtype.toUpperCase();
+}
+
 function AttachmentItem({ 
   attachment, 
   index, 
@@ -124,7 +136,7 @@ function AttachmentItem({
           <div className="flex flex-col">
             <span className="text-sm font-medium">{attachment.name}</span>
             <span className="text-xs text-muted-foreground">
-              {formatFileSize(attachment.size)} • {attachment.type.split("/")[1]?.toUpperCase() || "File"}
+              {formatFileSize(attachment.size)} • {getFileTypeLabel(attachment.type)}
             </span>
           </div>
         </div>
