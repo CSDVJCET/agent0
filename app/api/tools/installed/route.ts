@@ -16,6 +16,15 @@ const defaultInstalledTools = [
     enabled: true,
     installedAt: new Date().toISOString(),
   },
+  {
+    id: "calendar",
+    name: "Calendar",
+    description: "Manage Google Calendar events - create, list, update, delete events and find availability",
+    category: "productivity",
+    icon: "calendar",
+    enabled: true,
+    installedAt: new Date().toISOString(),
+  },
 ];
 
 export async function GET(request: Request) {

@@ -3,6 +3,7 @@ import { streamText, convertToModelMessages, stepCountIs } from "ai";
 import { z } from "zod";
 import type { MyUIMessage } from "@/types/chat";
 import { tools as weatherTools } from "@/ai/tools";
+import { calendarTools } from "@/ai/calendar-tools";
 
 export const maxDuration = 60;
 
@@ -101,6 +102,15 @@ export async function POST(req: Request) {
       // Map mentioned tool names to actual tool implementations
       if (lowerToolName === "weather") {
         tools.displayWeather = weatherTools.displayWeather;
+      }
+      // Calendar tools
+      if (lowerToolName === "calendar") {
+        tools.createCalendarEvent = calendarTools.createCalendarEvent;
+        tools.listCalendarEvents = calendarTools.listCalendarEvents;
+        tools.updateCalendarEvent = calendarTools.updateCalendarEvent;
+        tools.deleteCalendarEvent = calendarTools.deleteCalendarEvent;
+        tools.findCalendarAvailability = calendarTools.findCalendarAvailability;
+        tools.getCalendarEvent = calendarTools.getCalendarEvent;
       }
       // Add more tool mappings here as needed
     }
