@@ -44,3 +44,6 @@ next-env.d.ts
 /.clerk/
 
 .google-tokens.json
+
+# Installed Tools
+.installed-tools.json

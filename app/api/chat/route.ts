@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { MyUIMessage } from "@/types/chat";
 import { tools as weatherTools } from "@/ai/tools";
 import { calendarTools } from "@/ai/calendar-tools";
+import { isToolInstalled } from "@/lib/installed-tools";
 
 export const maxDuration = 60;
 
@@ -105,12 +106,18 @@ export async function POST(req: Request) {
       }
       // Calendar tools
       if (lowerToolName === "calendar") {
-        tools.createCalendarEvent = calendarTools.createCalendarEvent;
-        tools.listCalendarEvents = calendarTools.listCalendarEvents;
-        tools.updateCalendarEvent = calendarTools.updateCalendarEvent;
-        tools.deleteCalendarEvent = calendarTools.deleteCalendarEvent;
-        tools.findCalendarAvailability = calendarTools.findCalendarAvailability;
-        tools.getCalendarEvent = calendarTools.getCalendarEvent;
+        if (isToolInstalled("calendar")) {
+          tools.createCalendarEvent = calendarTools.createCalendarEvent;
+          tools.listCalendarEvents = calendarTools.listCalendarEvents;
+          tools.updateCalendarEvent = calendarTools.updateCalendarEvent;
+          tools.deleteCalendarEvent = calendarTools.deleteCalendarEvent;
+          tools.findCalendarAvailability = calendarTools.findCalendarAvailability;
+          tools.getCalendarEvent = calendarTools.getCalendarEvent;
+        } else {
+             // Optionally add a system message or error logic here if the tool is not installed
+             // For now, we just don't add the tools
+             console.warn("Calendar tool mentioned but not installed");
+        }
       }
       // Add more tool mappings here as needed
     }
