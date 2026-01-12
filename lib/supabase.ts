@@ -1,6 +1,25 @@
 import { createClient } from '@supabase/supabase-js'
+import type { Database } from '@/types/supabase'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Client for browser usage with anon key
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
+
+// Server-side client with service role key (for API routes)
+export function createServiceClient() {
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+  return createClient<Database>(supabaseUrl, supabaseServiceKey)
+}
+
+// Helper types for convenience
+export type User = Database['public']['Tables']['users']['Row']
+export type UserInsert = Database['public']['Tables']['users']['Insert']
+export type Document = Database['public']['Tables']['documents']['Row']
+export type DocumentInsert = Database['public']['Tables']['documents']['Insert']
+export type DocumentChunk = Database['public']['Tables']['document_chunks']['Row']
+export type DocumentChunkInsert = Database['public']['Tables']['document_chunks']['Insert']
+
+// Match documents function return type
+export type MatchedDocument = Database['public']['Functions']['match_documents']['Returns'][number]
