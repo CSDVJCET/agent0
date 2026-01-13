@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { CloudSun, Plus, Trash2, ExternalLink } from "lucide-react";
+import { CloudSun, Plus, Trash2, ExternalLink, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -28,6 +28,14 @@ const INTEGRATIONS = [
     icon: CloudSun,
     color: "text-blue-500",
     bgColor: "bg-blue-500/10",
+  },
+  {
+    id: "calendar",
+    name: "Calendar",
+    description: "Manage events and check availability on Google Calendar.",
+    icon: Calendar,
+    color: "text-red-500",
+    bgColor: "bg-red-500/10",
   },
 ];
 

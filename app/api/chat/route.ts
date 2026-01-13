@@ -3,6 +3,8 @@ import { streamText, convertToModelMessages, stepCountIs } from "ai";
 import { z } from "zod";
 import type { MyUIMessage } from "@/types/chat";
 import { tools as weatherTools } from "@/ai/tools";
+import { calendarTools } from "@/ai/calendar-tools";
+import { isToolInstalled } from "@/lib/installed-tools";
 
 export const maxDuration = 60;
 
@@ -102,6 +104,21 @@ export async function POST(req: Request) {
       if (lowerToolName === "weather") {
         tools.displayWeather = weatherTools.displayWeather;
       }
+      // Calendar tools
+      if (lowerToolName === "calendar") {
+        if (isToolInstalled("calendar")) {
+          tools.createCalendarEvent = calendarTools.createCalendarEvent;
+          tools.listCalendarEvents = calendarTools.listCalendarEvents;
+          tools.updateCalendarEvent = calendarTools.updateCalendarEvent;
+          tools.deleteCalendarEvent = calendarTools.deleteCalendarEvent;
+          tools.findCalendarAvailability = calendarTools.findCalendarAvailability;
+          tools.getCalendarEvent = calendarTools.getCalendarEvent;
+        } else {
+             // Optionally add a system message or error logic here if the tool is not installed
+             // For now, we just don't add the tools
+             console.warn("Calendar tool mentioned but not installed");
+        }
+      }
       // Add more tool mappings here as needed
     }
   } else {
@@ -146,6 +163,7 @@ export async function POST(req: Request) {
 
   const result = streamText({
     model: google(model),
+    system: `The current date and time is ${new Date().toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" })}. Use this to resolve relative date mentions like "today", "tomorrow", "next Monday", etc. If the user asks for "events today" or "schedule", assume the default time range starts now and ends at the end of the day or covers a reasonable period, do not ask for clarification unless necessary.`,
     messages: modelMessages,
     tools: hasTools ? tools : undefined,
     toolChoice: hasTools ? "auto" : "none",
