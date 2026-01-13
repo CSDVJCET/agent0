@@ -107,18 +107,13 @@ export async function POST(req: Request) {
       // Calendar tools
       if (lowerToolName === "calendar") {
         if (isToolInstalled("calendar")) {
-          // Primary tool for scheduling events with human-in-the-loop
-          tools.scheduleCalendarEvent = calendarTools.scheduleCalendarEvent;
-          tools.confirmScheduledEvent = calendarTools.confirmScheduledEvent;
-          // Other calendar tools
+          tools.draftCalendarEvent = calendarTools.draftCalendarEvent;
+          tools.createCalendarEvent = calendarTools.createCalendarEvent;
           tools.listCalendarEvents = calendarTools.listCalendarEvents;
           tools.updateCalendarEvent = calendarTools.updateCalendarEvent;
           tools.deleteCalendarEvent = calendarTools.deleteCalendarEvent;
           tools.findCalendarAvailability = calendarTools.findCalendarAvailability;
           tools.getCalendarEvent = calendarTools.getCalendarEvent;
-          // Keep legacy tools for backward compatibility
-          tools.draftCalendarEvent = calendarTools.draftCalendarEvent;
-          tools.createCalendarEvent = calendarTools.createCalendarEvent;
         } else {
              // Optionally add a system message or error logic here if the tool is not installed
              // For now, we just don't add the tools
@@ -148,27 +143,6 @@ export async function POST(req: Request) {
 
   const hasTools = Object.keys(tools).length > 0;
 
-  // Build system prompt based on enabled tools
-  const baseSystemPrompt = `The current date and time is ${new Date().toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" })}.`;
-  
-  // Add calendar-specific instructions when calendar tools are enabled
-  const hasCalendarTools = mentionedTools.some(t => t.toLowerCase() === "calendar");
-  const calendarPrompt = hasCalendarTools ? `
-
-CALENDAR SCHEDULING RULES (CRITICAL - FOLLOW EXACTLY):
-1. When the user wants to schedule, create, or book an event, IMMEDIATELY use the scheduleCalendarEvent tool
-2. NEVER ask clarifying questions about title, time, or duration
-3. ALWAYS infer the title from context:
-   - "schedule a meeting" → title: "Meeting"
-   - "book a standup" → title: "Standup"
-   - "meeting with John" → title: "Meeting with John"
-   - "dentist appointment" → title: "Dentist Appointment"
-4. If no time specified, use 9:00 AM on the mentioned date
-5. If no duration specified, default to 1 hour
-6. The user can review and edit the details in the form before confirming
-
-Example: "schedule a meeting tomorrow at 2pm" → IMMEDIATELY call scheduleCalendarEvent with title="Meeting", startDateTime=tomorrow at 14:00` : "";
-
   const providerOptions: { google: GoogleGenerativeAIProviderOptions } = {
     google: {
       ...(enableThinking &&
@@ -190,7 +164,7 @@ Example: "schedule a meeting tomorrow at 2pm" → IMMEDIATELY call scheduleCalen
 
   const result = streamText({
     model: google(model),
-    system: baseSystemPrompt + calendarPrompt,
+    system: `The current date and time is ${new Date().toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" })}. Use this to resolve relative date mentions like "today", "tomorrow", "next Monday", etc. If the user asks for "events today" or "schedule", assume the default time range starts now and ends at the end of the day or covers a reasonable period, do not ask for clarification unless necessary.`,
     messages: modelMessages,
     tools: hasTools ? tools : undefined,
     toolChoice: hasTools ? "auto" : "none",
