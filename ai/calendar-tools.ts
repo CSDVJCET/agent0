@@ -125,10 +125,34 @@ function parseEvent(event: any) {
 }
 
 /**
+ * Draft a calendar event for user confirmation
+ */
+export const draftEventTool = tool({
+  description: "Draft a calendar event for the user to review before creating it. Use this ONLY when critical information is missing (title OR date/time). If you have the title and date/time from the prompt, use createCalendarEvent directly instead.",
+  inputSchema: z.object({
+    summary: z.string().optional().describe("The title/name of the event from the prompt"),
+    startTime: z.string().optional().describe("Start time in ISO 8601 format derived from the prompt"),
+    endTime: z.string().optional().describe("End time in ISO 8601 format derived from the prompt"),
+    attendees: z.array(z.string().email()).optional().describe("List of attendee email addresses from the prompt"),
+    description: z.string().optional().describe("Detailed description from the prompt"),
+    location: z.string().optional().describe("Location from the prompt"),
+    timeZone: z.string().optional().describe("Timezone (e.g., 'America/New_York'). Use user's local timezone if not specified."),
+  }),
+  execute: async (params) => {
+    return {
+      ...params,
+      draftId: crypto.randomUUID(),
+      status: "draft",
+      message: "Please review and complete the event details.",
+    };
+  },
+});
+
+/**
  * Create a new calendar event
  */
 export const createEventTool = tool({
-  description: "Create a new calendar event with specified details including title, time, attendees, and description. Use this when the user wants to schedule a meeting, appointment, or any calendar event.",
+  description: "Create a new calendar event directly when you have the title and date/time. Use this when the user provides sufficient details (at minimum: title and start time). For confirmation workflow or missing critical info, use draftCalendarEvent instead.",
   inputSchema: z.object({
     summary: z.string().describe("The title/name of the event"),
     startTime: z.string().describe("Start time in ISO 8601 format (e.g., 2024-01-15T10:00:00-05:00)"),
@@ -604,12 +628,134 @@ export const getEventTool = tool({
     }
   },
 });
+/**
+ * Schedule an event with human-in-the-loop confirmation
+ * This is the main tool for event scheduling - extracts details and presents confirmation UI
+ */
+export const scheduleEventTool = tool({
+  description: `Schedule a calendar event by extracting ALL details from the user's request. NEVER ask for clarification - always infer missing details:
+- If no title is given, infer from context (e.g., "meeting", "call", "appointment")
+- If no duration is given, default to 1 hour
+- If no specific time is given but a date is, default to 9:00 AM
+- Always generate the form immediately, the user can edit before confirming
+
+Use this tool IMMEDIATELY when the user mentions scheduling, booking, or creating any calendar event.`,
+  inputSchema: z.object({
+    title: z.string().describe("Event title - ALWAYS provide one. Infer from context like 'meeting', 'standup', 'call', 'appointment'. Never leave empty."),
+    startDateTime: z.string().describe("Start date and time in ISO 8601 format. Parse 'tomorrow', 'next Monday', etc. If only date given, use 9:00 AM."),
+    endDateTime: z.string().optional().describe("End time. If not specified, defaults to 1 hour after start."),
+    location: z.string().optional().describe("Location if mentioned"),
+    attendees: z.array(z.string().email()).optional().describe("Attendee emails if mentioned"),
+    description: z.string().optional().describe("Description if mentioned"),
+    reasoning: z.string().describe("Brief explanation of inferred details"),
+  }),
+  execute: async ({ title, startDateTime, endDateTime, location, attendees, description, reasoning }) => {
+    // Calculate end time if not provided (default 1 hour duration)
+    const startDate = new Date(startDateTime);
+    let endDate: Date;
+    
+    if (endDateTime) {
+      endDate = new Date(endDateTime);
+    } else {
+      // Default to 1 hour duration
+      endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+    }
+
+    return {
+      status: "pending_confirmation",
+      eventDetails: {
+        title,
+        startDateTime: startDate.toISOString(),
+        endDateTime: endDate.toISOString(),
+        location: location || "",
+        attendees: attendees || [],
+        description: description || "",
+        durationMinutes: Math.round((endDate.getTime() - startDate.getTime()) / (60 * 1000)),
+      },
+      reasoning,
+      message: "Please review the event details and confirm to create the event.",
+    };
+  },
+});
+
+/**
+ * Confirm and create a scheduled event after human approval
+ */
+export const confirmScheduledEventTool = tool({
+  description: "Create a calendar event after user confirmation. Use this to finalize event creation after the user has reviewed and approved the details.",
+  inputSchema: z.object({
+    title: z.string().describe("Event title"),
+    startDateTime: z.string().describe("Start date and time in ISO 8601 format"),
+    endDateTime: z.string().describe("End date and time in ISO 8601 format"),
+    location: z.string().optional().describe("Event location"),
+    attendees: z.array(z.string().email()).optional().describe("Attendee email addresses"),
+    description: z.string().optional().describe("Event description"),
+  }),
+  execute: async ({ title, startDateTime, endDateTime, location, attendees, description }) => {
+    const accessToken = await getAccessToken();
+    
+    if (!accessToken) {
+      return {
+        error: true,
+        message: "Google Calendar is not connected. Please connect your Google account first.",
+      };
+    }
+
+    try {
+      const event: Record<string, unknown> = {
+        summary: title,
+        start: formatEventDateTime(startDateTime),
+        end: formatEventDateTime(endDateTime),
+      };
+
+      if (description) event.description = description;
+      if (location) event.location = location;
+      if (attendees && attendees.length > 0) {
+        event.attendees = attendees.map(email => ({ email }));
+      }
+
+      const result = await calendarRequest<any>(
+        accessToken,
+        "/calendars/primary/events",
+        "POST",
+        event
+      );
+
+      if (!result.success) {
+        return {
+          error: true,
+          message: result.error || "Failed to create calendar event",
+        };
+      }
+
+      const created = parseEvent(result.data);
+      return {
+        error: false,
+        status: "created",
+        eventId: created.id,
+        summary: created.title,
+        startTime: created.start,
+        endTime: created.end,
+        link: created.link,
+        message: `Event "${created.title}" has been created successfully!`,
+      };
+    } catch (err) {
+      return {
+        error: true,
+        message: err instanceof Error ? err.message : "Failed to create event",
+      };
+    }
+  },
+});
 
 /**
  * Export all calendar tools
  */
 export const calendarTools = {
+  scheduleCalendarEvent: scheduleEventTool,
+  confirmScheduledEvent: confirmScheduledEventTool,
   createCalendarEvent: createEventTool,
+  draftCalendarEvent: draftEventTool,
   listCalendarEvents: listEventsTool,
   updateCalendarEvent: updateEventTool,
   deleteCalendarEvent: deleteEventTool,
@@ -618,3 +764,4 @@ export const calendarTools = {
 };
 
 export default calendarTools;
+
