@@ -107,8 +107,7 @@ export async function POST(req: Request) {
       // Calendar tools
       if (lowerToolName === "calendar") {
         if (isToolInstalled("calendar")) {
-          tools.draftCalendarEvent = calendarTools.draftCalendarEvent;
-          tools.createCalendarEvent = calendarTools.createCalendarEvent;
+          tools.scheduleCalendarEvent = calendarTools.scheduleCalendarEvent;
           tools.listCalendarEvents = calendarTools.listCalendarEvents;
           tools.updateCalendarEvent = calendarTools.updateCalendarEvent;
           tools.deleteCalendarEvent = calendarTools.deleteCalendarEvent;
@@ -162,9 +161,13 @@ export async function POST(req: Request) {
     },
   };
 
+  const calendarGuidance = mentionedTools.includes("calendar")
+    ? " When the user asks to create/schedule a calendar event, ALWAYS call scheduleCalendarEvent immediately. Do not ask follow-up questions. Infer missing details, default duration to 1 hour, and let the user confirm in the UI before creating the event."
+    : "";
+
   const result = streamText({
     model: google(model),
-    system: `The current date and time is ${new Date().toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" })}. Use this to resolve relative date mentions like "today", "tomorrow", "next Monday", etc. If the user asks for "events today" or "schedule", assume the default time range starts now and ends at the end of the day or covers a reasonable period, do not ask for clarification unless necessary.`,
+    system: `The current date and time is ${new Date().toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" })}. Use this to resolve relative date mentions like "today", "tomorrow", "next Monday", etc. If the user asks for "events today" or "schedule", assume the default time range starts now and ends at the end of the day or covers a reasonable period, do not ask for clarification unless necessary.${calendarGuidance}`,
     messages: modelMessages,
     tools: hasTools ? tools : undefined,
     toolChoice: hasTools ? "auto" : "none",

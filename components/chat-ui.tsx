@@ -500,7 +500,6 @@ export function ChatUI() {
             onRegenerate={handleRegenerate}
             status={status}
             error={error}
-            onSendMessage={handleSubmit}
           />
         </div>
 

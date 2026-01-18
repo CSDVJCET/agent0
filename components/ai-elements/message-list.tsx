@@ -65,10 +65,9 @@ export type MessageListProps = {
   status: ChatStatus;
   onRegenerate: () => void;
   error?: Error | undefined;
-  onSendMessage?: (message: { text: string; files: any[] }) => void;
 };
 
-export function MessageList({ messages, isLoading, status, onRegenerate, error, onSendMessage }: MessageListProps) {
+export function MessageList({ messages, isLoading, status, onRegenerate, error }: MessageListProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -232,12 +231,6 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error, 
                                key={toolInvocation.toolCallId}
                                draftId={toolInvocation.toolCallId}
                                defaultValues={toolInvocation.result}
-                               onConfirm={(data) => {
-                                 onSendMessage?.({
-                                   text: `Create calendar event with these details:\n${JSON.stringify(data, null, 2)}`,
-                                   files: []
-                                 });
-                               }}
                              />
                            );
                         }
