@@ -8,7 +8,7 @@ import {
   PromptInputButton,
   PromptInputSpeechButton,
 } from "@/components/ai-elements/prompt-input";
-import { BrainIcon, CloudSunIcon, PaperclipIcon, SearchIcon } from "lucide-react";
+import { BrainIcon, CalendarIcon, CloudSunIcon, PaperclipIcon, SearchIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ButtonGroup, ButtonGroupSeparator } from "@/components/ui/button-group";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
@@ -49,6 +49,7 @@ export function PromptInputArea({
   const [availableTools, setAvailableTools] = useState<InstalledTool[]>([]);
   const [showToolSuggestions, setShowToolSuggestions] = useState(false);
   const [toolQuery, setToolQuery] = useState("");
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
   // Load available tools on mount
   useEffect(() => {
@@ -82,6 +83,11 @@ export function PromptInputArea({
       setShowToolSuggestions(false);
     }
   }, [value]);
+
+  // Reset selected index when query changes
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [toolQuery]);
 
   const handleToolSelect = (toolName: string) => {
     const lastAtIndex = value.lastIndexOf("@");
@@ -221,12 +227,30 @@ export function PromptInputArea({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={(e) => {
-              // If tool suggestions are open, Enter selects the first tool
-              if (e.key === "Enter" && !e.shiftKey && showToolSuggestions && filteredTools.length > 0) {
-                e.preventDefault();
-                handleToolSelect(filteredTools[0].name);
-                return;
+              // If tool suggestions are open, handle navigation and selection
+              if (showToolSuggestions && filteredTools.length > 0) {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setSelectedIndex((prev) => (prev + 1) % filteredTools.length);
+                  return;
+                }
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setSelectedIndex((prev) => (prev - 1 + filteredTools.length) % filteredTools.length);
+                  return;
+                }
+                if (e.key === "Enter" || e.key === "Tab") {
+                  e.preventDefault();
+                  handleToolSelect(filteredTools[selectedIndex].name);
+                  return;
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setShowToolSuggestions(false);
+                  return;
+                }
               }
+
               // Handle Backspace to remove tools
               if (e.key === "Backspace" && value === "" && mentionedTools.length > 0) {
                 e.preventDefault();
@@ -239,11 +263,6 @@ export function PromptInputArea({
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 onSubmit({ text: value, files: [] });
-              }
-              // Escape closes tool suggestions
-              if (e.key === "Escape" && showToolSuggestions) {
-                e.preventDefault();
-                setShowToolSuggestions(false);
               }
             }}
           />
@@ -263,16 +282,17 @@ export function PromptInputArea({
               <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
                 Available Tools
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 max-h-[280px] overflow-y-auto custom-scrollbar">
                 {filteredTools.map((tool, index) => (
                   <button
                     key={tool.id}
                     onClick={() => handleToolSelect(tool.name)}
+                    onMouseEnter={() => setSelectedIndex(index)}
                     className={cn(
-                      "w-full flex items-start gap-2 px-2 py-2 rounded-md text-left",
+                      "w-full flex items-start gap-2 px-2 py-2 rounded-md text-left transition-colors",
                       "hover:bg-accent hover:text-accent-foreground",
                       "focus:bg-accent focus:text-accent-foreground focus:outline-none",
-                      index === 0 && "bg-accent/50"
+                      index === selectedIndex && "bg-accent text-accent-foreground"
                     )}
                   >
                     <CloudSunIcon className="h-4 w-4 mt-0.5 shrink-0" />

@@ -15,6 +15,14 @@ const marketplaceTools = [
     icon: "cloud-sun",
     enabled: true,
   },
+  {
+    id: "calendar",
+    name: "Calendar",
+    description: "Manage Google Calendar events - create, list, update, delete events and find availability",
+    category: "productivity",
+    icon: "calendar",
+    enabled: true,
+  },
   // Add more tools here as needed
 ];
 

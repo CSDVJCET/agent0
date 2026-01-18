@@ -59,6 +59,7 @@ export function ChatUI() {
   const [isIntegrationsModalOpen, setIsIntegrationsModalOpen] = useState(false);
   const [activeIntegration, setActiveIntegration] = useState<string | null>(null);
   const [addedIntegrations, setAddedIntegrations] = useState<string[]>([]);
+  const [isCalendarConnected, setIsCalendarConnected] = useState(false);
   
   // File input ref for native FileList handling
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -115,17 +116,23 @@ export function ChatUI() {
         }
       }
 
-      const savedIntegrations = localStorage.getItem(STORAGE_KEYS.INTEGRATIONS);
-      if (savedIntegrations) {
-        try {
-          const parsed = JSON.parse(savedIntegrations);
-          if (Array.isArray(parsed)) {
-            setAddedIntegrations(parsed);
+      // Fetch installed tools from API
+      fetch("/api/tools/installed")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.tools && Array.isArray(data.tools)) {
+            setAddedIntegrations(data.tools.map((t: any) => t.id));
           }
-        } catch (e) {
-          console.error("Failed to parse saved integrations", e);
-        }
-      }
+        })
+        .catch((e) => console.error("Failed to fetch installed tools", e));
+
+      // Check Google auth status
+      fetch("/api/auth/google?action=status")
+        .then((res) => res.json())
+        .then((data) => {
+          setIsCalendarConnected(!!data.connected);
+        })
+        .catch((e) => console.error("Failed to check auth status", e));
     } catch (e) {
       console.error("Failed to load from localStorage", e);
     }
@@ -267,6 +274,18 @@ export function ChatUI() {
     return () => window.removeEventListener('message', handleExtensionMessage);
   }, []);
 
+  // Listen for Google Auth callback
+  useEffect(() => {
+    const handleAuthMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
+        console.log('Google Auth success received');
+        setIsCalendarConnected(true);
+      }
+    };
+    window.addEventListener('message', handleAuthMessage);
+    return () => window.removeEventListener('message', handleAuthMessage);
+  }, []);
+
   const isLoading = status === "streaming" || status === "submitted";
 
   // File selection handler - now using native FileList
@@ -332,17 +351,62 @@ export function ChatUI() {
     }
   }, [setMessages]);
 
-  const handleAddIntegration = useCallback((id: string) => {
+  const handleAddIntegration = useCallback(async (id: string) => {
+    // Optimistic update
     if (!addedIntegrations.includes(id)) {
       setAddedIntegrations((prev) => [...prev, id]);
     }
     setActiveIntegration(id);
-  }, [addedIntegrations]);
 
-  const handleRemoveIntegration = useCallback((id: string) => {
+    // Backend sync
+    try {
+      await fetch("/api/tools/install", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ toolId: id }),
+      });
+      
+      // Special handling for Calendar
+      if (id === "calendar" && !isCalendarConnected) {
+         const width = 600;
+         const height = 700;
+         const left = window.screen.width / 2 - width / 2;
+         const top = window.screen.height / 2 - height / 2;
+         
+         window.open(
+           "/api/auth/google", 
+           "GoogleAuth", 
+           `width=${width},height=${height},left=${left},top=${top}`
+         );
+      }
+    } catch (error) {
+      console.error("Failed to install tool", error);
+      // Revert optimistic update
+      setAddedIntegrations((prev) => prev.filter(i => i !== id));
+    }
+  }, [addedIntegrations, isCalendarConnected]);
+
+  const handleRemoveIntegration = useCallback(async (id: string) => {
     setAddedIntegrations((prev) => prev.filter((i) => i !== id));
     if (activeIntegration === id) {
       setActiveIntegration(null);
+    }
+     try {
+      await fetch("/api/tools/install", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ toolId: id }),
+      });
+
+      // Special handling for Calendar logout
+      if (id === "calendar") {
+        await fetch("/api/auth/google", { method: "DELETE" });
+        setIsCalendarConnected(false);
+      }
+    } catch (error) {
+      console.error("Failed to uninstall tool", error);
+      // Revert optimistic update
+      setAddedIntegrations((prev) => [...prev, id]);
     }
   }, [activeIntegration]);
 
