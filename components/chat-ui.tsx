@@ -19,6 +19,7 @@ import { Model } from "@/components/ai-elements/model-selector-control";
 import { TableOfContents } from "@/components/table-of-contents";
 import { IntegrationsModal } from "@/components/integrations-modal";
 import { IntegrationPanel } from "@/components/integration-panel";
+import { FileDropZone } from "@/components/file-drop-zone";
 
 // Gemini models with their capabilities
 const models: Model[] = [
@@ -313,6 +314,28 @@ export function ChatUI() {
     });
   }, []);
 
+  // Handler for drag-and-drop files (from FileDropZone)
+  const handleFilesDropped = useCallback((files: File[]) => {
+    const filePromises = files.map((file) => {
+      return new Promise<FileAttachment>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          resolve({
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            url: reader.result as string,
+          });
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+
+    Promise.all(filePromises).then((newAttachments) => {
+      setAttachments((prev) => [...prev, ...newAttachments]);
+    });
+  }, []);
+
   const removeAttachment = useCallback((index: number) => {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   }, []);
@@ -476,17 +499,18 @@ export function ChatUI() {
   ];
 
   return (
-    <div className="flex h-screen w-full flex-col bg-background text-foreground bg-grid">
-      {/* Header */}
-      <ChatHeader
-        models={models}
-        selectedModel={selectedModel}
-        onSelectModel={setSelectedModel}
-        isModelOpen={isModelOpen}
-        onModelOpenChange={setIsModelOpen}
-        onNewChat={handleNewChat}
-        onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
-      />
+    <FileDropZone onFilesDropped={handleFilesDropped}>
+      <div className="flex h-screen w-full flex-col bg-background text-foreground bg-grid">
+        {/* Header */}
+        <ChatHeader
+          models={models}
+          selectedModel={selectedModel}
+          onSelectModel={setSelectedModel}
+          isModelOpen={isModelOpen}
+          onModelOpenChange={setIsModelOpen}
+          onNewChat={handleNewChat}
+          onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
+        />
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-hidden relative flex flex-col">
@@ -569,6 +593,7 @@ export function ChatUI() {
         onClose={() => setActiveIntegration(null)}
         integrationId={activeIntegration}
       />
-    </div>
+      </div>
+    </FileDropZone>
   );
 }
