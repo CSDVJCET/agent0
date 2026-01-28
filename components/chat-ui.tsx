@@ -539,6 +539,7 @@ export function ChatUI() {
                 onFilesSelected={handleFileSelect}
                 mentionedTools={mentionedTools}
                 onToolMentionsChange={setMentionedTools}
+                addedIntegrations={addedIntegrations}
               />
             </motion.div>
 
