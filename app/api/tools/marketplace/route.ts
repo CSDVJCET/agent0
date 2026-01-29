@@ -23,6 +23,14 @@ const marketplaceTools = [
     icon: "calendar",
     enabled: true,
   },
+  {
+    id: "forms",
+    name: "Forms",
+    description: "Create surveys and forms, collect and analyze responses with Google Forms",
+    category: "productivity",
+    icon: "file-text",
+    enabled: true,
+  },
   // Add more tools here as needed
 ];
 
