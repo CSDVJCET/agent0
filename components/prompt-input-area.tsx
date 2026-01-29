@@ -28,6 +28,7 @@ export type PromptInputAreaProps = {
   onFilesSelected: (e: React.ChangeEvent<HTMLInputElement>) => void;
   mentionedTools?: string[];
   onToolMentionsChange?: (tools: string[]) => void;
+  addedIntegrations?: string[];
 };
 
 export function PromptInputArea({
@@ -43,6 +44,7 @@ export function PromptInputArea({
   onFilesSelected,
   mentionedTools = [],
   onToolMentionsChange,
+  addedIntegrations = [],
 }: PromptInputAreaProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -51,12 +53,12 @@ export function PromptInputArea({
   const [toolQuery, setToolQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  // Load available tools on mount
+  // Load available tools on mount and when integrations change
   useEffect(() => {
     fetchInstalledTools()
       .then((tools) => setAvailableTools(tools))
       .catch((err) => console.error("Failed to load tools:", err));
-  }, []);
+  }, [addedIntegrations]);
 
   // Parse tool mentions whenever value changes
   // useEffect(() => {

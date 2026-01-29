@@ -23,6 +23,14 @@ const marketplaceTools = [
     icon: "calendar",
     enabled: true,
   },
+  {
+    id: "gmail",
+    name: "Gmail",
+    description: "Search, read, draft, and send emails through Gmail",
+    category: "communication",
+    icon: "mail",
+    enabled: true,
+  },
   // Add more tools here as needed
 ];
 

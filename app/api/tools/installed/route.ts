@@ -25,6 +25,14 @@ function getToolMetadata(id: string) {
       icon: "calendar",
     };
   }
+  if (id === "gmail") {
+    return {
+      name: "Gmail",
+      description: "Search, read, draft, and send emails through Gmail",
+      category: "communication",
+      icon: "mail",
+    };
+  }
   return {
     name: id,
     description: "Custom tool",

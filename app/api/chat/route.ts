@@ -4,6 +4,8 @@ import { z } from "zod";
 import type { MyUIMessage } from "@/types/chat";
 import { tools as weatherTools } from "@/ai/tools";
 import { calendarTools } from "@/ai/calendar-tools";
+import { gmailTools } from "@/ai/gmail-tools";
+import { GMAIL_AGENT_PROMPT } from "@/ai/prompts/gmail";
 import { isToolInstalled } from "@/lib/installed-tools";
 
 export const maxDuration = 60;
@@ -119,6 +121,18 @@ export async function POST(req: Request) {
              console.warn("Calendar tool mentioned but not installed");
         }
       }
+      // Gmail tools
+      if (lowerToolName === "gmail") {
+        if (isToolInstalled("gmail")) {
+          tools.searchEmails = gmailTools.searchEmails;
+          tools.getThread = gmailTools.getThread;
+          tools.createDraft = gmailTools.createDraft;
+          tools.sendMessage = gmailTools.sendMessage;
+          tools.getMessageContent = gmailTools.getMessageContent;
+        } else {
+          console.warn("Gmail tool mentioned but not installed");
+        }
+      }
       // Add more tool mappings here as needed
     }
   } else {
@@ -161,13 +175,17 @@ export async function POST(req: Request) {
     },
   };
 
-  const calendarGuidance = mentionedTools.includes("calendar")
-    ? " When the user asks to create/schedule a calendar event, ALWAYS call scheduleCalendarEvent immediately. Do not ask follow-up questions. Infer missing details, default duration to 1 hour, and let the user confirm in the UI before creating the event."
-    : "";
+  // Build system prompt with agent-specific persona if needed
+  let systemPrompt = `The current date and time is ${new Date().toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" })}. Use this to resolve relative date mentions like "today", "tomorrow", "next Monday", etc. If the user asks for "events today" or "schedule", assume the default time range starts now and ends at the end of the day or covers a reasonable period, do not ask for clarification unless necessary.`;
+  
+  // Add Gmail agent persona when Gmail tools are active
+  if (mentionedTools.some(tool => tool.toLowerCase() === "gmail")) {
+    systemPrompt += "\n\n" + GMAIL_AGENT_PROMPT;
+  }
 
   const result = streamText({
     model: google(model),
-    system: `The current date and time is ${new Date().toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" })}. Use this to resolve relative date mentions like "today", "tomorrow", "next Monday", etc. If the user asks for "events today" or "schedule", assume the default time range starts now and ends at the end of the day or covers a reasonable period, do not ask for clarification unless necessary.${calendarGuidance}`,
+    system: systemPrompt,
     messages: modelMessages,
     tools: hasTools ? tools : undefined,
     toolChoice: hasTools ? "auto" : "none",
