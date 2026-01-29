@@ -33,6 +33,9 @@ import {
   ToolInput,
   ToolOutput,
 } from "@/components/ai-elements/tool";
+import { CalendarDraft } from "@/components/ai-elements/calendar-draft";
+import { CalendarEvent } from "@/components/ai-elements/calendar-event";
+import { EventSchedulingConfirmation } from "@/components/ai-elements/event-scheduling-confirmation";
 import {
   CopyIcon,
   RefreshCwIcon,
@@ -188,10 +191,64 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
                         };
                       });
                       return normalizedToolInvocations.map((toolInvocation: any) => {
+                        const isCompleted = toolInvocation.state === "result";
+                        const hasError = toolInvocation.result?.error === true;
+
+                        // Schedule Calendar Event (with human-in-the-loop confirmation)
+                        if (toolInvocation.toolName === "scheduleCalendarEvent" && isCompleted) {
+                          const result = toolInvocation.result;
+                          if (result.status === "pending_confirmation") {
+                            return (
+                              <EventSchedulingConfirmation
+                                key={toolInvocation.toolCallId}
+                                toolCallId={toolInvocation.toolCallId}
+                                eventDetails={result.eventDetails}
+                                reasoning={result.reasoning}
+                              />
+                            );
+                          }
+                        }
+
+                        // Confirm Scheduled Event (shows success after creation)
+                        if (toolInvocation.toolName === "confirmScheduledEvent" && isCompleted) {
+                          if (!hasError && toolInvocation.result?.status === "created") {
+                            return (
+                              <CalendarEvent
+                                key={toolInvocation.toolCallId}
+                                summary={toolInvocation.result.summary}
+                                startTime={toolInvocation.result.startTime}
+                                endTime={toolInvocation.result.endTime}
+                                link={toolInvocation.result.link}
+                              />
+                            );
+                          }
+                        }
+
+                        // Calendar Draft (existing)
+                        if (toolInvocation.toolName === "draftCalendarEvent" && isCompleted) {
+                           return (
+                             <CalendarDraft 
+                               key={toolInvocation.toolCallId}
+                               draftId={toolInvocation.toolCallId}
+                               defaultValues={toolInvocation.result}
+                             />
+                           );
+                        }
+
+                        // Calendar Created
+                        if (toolInvocation.toolName === "createCalendarEvent" && isCompleted) {
+                          if (!hasError) {
+                            return (
+                               <CalendarEvent 
+                                 key={toolInvocation.toolCallId}
+                                 {...toolInvocation.result}
+                               />
+                            );
+                          }
+                        }
+
                         // Special rendering for Weather tool - wrapped in Tool UI
                         if (toolInvocation.toolName === "displayWeather") {
-                          const isCompleted = toolInvocation.state === "result";
-                          const hasError = toolInvocation.result?.error === true;
                           
                           return (
                             <div key={toolInvocation.toolCallId} className="flex flex-col gap-2 w-full">

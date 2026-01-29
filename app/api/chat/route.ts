@@ -109,7 +109,7 @@ export async function POST(req: Request) {
       // Calendar tools
       if (lowerToolName === "calendar") {
         if (isToolInstalled("calendar")) {
-          tools.createCalendarEvent = calendarTools.createCalendarEvent;
+          tools.scheduleCalendarEvent = calendarTools.scheduleCalendarEvent;
           tools.listCalendarEvents = calendarTools.listCalendarEvents;
           tools.updateCalendarEvent = calendarTools.updateCalendarEvent;
           tools.deleteCalendarEvent = calendarTools.deleteCalendarEvent;
