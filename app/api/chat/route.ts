@@ -124,6 +124,7 @@ export async function POST(req: Request) {
       // Gmail tools
       if (lowerToolName === "gmail") {
         if (isToolInstalled("gmail")) {
+          tools.composeEmail = gmailTools.composeEmail;
           tools.searchEmails = gmailTools.searchEmails;
           tools.getThread = gmailTools.getThread;
           tools.createDraft = gmailTools.createDraft;
