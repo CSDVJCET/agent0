@@ -1,18 +1,24 @@
 /**
- * Google Calendar API Configuration and Helpers
+ * Google API Configuration and Helpers
  * 
- * This module provides utilities for interacting with Google Calendar API
+ * This module provides utilities for interacting with Google APIs
  * including OAuth2 token management and API client initialization.
+ * Supports Google Calendar and Gmail APIs.
  */
 
 import fs from "fs";
 import path from "path";
 
-// Google Calendar API scopes
+// Google API scopes (Calendar + Gmail)
 export const GOOGLE_CALENDAR_SCOPES = [
+  // Calendar scopes
   "https://www.googleapis.com/auth/calendar",
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar.readonly",
+  // Gmail scopes
+  "https://www.googleapis.com/auth/gmail.modify",
+  "https://www.googleapis.com/auth/gmail.compose",
+  "https://www.googleapis.com/auth/gmail.readonly",
 ];
 
 // Google Forms API scopes
