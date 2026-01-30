@@ -133,6 +133,8 @@ export async function POST(req: Request) {
           tools.getResponseSummary = formsTools.getResponseSummary;
         } else {
           console.warn("Forms tool mentioned but not installed");
+        }
+      }
       // Gmail tools
       if (lowerToolName === "gmail") {
         if (isToolInstalled("gmail")) {
@@ -194,6 +196,10 @@ export async function POST(req: Request) {
   if (mentionedTools.some(tool => tool.toLowerCase() === "gmail")) {
     systemPrompt += "\n\n" + GMAIL_AGENT_PROMPT;
   }
+
+  const calendarGuidance = mentionedTools.some(t => t.toLowerCase() === "calendar")
+    ? " When the user asks about calendar events or scheduling, use the calendar tools to fetch, create, update, or delete events. For scheduling, use scheduleCalendarEvent to present options to the user first."
+    : "";
 
   const formsGuidance = mentionedTools.some(t => t.toLowerCase() === "forms" || t.toLowerCase() === "survey")
     ? " When the user wants to create a form/survey, ALWAYS call createSurveyForm immediately with inferred questions. Infer question types: yes/no questions → MULTIPLE_CHOICE with ['Yes', 'No'], open-ended → PARAGRAPH or SHORT_ANSWER, rating → LINEAR_SCALE, selection → CHECKBOX or MULTIPLE_CHOICE. Let the user review in the UI before creating. For polling responses, use fetchNewResponses. For statistics, use getResponseSummary."

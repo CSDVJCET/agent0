@@ -29,6 +29,9 @@ const marketplaceTools = [
     description: "Create surveys and forms, collect and analyze responses with Google Forms",
     category: "productivity",
     icon: "file-text",
+    enabled: true,
+  },
+  {
     id: "gmail",
     name: "Gmail",
     description: "Search, read, draft, and send emails through Gmail",
