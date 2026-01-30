@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { MyUIMessage } from "@/types/chat";
 import { tools as weatherTools } from "@/ai/tools";
 import { calendarTools } from "@/ai/calendar-tools";
+import { formsTools } from "@/ai/forms-tools";
 import { gmailTools } from "@/ai/gmail-tools";
 import { GMAIL_AGENT_PROMPT } from "@/ai/prompts/gmail";
 import { isToolInstalled } from "@/lib/installed-tools";
@@ -121,6 +122,19 @@ export async function POST(req: Request) {
              console.warn("Calendar tool mentioned but not installed");
         }
       }
+      // Forms/Survey tools
+      if (lowerToolName === "forms" || lowerToolName === "survey") {
+        if (isToolInstalled("forms")) {
+          tools.createSurveyForm = formsTools.createSurveyForm;
+          tools.confirmCreateForm = formsTools.confirmCreateForm;
+          tools.fetchNewResponses = formsTools.fetchNewResponses;
+          tools.watchResponsesWebhook = formsTools.watchResponsesWebhook;
+          tools.updateFormSchema = formsTools.updateFormSchema;
+          tools.getResponseSummary = formsTools.getResponseSummary;
+        } else {
+          console.warn("Forms tool mentioned but not installed");
+        }
+      }
       // Gmail tools
       if (lowerToolName === "gmail") {
         if (isToolInstalled("gmail")) {
@@ -183,9 +197,17 @@ export async function POST(req: Request) {
     systemPrompt += "\n\n" + GMAIL_AGENT_PROMPT;
   }
 
+  const calendarGuidance = mentionedTools.some(t => t.toLowerCase() === "calendar")
+    ? " When the user asks about calendar events or scheduling, use the calendar tools to fetch, create, update, or delete events. For scheduling, use scheduleCalendarEvent to present options to the user first."
+    : "";
+
+  const formsGuidance = mentionedTools.some(t => t.toLowerCase() === "forms" || t.toLowerCase() === "survey")
+    ? " When the user wants to create a form/survey, ALWAYS call createSurveyForm immediately with inferred questions. Infer question types: yes/no questions → MULTIPLE_CHOICE with ['Yes', 'No'], open-ended → PARAGRAPH or SHORT_ANSWER, rating → LINEAR_SCALE, selection → CHECKBOX or MULTIPLE_CHOICE. Let the user review in the UI before creating. For polling responses, use fetchNewResponses. For statistics, use getResponseSummary."
+    : "";
+
   const result = streamText({
     model: google(model),
-    system: systemPrompt,
+    system: `The current date and time is ${new Date().toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" })}. Use this to resolve relative date mentions like "today", "tomorrow", "next Monday", etc. If the user asks for "events today" or "schedule", assume the default time range starts now and ends at the end of the day or covers a reasonable period, do not ask for clarification unless necessary.${calendarGuidance}${formsGuidance}`,
     messages: modelMessages,
     tools: hasTools ? tools : undefined,
     toolChoice: hasTools ? "auto" : "none",
