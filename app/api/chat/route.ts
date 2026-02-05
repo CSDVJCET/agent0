@@ -329,6 +329,19 @@ export async function POST(req: Request) {
 
   const hasTools = Object.keys(tools).length > 0;
 
+  // Build guidance strings outside the retry loop to avoid redeclaration
+  const calendarGuidance = mentionedTools.some(t => t.toLowerCase() === "calendar")
+    ? " When the user asks about calendar events or scheduling, use the calendar tools to fetch, create, update, or delete events. For scheduling, use scheduleCalendarEvent to present options to the user first."
+    : "";
+
+  const formsGuidance = mentionedTools.some(t => t.toLowerCase() === "forms" || t.toLowerCase() === "survey")
+    ? " When the user wants to create a form/survey, ALWAYS call createSurveyForm immediately with inferred questions. Infer question types: yes/no questions → MULTIPLE_CHOICE with ['Yes', 'No'], open-ended → PARAGRAPH or SHORT_ANSWER, rating → LINEAR_SCALE, selection → CHECKBOX or MULTIPLE_CHOICE. Let the user review in the UI before creating. For polling responses, use fetchNewResponses. For statistics, use getResponseSummary."
+    : "";
+
+  const tasksGuidance = mentionedTools.some(t => ["tasks", "task", "todo", "todos"].includes(t.toLowerCase()))
+    ? " When the user wants to create a task/todo, use scheduleTask to present the task details for confirmation. For listing tasks, use listTasks. To mark tasks complete, use completeTask. For updating task details, use updateTask. For deleting tasks, use deleteTask (which requires confirmation). Always parse relative dates like 'tomorrow', 'next week' into proper ISO dates."
+    : "";
+
   // Retry logic with automatic model fallback on rate limiting
   const maxRetries = 3;
   let currentModel = model;
@@ -347,31 +360,7 @@ export async function POST(req: Request) {
       // Get model instance for current model
       const { modelInstance, providerOptions } = getModelInstance(currentModel, enableThinking);
 
-  const calendarGuidance = mentionedTools.some(t => t.toLowerCase() === "calendar")
-    ? " When the user asks about calendar events or scheduling, use the calendar tools to fetch, create, update, or delete events. For scheduling, use scheduleCalendarEvent to present options to the user first."
-    : "";
 
-  const formsGuidance = mentionedTools.some(t => t.toLowerCase() === "forms" || t.toLowerCase() === "survey")
-    ? " When the user wants to create a form/survey, ALWAYS call createSurveyForm immediately with inferred questions. Infer question types: yes/no questions → MULTIPLE_CHOICE with ['Yes', 'No'], open-ended → PARAGRAPH or SHORT_ANSWER, rating → LINEAR_SCALE, selection → CHECKBOX or MULTIPLE_CHOICE. Let the user review in the UI before creating. For polling responses, use fetchNewResponses. For statistics, use getResponseSummary."
-    : "";
-
-  const tasksGuidance = mentionedTools.some(t => ["tasks", "task", "todo", "todos"].includes(t.toLowerCase()))
-    ? " When the user wants to create a task/todo, use scheduleTask to present the task details for confirmation. For listing tasks, use listTasks. To mark tasks complete, use completeTask. For updating task details, use updateTask. For deleting tasks, use deleteTask (which requires confirmation). Always parse relative dates like 'tomorrow', 'next week' into proper ISO dates."
-    : "";
-
-  const result = streamText({
-    model: google(model),
-    system: `The current date and time is ${new Date().toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" })}. Use this to resolve relative date mentions like "today", "tomorrow", "next Monday", etc. If the user asks for "events today" or "schedule", assume the default time range starts now and ends at the end of the day or covers a reasonable period, do not ask for clarification unless necessary.${calendarGuidance}${formsGuidance}${tasksGuidance}`,
-    messages: modelMessages,
-    tools: hasTools ? tools : undefined,
-    toolChoice: hasTools ? "auto" : "none",
-    providerOptions,
-    // Use stopWhen for multi-step tool calls when custom tools are mentioned
-    ...(mentionedTools.length > 0 && { stopWhen: stepCountIs(5) }),
-    onError: (error) => {
-      console.error("Stream error:", error);
-    },
-  });
       // Check if Google-specific tools should be disabled for non-Google models
       let currentTools = { ...tools };
       const isGoogleModel = !currentModel.includes(":");
@@ -400,14 +389,6 @@ export async function POST(req: Request) {
         systemPrompt += "\n\n" + GMAIL_AGENT_PROMPT;
       }
 
-      const calendarGuidance = mentionedTools.some(t => t.toLowerCase() === "calendar")
-        ? " When the user asks about calendar events or scheduling, use the calendar tools to fetch, create, update, or delete events. For scheduling, use scheduleCalendarEvent to present options to the user first."
-        : "";
-
-      const formsGuidance = mentionedTools.some(t => t.toLowerCase() === "forms" || t.toLowerCase() === "survey")
-        ? " When the user wants to create a form/survey, ALWAYS call createSurveyForm immediately with inferred questions. Infer question types: yes/no questions → MULTIPLE_CHOICE with ['Yes', 'No'], open-ended → PARAGRAPH or SHORT_ANSWER, rating → LINEAR_SCALE, selection → CHECKBOX or MULTIPLE_CHOICE. Let the user review in the UI before creating. For polling responses, use fetchNewResponses. For statistics, use getResponseSummary."
-        : "";
-
       // Add retry notification if this is not the first attempt
       if (attempt > 0) {
         systemPrompt += `\n\n[System: Automatically switched from ${retryMetadata.originalModel} to ${currentModel} due to rate limiting]`;
@@ -415,7 +396,7 @@ export async function POST(req: Request) {
 
       const result = streamText({
         model: modelInstance,
-        system: `${systemPrompt}${calendarGuidance}${formsGuidance}`,
+        system: `${systemPrompt}${calendarGuidance}${formsGuidance}${tasksGuidance}`,
         messages: modelMessages,
         tools: hasCurrentTools ? currentTools : undefined,
         toolChoice: hasCurrentTools ? "auto" : "none",
