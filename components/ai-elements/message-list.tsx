@@ -36,6 +36,7 @@ import {
 import { CalendarDraft } from "@/components/ai-elements/calendar-draft";
 import { CalendarEvent } from "@/components/ai-elements/calendar-event";
 import { EventSchedulingConfirmation } from "@/components/ai-elements/event-scheduling-confirmation";
+import { EmailDraftConfirmation } from "@/components/ai-elements/email-draft-confirmation";
 import { FormCreationConfirmation } from "@/components/ai-elements/form-creation-confirmation";
 import { FormResponsesList } from "@/components/ai-elements/form-responses-list";
 import { FormSummaryCard } from "@/components/ai-elements/form-summary-card";
@@ -257,18 +258,27 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
                           }
                         }
 
-                        // Create Survey Form (with human-in-the-loop confirmation)
-                        if (toolInvocation.toolName === "createSurveyForm" && isCompleted) {
+                        // Compose Email (with human-in-the-loop confirmation)
+                        if (toolInvocation.toolName === "composeEmail" && isCompleted) {
                           const result = toolInvocation.result;
                           if (result.status === "pending_confirmation") {
                             return (
-                              <FormCreationConfirmation
+                              <EmailDraftConfirmation
                                 key={toolInvocation.toolCallId}
                                 toolCallId={toolInvocation.toolCallId}
-                                formData={result.formData}
+                                emailDetails={result.emailDetails}
                                 reasoning={result.reasoning}
                               />
                             );
+                          }
+                        }
+
+                        // Confirm Send Email (shows success after sending)
+                        if (toolInvocation.toolName === "confirmSendEmail" && isCompleted) {
+                          if (!hasError && toolInvocation.result?.status === "sent") {
+                            // Show a success message - the UI already shows it in EmailDraftConfirmation
+                            // We can render a simple success indicator here if needed
+                            return null; // The component handles the success state
                           }
                         }
 

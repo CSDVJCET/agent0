@@ -552,6 +552,117 @@ export const getMessageContentTool = tool({
 });
 
 /**
+ * Compose an email with human-in-the-loop confirmation
+ * This is the main tool for email composition - extracts details and presents confirmation UI
+ */
+export const composeEmailTool = tool({
+  description: `Compose an email by extracting ALL details from the user's request. NEVER ask for clarification - always infer missing details:
+- Extract recipient(s), subject, and body from the user's request
+- If replying to a thread, include the thread_id
+- Always generate the form immediately, the user can edit before sending
+
+Use this tool IMMEDIATELY when the user mentions composing, writing, sending, or replying to an email.`,
+  inputSchema: z.object({
+    to: z.string().describe("Recipient email address(es), comma-separated for multiple. ALWAYS extract from context."),
+    subject: z.string().describe("Email subject line. Infer from context if not explicitly provided."),
+    body: z.string().describe("Email body content (plain text). Compose based on user's intent."),
+    cc: z.string().optional().describe("CC email address(es), comma-separated if mentioned"),
+    bcc: z.string().optional().describe("BCC email address(es), comma-separated if mentioned"),
+    thread_id: z.string().optional().describe("Thread ID if this is a reply to an existing conversation"),
+    reasoning: z.string().describe("Brief explanation of how you composed this email"),
+  }),
+  execute: async ({ to, subject, body, cc, bcc, thread_id, reasoning }) => {
+    return {
+      status: "pending_confirmation",
+      emailDetails: {
+        to,
+        subject,
+        body,
+        cc: cc || "",
+        bcc: bcc || "",
+        thread_id: thread_id || "",
+      },
+      reasoning,
+      message: "Please review the email and confirm to send.",
+    };
+  },
+});
+
+/**
+ * Confirm and send an email after human approval
+ */
+export const confirmSendEmailTool = tool({
+  description: "Send an email after user confirmation. Use this to finalize sending after the user has reviewed and approved the email details.",
+  inputSchema: z.object({
+    to: z.string().describe("Recipient email address(es), comma-separated for multiple"),
+    subject: z.string().describe("Email subject line"),
+    body: z.string().describe("Email body content (plain text)"),
+    cc: z.string().optional().describe("CC email address(es), comma-separated"),
+    bcc: z.string().optional().describe("BCC email address(es), comma-separated"),
+    thread_id: z.string().optional().describe("Thread ID if this is a reply"),
+  }),
+  execute: async ({ to, subject, body, cc, bcc, thread_id }) => {
+    const accessToken = await getAccessToken();
+    
+    if (!accessToken) {
+      return {
+        error: true,
+        message: "Gmail is not connected. Please connect your Google account first.",
+      };
+    }
+
+    try {
+      // Build the raw email message in RFC 2822 format
+      const emailLines = [
+        `To: ${to}`,
+        ...(cc ? [`Cc: ${cc}`] : []),
+        ...(bcc ? [`Bcc: ${bcc}`] : []),
+        `Subject: ${subject}`,
+        "Content-Type: text/plain; charset=utf-8",
+        "",
+        body,
+      ];
+      
+      const rawMessage = encodeBase64Url(emailLines.join("\r\n"));
+
+      const sendBody: Record<string, unknown> = {
+        raw: rawMessage,
+        ...(thread_id && { threadId: thread_id }),
+      };
+
+      const result = await gmailRequest<any>(
+        accessToken,
+        "/users/me/messages/send",
+        "POST",
+        sendBody
+      );
+
+      if (!result.success) {
+        return {
+          error: true,
+          message: result.error || "Failed to send email",
+        };
+      }
+
+      return {
+        error: false,
+        status: "sent",
+        messageId: result.data?.id,
+        threadId: result.data?.threadId,
+        to,
+        subject,
+        message: `Email sent successfully to ${to}`,
+      };
+    } catch (err) {
+      return {
+        error: true,
+        message: err instanceof Error ? err.message : "Failed to send email",
+      };
+    }
+  },
+});
+
+/**
  * Export all Gmail tools
  */
 export const gmailTools = {
@@ -560,4 +671,6 @@ export const gmailTools = {
   createDraft: createDraftTool,
   sendMessage: sendMessageTool,
   getMessageContent: getMessageContentTool,
+  composeEmail: composeEmailTool,
+  confirmSendEmail: confirmSendEmailTool,
 };
