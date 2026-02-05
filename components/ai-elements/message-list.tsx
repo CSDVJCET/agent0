@@ -279,6 +279,9 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
                             // Show a success message - the UI already shows it in EmailDraftConfirmation
                             // We can render a simple success indicator here if needed
                             return null; // The component handles the success state
+                          }
+                        }
+
                         // Fetch Form Responses
                         if (toolInvocation.toolName === "fetchNewResponses" && isCompleted) {
                           if (!hasError) {
