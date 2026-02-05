@@ -6,12 +6,13 @@ import {
   PromptInputTextarea,
   PromptInputSubmit,
   PromptInputButton,
-  PromptInputSpeechButton,
 } from "@/components/ai-elements/prompt-input";
 import { BrainIcon, CalendarIcon, CloudSunIcon, FileTextIcon, PaperclipIcon, SearchIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ButtonGroup, ButtonGroupSeparator } from "@/components/ui/button-group";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
+
+import { SpeechInput } from "@/components/ai-elements/speech-input";
 import { fetchInstalledTools, parseToolMentions, type InstalledTool } from "@/lib/tool-utils";
 import { Badge } from "@/components/ui/badge";
 
@@ -203,7 +204,20 @@ export function PromptInputArea({
 
           <ButtonGroupSeparator className="h-6 mb-2 self-end!" />
 
-          <PromptInputSpeechButton className="rounded-none border-none shadow-none h-10 w-10 p-0 flex items-center justify-center shrink-0" />
+          <SpeechInput
+            className="rounded-none border-none shadow-none h-10 w-10 p-0 flex items-center justify-center shrink-0"
+            onTranscriptionChange={(transcript) => {
+              const currentValue = textareaRef.current?.value ?? value;
+              const trimmedTranscript = transcript.trim();
+              if (!trimmedTranscript) {
+                return;
+              }
+              const needsSpace = currentValue.length > 0 && !currentValue.endsWith(" ");
+              const nextValue = `${currentValue}${needsSpace ? " " : ""}${trimmedTranscript}`;
+              onChange(nextValue);
+              textareaRef.current?.focus();
+            }}
+          />
 
           {/* Tool Pills inside input */}
           {mentionedTools.length > 0 && (
