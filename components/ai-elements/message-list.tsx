@@ -36,6 +36,7 @@ import {
 import { CalendarDraft } from "@/components/ai-elements/calendar-draft";
 import { CalendarEvent } from "@/components/ai-elements/calendar-event";
 import { EventSchedulingConfirmation } from "@/components/ai-elements/event-scheduling-confirmation";
+import { EmailDraftConfirmation } from "@/components/ai-elements/email-draft-confirmation";
 import { FormCreationConfirmation } from "@/components/ai-elements/form-creation-confirmation";
 import { FormResponsesList } from "@/components/ai-elements/form-responses-list";
 import { FormSummaryCard } from "@/components/ai-elements/form-summary-card";
@@ -124,7 +125,7 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
       <Conversation className="h-full">
         <ConversationContent className="max-w-3xl mx-auto w-full py-10 px-4 lg:px-0 gap-8">
         <AnimatePresence initial={false}>
-          {deduplicatedMessages.map((message) => {
+          {deduplicatedMessages.map((message,messageIndex) => {
             const textContent = getMessageTextContent(message);
             const reasoning = getMessageReasoning(message);
             const toolInvocations = getToolInvocations(message);
@@ -145,7 +146,7 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
 
             return (
               <motion.div
-                key={message.id}
+                key={`${message.id}-${messageIndex}`}
                 id={`message-${message.id}`}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -187,38 +188,43 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
                     )}
 
                     {message.role === "assistant" && (() => {
-                      const seenIds = new Set();
-                      const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any) => {
-                        const t = ti.toolInvocation || ti;
-                        
-                        // Extract tool name - handle both old and new AI SDK formats
-                        // Old format: t.toolName exists
-                        // New AI SDK 5.0 format: tool name is in type like "tool-displayWeather"
-                        let toolName = t.toolName;
-                        if (!toolName && t.type && t.type.startsWith("tool-")) {
-                          toolName = t.type.replace("tool-", "");
-                        }
-                        
-                        // Normalize state - handle different state formats
-                        // New format: "input-available", "output-available", "output-error"
-                        // Old format: "call", "result"
-                        let state = t.state;
-                        if (state === "output-available") state = "result";
-                        
-                        const toolCallId = t.toolCallId || `tool-${Date.now()}-${Math.random()}`;
+const seenIds = new Set();
+const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, toolIndex: number) => {
+  const t = ti?.toolInvocation || ti;
+  if (!t) return acc;
 
-                        if (!seenIds.has(toolCallId)) {
-                          seenIds.add(toolCallId);
-                          acc.push({
-                            toolCallId,
-                            toolName: toolName,
-                            state: state,
-                            args: t.args || t.input,
-                            result: t.result || t.output,
-                          });
-                        }
-                        return acc;
-                      }, []);
+  // Extract tool name
+  let toolName = t.toolName;
+  if (!toolName && t.type && t.type.startsWith("tool-")) {
+    toolName = t.type.replace("tool-", "");
+  }
+  toolName = toolName || "tool";
+
+  // Normalize state
+  let state = t.state;
+  if (state === "output-available") state = "result";
+  if (state === "input-available") state = "call";
+  if (!state) {
+    state = t.result || t.output ? "result" : "call";
+  }
+
+  // Generate stable toolCallId
+  const toolCallId = t.toolCallId || `${message.id}-tool-${toolIndex}`;
+
+  if (!seenIds.has(toolCallId)) {
+    seenIds.add(toolCallId);
+    acc.push({
+      toolCallId,
+      toolName,
+      state,
+      args: t.args || t.input,
+      result: t.result || t.output,
+    });
+  }
+
+  return acc;
+}, []);
+
                       return normalizedToolInvocations.map((toolInvocation: any) => {
                         const isCompleted = toolInvocation.state === "result";
                         const hasError = toolInvocation.result?.error === true;
@@ -276,18 +282,27 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
                           }
                         }
 
-                        // Create Survey Form (with human-in-the-loop confirmation)
-                        if (toolInvocation.toolName === "createSurveyForm" && isCompleted) {
+                        // Compose Email (with human-in-the-loop confirmation)
+                        if (toolInvocation.toolName === "composeEmail" && isCompleted) {
                           const result = toolInvocation.result;
                           if (result.status === "pending_confirmation") {
                             return (
-                              <FormCreationConfirmation
+                              <EmailDraftConfirmation
                                 key={toolInvocation.toolCallId}
                                 toolCallId={toolInvocation.toolCallId}
-                                formData={result.formData}
+                                emailDetails={result.emailDetails}
                                 reasoning={result.reasoning}
                               />
                             );
+                          }
+                        }
+
+                        // Confirm Send Email (shows success after sending)
+                        if (toolInvocation.toolName === "confirmSendEmail" && isCompleted) {
+                          if (!hasError && toolInvocation.result?.status === "sent") {
+                            // Show a success message - the UI already shows it in EmailDraftConfirmation
+                            // We can render a simple success indicator here if needed
+                            return null; // The component handles the success state
                           }
                         }
 
