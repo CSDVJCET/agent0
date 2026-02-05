@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { motion } from "motion/react";
@@ -21,14 +21,30 @@ import { IntegrationsModal } from "@/components/integrations-modal";
 import { IntegrationPanel } from "@/components/integration-panel";
 import { FileDropZone } from "@/components/file-drop-zone";
 
-// Gemini models with their capabilities
+// Models with their capabilities (tool-calling verified)
 const models: Model[] = [
-  // Gemini 2.5 Series
+  // Google Gemini
   { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", provider: "google", series: "2.5", supportsThinking: true },
   { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", provider: "google", series: "2.5", supportsThinking: true },
   { id: "gemini-2.5-flash-lite", name: "Gemini 2.5 Flash Lite", provider: "google", series: "2.5", supportsThinking: true },
-  // Gemini 2.0 Series
   { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", provider: "google", series: "2.0", supportsThinking: false },
+  { id: "gemini-3-flash-preview", name: "Gemini 3 Flash (Preview)", provider: "google", series: "3", supportsThinking: true },
+
+  // Groq
+  { id: "groq:llama-3.3-70b-versatile", name: "Llama 3.3 70B", provider: "groq", series: "3.3", supportsThinking: false },
+  { id: "groq:llama-3.1-8b-instant", name: "Llama 3.1 8B Instant", provider: "groq", series: "3.1", supportsThinking: false },
+  { id: "groq:qwen/qwen3-32b", name: "Qwen 3 32B", provider: "groq", series: "3", supportsThinking: false },
+  { id: "groq:moonshotai/kimi-k2-instruct-0905", name: "Kimi K2 Instruct", provider: "groq", series: "k2", supportsThinking: false },
+  { id: "groq:meta-llama/llama-4-maverick-17b-128e-instruct", name: "Llama 4 Maverick 17B", provider: "groq", series: "4", supportsThinking: false },
+  { id: "groq:meta-llama/llama-4-scout-17b-16e-instruct", name: "Llama 4 Scout 17B", provider: "groq", series: "4", supportsThinking: false },
+  { id: "groq:openai/gpt-oss-20b", name: "GPT-OSS 20B", provider: "groq", series: "oss", supportsThinking: false },
+  { id: "groq:openai/gpt-oss-120b", name: "GPT-OSS 120B", provider: "groq", series: "oss", supportsThinking: false },
+
+  // Cohere
+  { id: "cohere:command-a-03-2025", name: "Command A", provider: "cohere", series: "a", supportsThinking: false },
+  { id: "cohere:command-r7b-12-2024", name: "Command R7B", provider: "cohere", series: "r7b", supportsThinking: false },
+  { id: "cohere:command-r-08-2024", name: "Command R", provider: "cohere", series: "r", supportsThinking: false },
+  { id: "cohere:command-nightly", name: "Command Nightly", provider: "cohere", series: "nightly", supportsThinking: false },
 ];
 
 const defaultSuggestions = [
@@ -44,6 +60,22 @@ const STORAGE_KEYS = {
   THINKING: "agent0-enable-thinking",
   INTEGRATIONS: "agent0-added-integrations",
 };
+
+function dedupeMessages(input: MyUIMessage[]): MyUIMessage[] {
+  const seen = new Set<string>();
+  const result: MyUIMessage[] = [];
+
+  for (let i = input.length - 1; i >= 0; i -= 1) {
+    const message = input[i];
+    if (!message?.id || seen.has(message.id)) {
+      continue;
+    }
+    seen.add(message.id);
+    result.unshift(message);
+  }
+
+  return result;
+}
 
 export function ChatUI() {
   const [selectedModel, setSelectedModel] = useState<Model>(models[0]);
@@ -109,7 +141,7 @@ export function ChatUI() {
         try {
           const parsed = JSON.parse(savedMessages);
           if (Array.isArray(parsed)) {
-            setMessages(parsed);
+            setMessages(dedupeMessages(parsed));
           }
         } catch (e) {
           console.error("Failed to parse saved messages", e);
@@ -183,11 +215,13 @@ export function ChatUI() {
     }
   }, [selectedModel, enableThinking]);
 
+  const dedupedMessages = useMemo(() => dedupeMessages(messages), [messages]);
+
   // Save messages to local storage when they change
   useEffect(() => {
     if (isLoaded) {
       try {
-        const serialized = JSON.stringify(messages);
+        const serialized = JSON.stringify(dedupedMessages);
         localStorage.setItem(STORAGE_KEYS.MESSAGES, serialized);
       } catch (e) {
         // Handle quota exceeded - try to clear old messages
@@ -203,7 +237,7 @@ export function ChatUI() {
         }
       }
     }
-  }, [messages, isLoaded]);
+  }, [dedupedMessages, isLoaded]);
 
   // Listen for extension messages (screenshot + text context)
   useEffect(() => {
@@ -506,7 +540,7 @@ export function ChatUI() {
   // Prevent hydration mismatch by not rendering until loaded
   if (!isLoaded) return null;
 
-  const isStarted = messages.length > 0;
+  const isStarted = dedupedMessages.length > 0;
   const hasCustomTools = mentionedTools.length > 0;
   
   const featureBadges: FeatureBadge[] = [
@@ -541,12 +575,12 @@ export function ChatUI() {
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-hidden relative flex flex-col">
-        <TableOfContents messages={messages} />
+        <TableOfContents messages={dedupedMessages} />
         
         {/* Conversation Area */}
         <div className={cn("flex-1 overflow-hidden relative", !isStarted && "hidden")}>
           <MessageList 
-            messages={messages} 
+            messages={dedupedMessages} 
             isLoading={isLoading} 
             onRegenerate={handleRegenerate}
             status={status}

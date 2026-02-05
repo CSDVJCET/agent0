@@ -105,7 +105,7 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
       <Conversation className="h-full">
         <ConversationContent className="max-w-3xl mx-auto w-full py-10 px-4 lg:px-0 gap-8">
         <AnimatePresence initial={false}>
-          {messages.map((message) => {
+          {messages.map((message, messageIndex) => {
             const textContent = getMessageTextContent(message);
             const reasoning = getMessageReasoning(message);
             const toolInvocations = getToolInvocations(message);
@@ -126,7 +126,7 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
 
             return (
               <motion.div
-                key={message.id}
+                key={`${message.id}-${messageIndex}`}
                 id={`message-${message.id}`}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -168,31 +168,38 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
                     )}
 
                     {message.role === "assistant" && (() => {
-                      const normalizedToolInvocations = toolInvocations.map((ti: any) => {
-                        const t = ti.toolInvocation || ti;
+                      const normalizedToolInvocations = toolInvocations
+                        .map((ti: any, toolIndex: number) => {
+                          const t = ti?.toolInvocation || ti;
+                          if (!t) return null;
                         
-                        // Extract tool name - handle both old and new AI SDK formats
-                        // Old format: t.toolName exists
-                        // New AI SDK 5.0 format: tool name is in type like "tool-displayWeather"
-                        let toolName = t.toolName;
-                        if (!toolName && t.type && t.type.startsWith("tool-")) {
-                          toolName = t.type.replace("tool-", "");
-                        }
-                        
-                        // Normalize state - handle different state formats
-                        // New format: "input-available", "output-available", "output-error"
-                        // Old format: "call", "result"
-                        let state = t.state;
-                        if (state === "output-available") state = "result";
-                        
-                        return {
-                          toolCallId: t.toolCallId || `tool-${Date.now()}-${Math.random()}`,
-                          toolName: toolName,
-                          state: state,
-                          args: t.args || t.input,
-                          result: t.result || t.output,
-                        };
-                      });
+                          // Extract tool name - handle both old and new AI SDK formats
+                          // Old format: t.toolName exists
+                          // New AI SDK 5.0 format: tool name is in type like "tool-displayWeather"
+                          let toolName = t.toolName;
+                          if (!toolName && t.type && t.type.startsWith("tool-")) {
+                            toolName = t.type.replace("tool-", "");
+                          }
+
+                          // Normalize state - handle different state formats
+                          // New format: "input-available", "output-available", "output-error"
+                          // Old format: "call", "result"
+                          let state = t.state;
+                          if (state === "output-available") state = "result";
+                          if (state === "input-available") state = "call";
+                          if (!state) {
+                            state = t.result || t.output ? "result" : "call";
+                          }
+
+                          return {
+                            toolCallId: t.toolCallId || `${message.id}-tool-${toolIndex}`,
+                            toolName: toolName || "tool",
+                            state: state,
+                            args: t.args || t.input,
+                            result: t.result || t.output,
+                          };
+                        })
+                        .filter(Boolean);
                       return normalizedToolInvocations.map((toolInvocation: any) => {
                         const isCompleted = toolInvocation.state === "result";
                         const hasError = toolInvocation.result?.error === true;
