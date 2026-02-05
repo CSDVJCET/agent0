@@ -37,6 +37,9 @@ import { CalendarDraft } from "@/components/ai-elements/calendar-draft";
 import { CalendarEvent } from "@/components/ai-elements/calendar-event";
 import { EventSchedulingConfirmation } from "@/components/ai-elements/event-scheduling-confirmation";
 import { EmailDraftConfirmation } from "@/components/ai-elements/email-draft-confirmation";
+import { FormCreationConfirmation } from "@/components/ai-elements/form-creation-confirmation";
+import { FormResponsesList } from "@/components/ai-elements/form-responses-list";
+import { FormSummaryCard } from "@/components/ai-elements/form-summary-card";
 import {
   CopyIcon,
   RefreshCwIcon,
@@ -103,7 +106,7 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
       <Conversation className="h-full">
         <ConversationContent className="max-w-3xl mx-auto w-full py-10 px-4 lg:px-0 gap-8">
         <AnimatePresence initial={false}>
-          {messages.map((message) => {
+          {messages.map((message, messageIndex) => {
             const textContent = getMessageTextContent(message);
             const reasoning = getMessageReasoning(message);
             const toolInvocations = getToolInvocations(message);
@@ -124,7 +127,7 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
 
             return (
               <motion.div
-                key={message.id}
+                key={`${message.id}-${messageIndex}`}
                 id={`message-${message.id}`}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -166,31 +169,38 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
                     )}
 
                     {message.role === "assistant" && (() => {
-                      const normalizedToolInvocations = toolInvocations.map((ti: any) => {
-                        const t = ti.toolInvocation || ti;
+                      const normalizedToolInvocations = toolInvocations
+                        .map((ti: any, toolIndex: number) => {
+                          const t = ti?.toolInvocation || ti;
+                          if (!t) return null;
                         
-                        // Extract tool name - handle both old and new AI SDK formats
-                        // Old format: t.toolName exists
-                        // New AI SDK 5.0 format: tool name is in type like "tool-displayWeather"
-                        let toolName = t.toolName;
-                        if (!toolName && t.type && t.type.startsWith("tool-")) {
-                          toolName = t.type.replace("tool-", "");
-                        }
-                        
-                        // Normalize state - handle different state formats
-                        // New format: "input-available", "output-available", "output-error"
-                        // Old format: "call", "result"
-                        let state = t.state;
-                        if (state === "output-available") state = "result";
-                        
-                        return {
-                          toolCallId: t.toolCallId || `tool-${Date.now()}-${Math.random()}`,
-                          toolName: toolName,
-                          state: state,
-                          args: t.args || t.input,
-                          result: t.result || t.output,
-                        };
-                      });
+                          // Extract tool name - handle both old and new AI SDK formats
+                          // Old format: t.toolName exists
+                          // New AI SDK 5.0 format: tool name is in type like "tool-displayWeather"
+                          let toolName = t.toolName;
+                          if (!toolName && t.type && t.type.startsWith("tool-")) {
+                            toolName = t.type.replace("tool-", "");
+                          }
+
+                          // Normalize state - handle different state formats
+                          // New format: "input-available", "output-available", "output-error"
+                          // Old format: "call", "result"
+                          let state = t.state;
+                          if (state === "output-available") state = "result";
+                          if (state === "input-available") state = "call";
+                          if (!state) {
+                            state = t.result || t.output ? "result" : "call";
+                          }
+
+                          return {
+                            toolCallId: t.toolCallId || `${message.id}-tool-${toolIndex}`,
+                            toolName: toolName || "tool",
+                            state: state,
+                            args: t.args || t.input,
+                            result: t.result || t.output,
+                          };
+                        })
+                        .filter(Boolean);
                       return normalizedToolInvocations.map((toolInvocation: any) => {
                         const isCompleted = toolInvocation.state === "result";
                         const hasError = toolInvocation.result?.error === true;
@@ -269,6 +279,37 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
                             // Show a success message - the UI already shows it in EmailDraftConfirmation
                             // We can render a simple success indicator here if needed
                             return null; // The component handles the success state
+                        // Fetch Form Responses
+                        if (toolInvocation.toolName === "fetchNewResponses" && isCompleted) {
+                          if (!hasError) {
+                            return (
+                              <FormResponsesList
+                                key={toolInvocation.toolCallId}
+                                formId={toolInvocation.result.formId}
+                                responseCount={toolInvocation.result.responseCount}
+                                responses={toolInvocation.result.responses}
+                                checkedAt={toolInvocation.result.checkedAt}
+                              />
+                            );
+                          }
+                        }
+
+                        // Get Response Summary
+                        if (toolInvocation.toolName === "getResponseSummary" && isCompleted) {
+                          if (!hasError) {
+                            return (
+                              <FormSummaryCard
+                                key={toolInvocation.toolCallId}
+                                formId={toolInvocation.result.formId}
+                                formTitle={toolInvocation.result.formTitle}
+                                totalResponses={toolInvocation.result.totalResponses}
+                                questionCount={toolInvocation.result.questionCount}
+                                responderUri={toolInvocation.result.responderUri}
+                                firstResponseAt={toolInvocation.result.firstResponseAt}
+                                lastResponseAt={toolInvocation.result.lastResponseAt}
+                                questionSummaries={toolInvocation.result.questionSummaries}
+                              />
+                            );
                           }
                         }
 

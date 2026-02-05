@@ -39,7 +39,11 @@ export function ModelSelectorControl({
   isOpen,
   onOpenChange,
 }: ModelSelectorControlProps) {
-  const model25Series = models.filter((m) => m.series === "2.5");
+  // Group models by provider
+  const googleModels = models.filter((m) => m.provider === "google");
+  const groqModels = models.filter((m) => m.provider === "groq");
+  const openrouterModels = models.filter((m) => m.provider === "openrouter");
+  const cohereModels = models.filter((m) => m.provider === "cohere");
 
   return (
     <ModelSelector open={isOpen} onOpenChange={onOpenChange}>
@@ -55,27 +59,102 @@ export function ModelSelectorControl({
         </Button>
       </ModelSelectorTrigger>
       <ModelSelectorContent>
-        <ModelSelectorInput placeholder="Search Gemini models..." />
+        <ModelSelectorInput placeholder="Search models..." />
         <ModelSelectorList>
           <ModelSelectorEmpty>No model found.</ModelSelectorEmpty>
-          <ModelSelectorGroup heading="Gemini 2.5 (Thinking)">
-            {model25Series.map((model) => (
-              <ModelSelectorItem
-                key={model.id}
-                onSelect={() => {
-                  onSelectModel(model);
-                  onOpenChange(false);
-                }}
-                className="gap-2"
-              >
-                <ModelSelectorLogo provider={model.provider} />
-                <ModelSelectorName>{model.name}</ModelSelectorName>
-                {selectedModel.id === model.id && (
-                  <CheckIcon className="ml-auto size-4" />
-                )}
-              </ModelSelectorItem>
-            ))}
-          </ModelSelectorGroup>
+          
+          {googleModels.length > 0 && (
+            <ModelSelectorGroup heading="Google Gemini">
+              {googleModels.map((model) => (
+                <ModelSelectorItem
+                  key={model.id}
+                  onSelect={() => {
+                    onSelectModel(model);
+                    onOpenChange(false);
+                  }}
+                  className="gap-2"
+                >
+                  <ModelSelectorLogo provider={model.provider} />
+                  <ModelSelectorName>{model.name}</ModelSelectorName>
+                  {selectedModel.id === model.id && (
+                    <CheckIcon className="ml-auto size-4" />
+                  )}
+                </ModelSelectorItem>
+              ))}
+            </ModelSelectorGroup>
+          )}
+
+          {groqModels.length > 0 && (
+            <>
+              <ModelSelectorSeparator />
+              <ModelSelectorGroup heading="Groq">
+                {groqModels.map((model) => (
+                  <ModelSelectorItem
+                    key={model.id}
+                    onSelect={() => {
+                      onSelectModel(model);
+                      onOpenChange(false);
+                    }}
+                    className="gap-2"
+                  >
+                    <ModelSelectorLogo provider={model.provider} />
+                    <ModelSelectorName>{model.name}</ModelSelectorName>
+                    {selectedModel.id === model.id && (
+                      <CheckIcon className="ml-auto size-4" />
+                    )}
+                  </ModelSelectorItem>
+                ))}
+              </ModelSelectorGroup>
+            </>
+          )}
+
+          {openrouterModels.length > 0 && (
+            <>
+              <ModelSelectorSeparator />
+              <ModelSelectorGroup heading="OpenRouter">
+                {openrouterModels.map((model) => (
+                  <ModelSelectorItem
+                    key={model.id}
+                    onSelect={() => {
+                      onSelectModel(model);
+                      onOpenChange(false);
+                    }}
+                    className="gap-2"
+                  >
+                    <ModelSelectorLogo provider={model.provider} />
+                    <ModelSelectorName>{model.name}</ModelSelectorName>
+                    {selectedModel.id === model.id && (
+                      <CheckIcon className="ml-auto size-4" />
+                    )}
+                  </ModelSelectorItem>
+                ))}
+              </ModelSelectorGroup>
+            </>
+          )}
+
+          {cohereModels.length > 0 && (
+            <>
+              <ModelSelectorSeparator />
+              <ModelSelectorGroup heading="Cohere">
+                {cohereModels.map((model) => (
+                  <ModelSelectorItem
+                    key={model.id}
+                    onSelect={() => {
+                      onSelectModel(model);
+                      onOpenChange(false);
+                    }}
+                    className="gap-2"
+                  >
+                    <ModelSelectorLogo provider={model.provider} />
+                    <ModelSelectorName>{model.name}</ModelSelectorName>
+                    {selectedModel.id === model.id && (
+                      <CheckIcon className="ml-auto size-4" />
+                    )}
+                  </ModelSelectorItem>
+                ))}
+              </ModelSelectorGroup>
+            </>
+          )}
         </ModelSelectorList>
       </ModelSelectorContent>
     </ModelSelector>

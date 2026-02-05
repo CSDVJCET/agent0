@@ -1,14 +1,142 @@
 import { google, GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
+import { cohere } from "@ai-sdk/cohere";
+import { createOpenAI } from "@ai-sdk/openai";
 import { streamText, convertToModelMessages, stepCountIs } from "ai";
 import { z } from "zod";
 import type { MyUIMessage } from "@/types/chat";
 import { tools as weatherTools } from "@/ai/tools";
 import { calendarTools } from "@/ai/calendar-tools";
+import { formsTools } from "@/ai/forms-tools";
 import { gmailTools } from "@/ai/gmail-tools";
 import { GMAIL_AGENT_PROMPT } from "@/ai/prompts/gmail";
 import { isToolInstalled } from "@/lib/installed-tools";
+import { getNextFallbackModel, isRateLimitError, type ModelRetryMetadata } from "@/lib/model-fallback";
+
+// Initialize free provider clients
+const groq = createOpenAI({
+  baseURL: "https://api.groq.com/openai/v1",
+  apiKey: process.env.GROQ_API_KEY || "",
+});
+
+const openrouter = createOpenAI({
+  name: "openrouter",
+  baseURL: "https://openrouter.ai/api/v1",
+  apiKey: process.env.OPENROUTER_API_KEY || "",
+  headers: {
+    "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+    "X-Title": "Agent0",
+  },
+});
 
 export const maxDuration = 60;
+
+// Helper function to clean messages for non-Google providers
+// Removes Google-specific parts (reasoning, sources) that other providers don't support
+function cleanMessagesForProvider(messages: MyUIMessage[], isGoogleModel: boolean): MyUIMessage[] {
+  if (isGoogleModel) {
+    return messages; // Google models support all part types
+  }
+
+  // For non-Google providers, filter out unsupported parts
+  const cleanedMessages = messages.map((msg) => {
+    if (!msg.parts || !Array.isArray(msg.parts)) {
+      return msg;
+    }
+
+    const cleanedParts = msg.parts.filter((part) => {
+      // Keep standard parts: text, file, tool-*, image-url, image
+      // Remove: reasoning, source-url, source-document
+      if (part.type === "reasoning") return false;
+      if (part.type === "source-url") return false;
+      if (part.type === "source-document") return false;
+      return true;
+    });
+
+    return {
+      ...msg,
+      parts: cleanedParts,
+    };
+  }).filter((msg) => {
+    // Remove messages with no parts or empty parts array
+    return msg.parts && msg.parts.length > 0;
+  });
+
+  return cleanedMessages;
+}
+
+function sanitizeToolParts(messages: MyUIMessage[]): MyUIMessage[] {
+  return messages
+    .map((msg) => {
+      if (!msg.parts || !Array.isArray(msg.parts)) {
+        return msg;
+      }
+
+      const sanitizedParts = msg.parts.filter((part: any) => {
+        if (!part || typeof part.type !== "string") {
+          return false;
+        }
+
+        if (part.type === "tool-invocation") {
+          const toolName =
+            part.toolName || part.toolInvocation?.toolName || part.tool?.name;
+          return typeof toolName === "string" && toolName.trim().length > 0;
+        }
+
+        if (part.type.startsWith("tool-")) {
+          const toolName = part.type.slice(5);
+          return toolName.trim().length > 0;
+        }
+
+        return true;
+      });
+
+      return {
+        ...msg,
+        parts: sanitizedParts,
+      };
+    })
+    .filter((msg) => msg.parts && msg.parts.length > 0);
+}
+
+// Helper function to get model instance and provider options
+function getModelInstance(model: string, enableThinking: boolean) {
+  let modelInstance: any;
+  let providerOptions: any = {};
+
+  if (model.startsWith("groq:")) {
+    const modelId = model.replace("groq:", "");
+    modelInstance = groq(modelId);
+  } else if (model.startsWith("cohere:")) {
+    const modelId = model.replace("cohere:", "");
+    modelInstance = cohere(modelId);
+  } else if (model.startsWith("openrouter:")) {
+    const modelId = model.replace("openrouter:", "");
+    modelInstance = openrouter(modelId);
+  } else {
+    // Default to Google Gemini
+    modelInstance = google(model);
+    providerOptions = {
+      google: {
+        ...(enableThinking &&
+          model.includes("2.5") && {
+            thinkingConfig: {
+              thinkingBudget: 4096,
+              includeThoughts: true,
+            },
+          }),
+        ...(enableThinking &&
+          model.includes("gemini-3") && {
+            thinkingConfig: {
+              thinkingLevel: "high",
+              includeThoughts: true,
+            },
+          }),
+      },
+    };
+  }
+
+  return { modelInstance, providerOptions };
+}
 
 const bodySchema = z.object({
   messages: z.array(z.any()), // Will be validated as UIMessage[] at runtime
@@ -75,10 +203,23 @@ export async function POST(req: Request) {
   // Type-cast messages to MyUIMessage[] for type safety
   const uiMessages = messages as MyUIMessage[];
 
-  // Convert UI messages to model messages using the AI SDK helper
+  // Check if using Google model
+  const isGoogleModel = !model.includes(":");
+
+  // Clean messages for non-Google providers (removes reasoning, sources, etc.)
+  const cleanedMessages = cleanMessagesForProvider(uiMessages, isGoogleModel);
+  const sanitizedMessages = sanitizeToolParts(cleanedMessages);
+
+  // Log for debugging OpenRouter issues
+  if (model.startsWith("openrouter:")) {
+    console.log("OpenRouter request - cleaned messages count:", cleanedMessages.length);
+    console.log("OpenRouter request - first message:", JSON.stringify(cleanedMessages[0], null, 2));
+  }
+
+  // Convert UI messages to model messages using the AI SDK helper (async in v6)
   let modelMessages;
   try {
-    modelMessages = convertToModelMessages(uiMessages);
+    modelMessages = await convertToModelMessages(sanitizedMessages);
   } catch (error) {
     console.error("convertToModelMessages failed", error);
     return new Response(
@@ -93,7 +234,6 @@ export async function POST(req: Request) {
 
   // Build tools object based on mentioned tools and enabled features
   let tools: Record<string, any> = {};
-  let useProviderTools = false;
   const hasCustomTools = mentionedTools.length > 0;
 
   // Add @mentioned custom tools (like weather)
@@ -121,6 +261,19 @@ export async function POST(req: Request) {
              console.warn("Calendar tool mentioned but not installed");
         }
       }
+      // Forms/Survey tools
+      if (lowerToolName === "forms" || lowerToolName === "survey") {
+        if (isToolInstalled("forms")) {
+          tools.createSurveyForm = formsTools.createSurveyForm;
+          tools.confirmCreateForm = formsTools.confirmCreateForm;
+          tools.fetchNewResponses = formsTools.fetchNewResponses;
+          tools.watchResponsesWebhook = formsTools.watchResponsesWebhook;
+          tools.updateFormSchema = formsTools.updateFormSchema;
+          tools.getResponseSummary = formsTools.getResponseSummary;
+        } else {
+          console.warn("Forms tool mentioned but not installed");
+        }
+      }
       // Gmail tools
       if (lowerToolName === "gmail") {
         if (isToolInstalled("gmail")) {
@@ -139,94 +292,173 @@ export async function POST(req: Request) {
   } else {
     // Only add Google provider tools when NO custom tools are mentioned
     // This prevents mixing function tools with provider-defined tools
-    if (enableSearch) {
+    // Note: Google-specific tools only work with Google models
+    const isGoogleModel = !model.includes(":");
+
+    if (enableSearch && isGoogleModel) {
       tools.google_search = google.tools.googleSearch({});
-      useProviderTools = true;
     }
 
-    if (enableUrlContext) {
+    if (enableUrlContext && isGoogleModel) {
       tools.url_context = google.tools.urlContext({});
-      useProviderTools = true;
     }
 
-    if (enableCodeExecution) {
+    if (enableCodeExecution && isGoogleModel) {
       tools.code_execution = google.tools.codeExecution({});
-      useProviderTools = true;
     }
   }
 
   const hasTools = Object.keys(tools).length > 0;
 
-  const providerOptions: { google: GoogleGenerativeAIProviderOptions } = {
-    google: {
-      ...(enableThinking &&
-        model.includes("2.5") && {
-          thinkingConfig: {
-            thinkingBudget: 4096,
-            includeThoughts: true,
-          },
-        }),
-      ...(enableThinking &&
-        model.includes("gemini-3") && {
-          thinkingConfig: {
-            thinkingLevel: "high",
-            includeThoughts: true,
-          },
-        }),
-    },
+  // Retry logic with automatic model fallback on rate limiting
+  const maxRetries = 3;
+  let currentModel = model;
+  const attemptedModels = new Set<string>([currentModel]);
+  let lastError: any = null;
+  const retryMetadata: ModelRetryMetadata = {
+    originalModel: model,
+    attemptedModels: [currentModel],
+    finalModel: currentModel,
+    retryCount: 0,
   };
 
-  // Build system prompt with agent-specific persona if needed
-  let systemPrompt = `The current date and time is ${new Date().toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" })}. Use this to resolve relative date mentions like "today", "tomorrow", "next Monday", etc. If the user asks for "events today" or "schedule", assume the default time range starts now and ends at the end of the day or covers a reasonable period, do not ask for clarification unless necessary.`;
-  
-  // Add Gmail agent persona when Gmail tools are active
-  if (mentionedTools.some(tool => tool.toLowerCase() === "gmail")) {
-    systemPrompt += "\n\n" + GMAIL_AGENT_PROMPT;
+  // Try to get the stream with automatic fallback on rate limits
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      // Get model instance for current model
+      const { modelInstance, providerOptions } = getModelInstance(currentModel, enableThinking);
+
+      // Check if Google-specific tools should be disabled for non-Google models
+      let currentTools = { ...tools };
+      const isGoogleModel = !currentModel.includes(":");
+      const isOpenRouterModel = currentModel.startsWith("openrouter:");
+
+      if (!isGoogleModel && !hasCustomTools) {
+        // Remove Google-specific tools for non-Google models
+        delete currentTools.google_search;
+        delete currentTools.url_context;
+        delete currentTools.code_execution;
+      }
+
+      // Temporarily disable tools for OpenRouter free models due to API compatibility issues
+      if (isOpenRouterModel && currentModel.includes(":free")) {
+        console.warn("Disabling tools for OpenRouter free model due to API constraints");
+        currentTools = {};
+      }
+
+      const hasCurrentTools = Object.keys(currentTools).length > 0;
+
+      // Build system prompt with agent-specific persona if needed
+      let systemPrompt = `The current date and time is ${new Date().toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" })}. Use this to resolve relative date mentions like "today", "tomorrow", "next Monday", etc. If the user asks for "events today" or "schedule", assume the default time range starts now and ends at the end of the day or covers a reasonable period, do not ask for clarification unless necessary.`;
+
+      // Add Gmail agent persona when Gmail tools are active
+      if (mentionedTools.some(tool => tool.toLowerCase() === "gmail")) {
+        systemPrompt += "\n\n" + GMAIL_AGENT_PROMPT;
+      }
+
+      const calendarGuidance = mentionedTools.some(t => t.toLowerCase() === "calendar")
+        ? " When the user asks about calendar events or scheduling, use the calendar tools to fetch, create, update, or delete events. For scheduling, use scheduleCalendarEvent to present options to the user first."
+        : "";
+
+      const formsGuidance = mentionedTools.some(t => t.toLowerCase() === "forms" || t.toLowerCase() === "survey")
+        ? " When the user wants to create a form/survey, ALWAYS call createSurveyForm immediately with inferred questions. Infer question types: yes/no questions → MULTIPLE_CHOICE with ['Yes', 'No'], open-ended → PARAGRAPH or SHORT_ANSWER, rating → LINEAR_SCALE, selection → CHECKBOX or MULTIPLE_CHOICE. Let the user review in the UI before creating. For polling responses, use fetchNewResponses. For statistics, use getResponseSummary."
+        : "";
+
+      // Add retry notification if this is not the first attempt
+      if (attempt > 0) {
+        systemPrompt += `\n\n[System: Automatically switched from ${retryMetadata.originalModel} to ${currentModel} due to rate limiting]`;
+      }
+
+      const result = streamText({
+        model: modelInstance,
+        system: `${systemPrompt}${calendarGuidance}${formsGuidance}`,
+        messages: modelMessages,
+        tools: hasCurrentTools ? currentTools : undefined,
+        toolChoice: hasCurrentTools ? "auto" : "none",
+        providerOptions,
+        // Use stopWhen for multi-step tool calls when custom tools are mentioned
+        ...(mentionedTools.length > 0 && { stopWhen: stepCountIs(5) }),
+        onError: (error) => {
+          console.error("Stream error:", error);
+        },
+      });
+
+      // Update metadata with successful model
+      retryMetadata.finalModel = currentModel;
+      retryMetadata.retryCount = attempt;
+
+      return result.toUIMessageStreamResponse({
+        sendReasoning: enableThinking,
+        sendSources: true,
+        originalMessages: uiMessages,
+        onError: getErrorMessage,
+        messageMetadata: ({ part }) => {
+          // Send metadata when streaming starts
+          if (part.type === "start") {
+            return {
+              createdAt: Date.now(),
+              model: currentModel,
+              retryMetadata: attempt > 0 ? retryMetadata : undefined,
+            };
+          }
+
+          // Send additional metadata when streaming completes
+          if (part.type === "finish" && part.totalUsage) {
+            return {
+              totalTokens: part.totalUsage.totalTokens,
+              totalUsage: {
+                inputTokens: part.totalUsage.inputTokens,
+                outputTokens: part.totalUsage.outputTokens,
+                totalTokens: part.totalUsage.totalTokens,
+                reasoningTokens: part.totalUsage.reasoningTokens,
+                cachedInputTokens: part.totalUsage.cachedInputTokens,
+              },
+              retryMetadata: attempt > 0 ? retryMetadata : undefined,
+            };
+          }
+
+          return undefined;
+        },
+      });
+    } catch (error: any) {
+      lastError = error;
+      console.error(`Attempt ${attempt + 1} failed with model ${currentModel}:`, error);
+
+      // Check if this is a rate limit error
+      if (isRateLimitError(error)) {
+        // Try to find next fallback model
+        const nextModel = getNextFallbackModel(currentModel, attemptedModels);
+
+        if (nextModel && attempt < maxRetries - 1) {
+          console.log(`Rate limit hit, falling back to: ${nextModel}`);
+          currentModel = nextModel;
+          attemptedModels.add(nextModel);
+          retryMetadata.attemptedModels.push(nextModel);
+          // Continue to next iteration
+          continue;
+        } else {
+          // No more fallback models or out of retries
+          console.error("No more fallback models available or max retries reached");
+          break;
+        }
+      } else {
+        // Not a rate limit error, don't retry
+        console.error("Non-rate-limit error, not retrying:", error);
+        break;
+      }
+    }
   }
 
-  const result = streamText({
-    model: google(model),
-    system: systemPrompt,
-    messages: modelMessages,
-    tools: hasTools ? tools : undefined,
-    toolChoice: hasTools ? "auto" : "none",
-    providerOptions,
-    // Use stopWhen for multi-step tool calls when custom tools are mentioned
-    ...(mentionedTools.length > 0 && { stopWhen: stepCountIs(5) }),
-    onError: (error) => {
-      console.error("Stream error:", error);
-    },
-  });
-
-  return result.toUIMessageStreamResponse({
-    sendReasoning: enableThinking,
-    sendSources: true,
-    originalMessages: uiMessages,
-    onError: getErrorMessage,
-    messageMetadata: ({ part }) => {
-      // Send metadata when streaming starts
-      if (part.type === "start") {
-        return {
-          createdAt: Date.now(),
-          model: model,
-        };
-      }
-
-      // Send additional metadata when streaming completes
-      if (part.type === "finish" && part.totalUsage) {
-        return {
-          totalTokens: part.totalUsage.totalTokens,
-          totalUsage: {
-            inputTokens: part.totalUsage.inputTokens,
-            outputTokens: part.totalUsage.outputTokens,
-            totalTokens: part.totalUsage.totalTokens,
-            reasoningTokens: part.totalUsage.reasoningTokens,
-            cachedInputTokens: part.totalUsage.cachedInputTokens,
-          },
-        };
-      }
-
-      return undefined;
-    },
-  });
+  // If we get here, all retries failed
+  return new Response(
+    JSON.stringify({
+      error: "All models failed",
+      details: getErrorMessage(lastError),
+      attemptedModels: retryMetadata.attemptedModels,
+    }),
+    {
+      status: 503,
+      headers: { "Content-Type": "application/json" }
+    }
+  );
 }
