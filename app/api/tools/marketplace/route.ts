@@ -24,6 +24,14 @@ const marketplaceTools = [
     enabled: true,
   },
   {
+    id: "tasks",
+    name: "Tasks",
+    description: "Manage Google Tasks - create, list, update, complete, and delete tasks with priority tracking",
+    category: "productivity",
+    icon: "list-todo",
+    enabled: true,
+  },
+  {
     id: "forms",
     name: "Forms",
     description: "Create surveys and forms, collect and analyze responses with Google Forms",

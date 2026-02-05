@@ -6,6 +6,7 @@ import { tools as weatherTools } from "@/ai/tools";
 import { calendarTools } from "@/ai/calendar-tools";
 import { formsTools } from "@/ai/forms-tools";
 import { gmailTools } from "@/ai/gmail-tools";
+import { tasksTools } from "@/ai/tasks-tools";
 import { GMAIL_AGENT_PROMPT } from "@/ai/prompts/gmail";
 import { isToolInstalled } from "@/lib/installed-tools";
 
@@ -147,6 +148,24 @@ export async function POST(req: Request) {
           console.warn("Gmail tool mentioned but not installed");
         }
       }
+      // Tasks tools
+      if (lowerToolName === "tasks" || lowerToolName === "task" || lowerToolName === "todo" || lowerToolName === "todos") {
+        if (isToolInstalled("tasks")) {
+          tools.scheduleTask = tasksTools.scheduleTask;
+          tools.confirmScheduledTask = tasksTools.confirmScheduledTask;
+          tools.createTask = tasksTools.createTask;
+          tools.listTasks = tasksTools.listTasks;
+          tools.updateTask = tasksTools.updateTask;
+          tools.deleteTask = tasksTools.deleteTask;
+          tools.completeTask = tasksTools.completeTask;
+          tools.uncompleteTask = tasksTools.uncompleteTask;
+          tools.getTask = tasksTools.getTask;
+          tools.getTaskLists = tasksTools.getTaskLists;
+          tools.moveTask = tasksTools.moveTask;
+        } else {
+          console.warn("Tasks tool mentioned but not installed");
+        }
+      }
       // Add more tool mappings here as needed
     }
   } else {
@@ -205,9 +224,13 @@ export async function POST(req: Request) {
     ? " When the user wants to create a form/survey, ALWAYS call createSurveyForm immediately with inferred questions. Infer question types: yes/no questions → MULTIPLE_CHOICE with ['Yes', 'No'], open-ended → PARAGRAPH or SHORT_ANSWER, rating → LINEAR_SCALE, selection → CHECKBOX or MULTIPLE_CHOICE. Let the user review in the UI before creating. For polling responses, use fetchNewResponses. For statistics, use getResponseSummary."
     : "";
 
+  const tasksGuidance = mentionedTools.some(t => ["tasks", "task", "todo", "todos"].includes(t.toLowerCase()))
+    ? " When the user wants to create a task/todo, use scheduleTask to present the task details for confirmation. For listing tasks, use listTasks. To mark tasks complete, use completeTask. For updating task details, use updateTask. For deleting tasks, use deleteTask (which requires confirmation). Always parse relative dates like 'tomorrow', 'next week' into proper ISO dates."
+    : "";
+
   const result = streamText({
     model: google(model),
-    system: `The current date and time is ${new Date().toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" })}. Use this to resolve relative date mentions like "today", "tomorrow", "next Monday", etc. If the user asks for "events today" or "schedule", assume the default time range starts now and ends at the end of the day or covers a reasonable period, do not ask for clarification unless necessary.${calendarGuidance}${formsGuidance}`,
+    system: `The current date and time is ${new Date().toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" })}. Use this to resolve relative date mentions like "today", "tomorrow", "next Monday", etc. If the user asks for "events today" or "schedule", assume the default time range starts now and ends at the end of the day or covers a reasonable period, do not ask for clarification unless necessary.${calendarGuidance}${formsGuidance}${tasksGuidance}`,
     messages: modelMessages,
     tools: hasTools ? tools : undefined,
     toolChoice: hasTools ? "auto" : "none",

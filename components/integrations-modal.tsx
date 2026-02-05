@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { CloudSun, Plus, Trash2, ExternalLink, Calendar, FileText, Mail } from "lucide-react";
+import { CloudSun, Plus, Trash2, ExternalLink, Calendar, FileText, Mail, ListTodo } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -36,6 +36,14 @@ const INTEGRATIONS = [
     icon: Calendar,
     color: "text-red-500",
     bgColor: "bg-red-500/10",
+  },
+  {
+    id: "tasks",
+    name: "Tasks",
+    description: "Create, track, and manage to-do lists with Google Tasks.",
+    icon: ListTodo,
+    color: "text-green-500",
+    bgColor: "bg-green-500/10",
   },
   {
     id: "forms",

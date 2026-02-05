@@ -39,6 +39,11 @@ import { EventSchedulingConfirmation } from "@/components/ai-elements/event-sche
 import { FormCreationConfirmation } from "@/components/ai-elements/form-creation-confirmation";
 import { FormResponsesList } from "@/components/ai-elements/form-responses-list";
 import { FormSummaryCard } from "@/components/ai-elements/form-summary-card";
+import { TaskDraft } from "@/components/ai-elements/task-draft";
+import { TaskDisplay } from "@/components/ai-elements/task-display";
+import { TaskList } from "@/components/ai-elements/task-list";
+import { TaskSchedulingConfirmation } from "@/components/ai-elements/task-scheduling-confirmation";
+import { TaskDeleteConfirmation } from "@/components/ai-elements/task-delete-confirmation";
 import {
   CopyIcon,
   RefreshCwIcon,
@@ -74,7 +79,21 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
   const wrapperRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [mounted, setMounted] = useState(false);
-  const lastMessage = messages[messages.length - 1];
+  
+  // Deduplicate messages to prevent React key collisions
+  // This can happen during streaming updates or localStorage restoration
+  const deduplicatedMessages = messages.reduce((acc, message) => {
+    const existingIndex = acc.findIndex(m => m.id === message.id);
+    if (existingIndex === -1) {
+      acc.push(message);
+    } else {
+      // Keep the newer version (later in the array = more recent update)
+      acc[existingIndex] = message;
+    }
+    return acc;
+  }, [] as MyUIMessage[]);
+  
+  const lastMessage = deduplicatedMessages[deduplicatedMessages.length - 1];
   const showSendingPlaceholder = status === "submitted" && lastMessage?.role === "user";
 
   useEffect(() => {
@@ -105,7 +124,7 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
       <Conversation className="h-full">
         <ConversationContent className="max-w-3xl mx-auto w-full py-10 px-4 lg:px-0 gap-8">
         <AnimatePresence initial={false}>
-          {messages.map((message) => {
+          {deduplicatedMessages.map((message) => {
             const textContent = getMessageTextContent(message);
             const reasoning = getMessageReasoning(message);
             const toolInvocations = getToolInvocations(message);
@@ -159,7 +178,7 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
                     {message.role === "assistant" && reasoning && (
                       <Reasoning
                         isStreaming={
-                          isLoading && message.id === messages[messages.length - 1]?.id
+                          isLoading && message.id === deduplicatedMessages[deduplicatedMessages.length - 1]?.id
                         }
                       >
                         <ReasoningTrigger />
@@ -168,7 +187,8 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
                     )}
 
                     {message.role === "assistant" && (() => {
-                      const normalizedToolInvocations = toolInvocations.map((ti: any) => {
+                      const seenIds = new Set();
+                      const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any) => {
                         const t = ti.toolInvocation || ti;
                         
                         // Extract tool name - handle both old and new AI SDK formats
@@ -185,14 +205,20 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
                         let state = t.state;
                         if (state === "output-available") state = "result";
                         
-                        return {
-                          toolCallId: t.toolCallId || `tool-${Date.now()}-${Math.random()}`,
-                          toolName: toolName,
-                          state: state,
-                          args: t.args || t.input,
-                          result: t.result || t.output,
-                        };
-                      });
+                        const toolCallId = t.toolCallId || `tool-${Date.now()}-${Math.random()}`;
+
+                        if (!seenIds.has(toolCallId)) {
+                          seenIds.add(toolCallId);
+                          acc.push({
+                            toolCallId,
+                            toolName: toolName,
+                            state: state,
+                            args: t.args || t.input,
+                            result: t.result || t.output,
+                          });
+                        }
+                        return acc;
+                      }, []);
                       return normalizedToolInvocations.map((toolInvocation: any) => {
                         const isCompleted = toolInvocation.state === "result";
                         const hasError = toolInvocation.result?.error === true;
@@ -294,6 +320,115 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
                                 firstResponseAt={toolInvocation.result.firstResponseAt}
                                 lastResponseAt={toolInvocation.result.lastResponseAt}
                                 questionSummaries={toolInvocation.result.questionSummaries}
+                              />
+                            );
+                          }
+                        }
+
+                        // Schedule Task (with human-in-the-loop confirmation)
+                        if (toolInvocation.toolName === "scheduleTask" && isCompleted) {
+                          const result = toolInvocation.result;
+                          if (result.status === "pending_confirmation") {
+                            return (
+                              <TaskSchedulingConfirmation
+                                key={toolInvocation.toolCallId}
+                                toolCallId={toolInvocation.toolCallId}
+                                taskDetails={result.taskDetails}
+                                reasoning={result.reasoning}
+                              />
+                            );
+                          }
+                        }
+
+                        // Confirm Scheduled Task (shows success after creation)
+                        if (toolInvocation.toolName === "confirmScheduledTask" && isCompleted) {
+                          if (!hasError && toolInvocation.result?.status === "created") {
+                            return (
+                              <TaskDisplay
+                                key={toolInvocation.toolCallId}
+                                taskId={toolInvocation.result.taskId}
+                                title={toolInvocation.result.title}
+                                notes={toolInvocation.result.notes}
+                                due={toolInvocation.result.due}
+                                priority={toolInvocation.result.priority}
+                                status="needsAction"
+                                isNew={true}
+                              />
+                            );
+                          }
+                        }
+
+                        // Draft Task
+                        if (toolInvocation.toolName === "draftTask" && isCompleted) {
+                          return (
+                            <TaskDraft
+                              key={toolInvocation.toolCallId}
+                              draftId={toolInvocation.toolCallId}
+                              defaultValues={toolInvocation.result}
+                            />
+                          );
+                        }
+
+                        // Create Task
+                        if (toolInvocation.toolName === "createTask" && isCompleted) {
+                          if (!hasError) {
+                            return (
+                              <TaskDisplay
+                                key={toolInvocation.toolCallId}
+                                taskId={toolInvocation.result.taskId}
+                                title={toolInvocation.result.title}
+                                notes={toolInvocation.result.notes}
+                                due={toolInvocation.result.due}
+                                priority={toolInvocation.result.priority}
+                                status={toolInvocation.result.status || "needsAction"}
+                                isNew={true}
+                              />
+                            );
+                          }
+                        }
+
+                        // List Tasks
+                        if (toolInvocation.toolName === "listTasks" && isCompleted) {
+                          if (!hasError) {
+                            return (
+                              <TaskList
+                                key={toolInvocation.toolCallId}
+                                tasks={toolInvocation.result.tasks}
+                                taskCount={toolInvocation.result.taskCount}
+                                pendingCount={toolInvocation.result.pendingCount}
+                                completedCount={toolInvocation.result.completedCount}
+                                message={toolInvocation.result.message}
+                              />
+                            );
+                          }
+                        }
+
+                        // Complete Task
+                        if (toolInvocation.toolName === "completeTask" && isCompleted) {
+                          if (!hasError) {
+                            return (
+                              <TaskDisplay
+                                key={toolInvocation.toolCallId}
+                                taskId={toolInvocation.result.taskId}
+                                title={toolInvocation.result.title}
+                                notes=""
+                                status="completed"
+                                isNew={false}
+                              />
+                            );
+                          }
+                        }
+
+                        // Delete Task (with HITL confirmation)
+                        if (toolInvocation.toolName === "deleteTask" && isCompleted) {
+                          const result = toolInvocation.result;
+                          if (result.status === "pending_confirmation") {
+                            return (
+                              <TaskDeleteConfirmation
+                                key={toolInvocation.toolCallId}
+                                toolCallId={toolInvocation.toolCallId}
+                                taskDetails={result.taskDetails}
+                                message={result.message}
                               />
                             );
                           }
