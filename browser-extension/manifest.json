@@ -32,6 +32,13 @@
         "mac": "Command+Shift+S"
       },
       "description": "Capture image"
+    },
+    "summarize-page": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+A",
+        "mac": "Command+Shift+A"
+      },
+      "description": "Summarize page with Agent0"
     }
   },
   "action": {
