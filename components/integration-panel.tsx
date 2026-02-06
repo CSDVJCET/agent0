@@ -48,7 +48,7 @@ const INTEGRATION_DETAILS: Record<string, { name: string; description: string; f
     description: "Manage to-do lists with Google Tasks.",
     functions: [
       { name: "createTask", description: "Create a new task" },
-      { name: "draftTask", description: "Draft a task with HITL confirmation" },
+      { name: "scheduleTask", description: "Schedule task with HITL confirmation" },
       { name: "listTasks", description: "List tasks in a task list" },
       { name: "updateTask", description: "Modify an existing task" },
       { name: "deleteTask", description: "Remove a task" },

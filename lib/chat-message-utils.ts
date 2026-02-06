@@ -20,7 +20,6 @@ export function getToolTitle(toolName: string): string {
     scheduleTask: "Schedule Task",
     confirmScheduledTask: "Confirm Task",
     createTask: "Create Task",
-    draftTask: "Draft Task",
     listTasks: "List Tasks",
     updateTask: "Update Task",
     deleteTask: "Delete Task",

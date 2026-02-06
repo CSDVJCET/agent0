@@ -40,7 +40,6 @@ import { EmailDraftConfirmation } from "@/components/ai-elements/email-draft-con
 import { FormCreationConfirmation } from "@/components/ai-elements/form-creation-confirmation";
 import { FormResponsesList } from "@/components/ai-elements/form-responses-list";
 import { FormSummaryCard } from "@/components/ai-elements/form-summary-card";
-import { TaskDraft } from "@/components/ai-elements/task-draft";
 import { TaskDisplay } from "@/components/ai-elements/task-display";
 import { TaskList } from "@/components/ai-elements/task-list";
 import { TaskSchedulingConfirmation } from "@/components/ai-elements/task-scheduling-confirmation";
@@ -371,17 +370,6 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
                               />
                             );
                           }
-                        }
-
-                        // Draft Task
-                        if (toolInvocation.toolName === "draftTask" && isCompleted) {
-                          return (
-                            <TaskDraft
-                              key={toolInvocation.toolCallId}
-                              draftId={toolInvocation.toolCallId}
-                              defaultValues={toolInvocation.result}
-                            />
-                          );
                         }
 
                         // Create Task

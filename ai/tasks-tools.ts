@@ -10,13 +10,13 @@ import { getValidAccessToken } from "@/lib/google-calendar";
  * 
  * Available operations:
  * - createTask: Create a new task
- * - draftTask: Draft a task with HITL confirmation
+ * - scheduleTask: Schedule task with HITL confirmation
  * - listTasks: List tasks in a task list
  * - updateTask: Modify an existing task
  * - deleteTask: Remove a task
  * - completeTask: Mark a task as completed
  * - getTaskLists: Get all task lists
- * - scheduleTaskWorkTime: Find optimal time slots for task completion
+ * - moveTask: Move task to different position
  */
 
 // Google Tasks API base URL
@@ -222,32 +222,10 @@ export const getTaskListsTool = tool({
 });
 
 /**
- * Draft a task for user confirmation (HITL)
- */
-export const draftTaskTool = tool({
-  description: "Draft a task for the user to review before creating it. Use this when you want the user to confirm task details before creation.",
-  inputSchema: z.object({
-    title: z.string().optional().describe("The title of the task"),
-    notes: z.string().optional().describe("Additional notes or description for the task"),
-    due: z.string().optional().describe("Due date in ISO 8601 format or YYYY-MM-DD"),
-    priority: z.enum(["high", "medium", "low"]).optional().describe("Priority level of the task"),
-    taskListId: z.string().optional().describe("ID of the task list to add the task to. Defaults to primary task list (@default)."),
-  }),
-  execute: async (params) => {
-    return {
-      ...params,
-      draftId: crypto.randomUUID(),
-      status: "draft",
-      message: "Please review and complete the task details.",
-    };
-  },
-});
-
-/**
  * Create a new task directly
  */
 export const createTaskTool = tool({
-  description: "Create a new task in Google Tasks. Use this when you have sufficient details (at minimum: title). For confirmation workflow, use draftTask instead.",
+  description: "Create a new task in Google Tasks. Use this when you have sufficient details (at minimum: title). For confirmation workflow, use scheduleTask instead.",
   inputSchema: z.object({
     title: z.string().describe("The title of the task"),
     notes: z.string().optional().describe("Additional notes or description for the task"),
@@ -923,7 +901,6 @@ export const tasksTools = {
   scheduleTask: scheduleTaskTool,
   confirmScheduledTask: confirmScheduledTaskTool,
   createTask: createTaskTool,
-  draftTask: draftTaskTool,
   listTasks: listTasksTool,
   updateTask: updateTaskTool,
   deleteTask: deleteTaskTool,
