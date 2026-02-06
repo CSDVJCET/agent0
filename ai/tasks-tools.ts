@@ -16,7 +16,6 @@ import { getValidAccessToken } from "@/lib/google-calendar";
  * - deleteTask: Remove a task
  * - completeTask: Mark a task as completed
  * - getTaskLists: Get all task lists
- * - moveTask: Move task to different position
  */
 
 // Google Tasks API base URL
@@ -834,67 +833,6 @@ export const getTaskTool = tool({
 });
 
 /**
- * Move task to a different position
- */
-export const moveTaskTool = tool({
-  description: "Move a task to a different position in the list or make it a subtask of another task.",
-  inputSchema: z.object({
-    taskId: z.string().describe("The ID of the task to move"),
-    taskListId: z.string().optional().describe("ID of the task list. Defaults to @default."),
-    parent: z.string().optional().describe("New parent task ID (to make it a subtask). Leave empty for top-level."),
-    previous: z.string().optional().describe("Previous sibling task ID (to position after this task)"),
-  }),
-  execute: async ({ taskId, taskListId, parent, previous }) => {
-    const accessToken = await getAccessToken();
-    
-    if (!accessToken) {
-      return {
-        error: true,
-        message: "Google Tasks is not connected. Please connect your Google account first by visiting /api/auth/google",
-      };
-    }
-
-    try {
-      const listId = taskListId || "@default";
-      const params = new URLSearchParams();
-      if (parent) params.set("parent", parent);
-      if (previous) params.set("previous", previous);
-
-      const queryString = params.toString();
-      const url = `/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}/move${queryString ? `?${queryString}` : ''}`;
-
-      const result = await tasksRequest<any>(
-        accessToken,
-        url,
-        "POST"
-      );
-
-      if (!result.success) {
-        return {
-          error: true,
-          message: result.error || "Failed to move task",
-        };
-      }
-
-      const moved = parseTask(result.data);
-      return {
-        error: false,
-        taskId: moved.id,
-        title: moved.title,
-        parent: moved.parent,
-        position: moved.position,
-        message: `Successfully moved task "${moved.title}"`,
-      };
-    } catch (err) {
-      return {
-        error: true,
-        message: err instanceof Error ? err.message : "Failed to move task",
-      };
-    }
-  },
-});
-
-/**
  * Export all tasks tools
  */
 export const tasksTools = {
@@ -908,7 +846,6 @@ export const tasksTools = {
   uncompleteTask: uncompleteTaskTool,
   getTask: getTaskTool,
   getTaskLists: getTaskListsTool,
-  moveTask: moveTaskTool,
 };
 
 export default tasksTools;

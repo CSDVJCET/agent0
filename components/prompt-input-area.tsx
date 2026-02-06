@@ -57,7 +57,13 @@ export function PromptInputArea({
   // Load available tools on mount and when integrations change
   useEffect(() => {
     fetchInstalledTools()
-      .then((tools) => setAvailableTools(tools))
+      .then((tools) => {
+        // Filter tools to only show installed ones based on addedIntegrations
+        const installedTools = tools.filter(tool => 
+          addedIntegrations.includes(tool.id)
+        );
+        setAvailableTools(installedTools);
+      })
       .catch((err) => console.error("Failed to load tools:", err));
   }, [addedIntegrations]);
 

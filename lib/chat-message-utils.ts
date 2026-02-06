@@ -27,7 +27,6 @@ export function getToolTitle(toolName: string): string {
     uncompleteTask: "Reopen Task",
     getTask: "Get Task",
     getTaskLists: "Get Task Lists",
-    moveTask: "Move Task",
     // Forms tools
     createSurveyForm: "Create Form",
     confirmCreateForm: "Confirm Form",

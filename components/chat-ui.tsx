@@ -93,6 +93,7 @@ export function ChatUI() {
   const [addedIntegrations, setAddedIntegrations] = useState<string[]>([]);
   const [isCalendarConnected, setIsCalendarConnected] = useState(false);
   const [isFormsConnected, setIsFormsConnected] = useState(false);
+  const [isTasksConnected, setIsTasksConnected] = useState(false);
   
   // File input ref for native FileList handling
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -166,6 +167,8 @@ export function ChatUI() {
           setIsCalendarConnected(!!data.connected);
           // Forms uses the same tokens, check if forms scopes are authorized
           setIsFormsConnected(!!data.hasFormsScopes);
+          // Tasks uses the same tokens, check if tasks scopes are authorized
+          setIsTasksConnected(!!data.hasTasksScopes);
         })
         .catch((e) => console.error("Failed to check calendar auth status", e));
     } catch (e) {
@@ -197,16 +200,7 @@ export function ChatUI() {
     }
   }, [enableThinking, isLoaded]);
 
-  // Save integrations to local storage
-  useEffect(() => {
-    if (isLoaded) {
-      try {
-        localStorage.setItem(STORAGE_KEYS.INTEGRATIONS, JSON.stringify(addedIntegrations));
-      } catch (e) {
-        console.error("Failed to save integrations to localStorage", e);
-      }
-    }
-  }, [addedIntegrations, isLoaded]);
+  // Note: integrations are persisted via API, not localStorage
 
   // If model doesn't support thinking, force thinking off
   useEffect(() => {
@@ -322,6 +316,10 @@ export function ChatUI() {
         console.log('Google Forms Auth success received');
         setIsFormsConnected(true);
       }
+      if (event.data?.type === 'GOOGLE_TASKS_AUTH_SUCCESS') {
+        console.log('Google Tasks Auth success received');
+        setIsTasksConnected(true);
+      }
     };
     window.addEventListener('message', handleAuthMessage);
     return () => window.removeEventListener('message', handleAuthMessage);
@@ -392,6 +390,19 @@ export function ChatUI() {
     }
   }, [setMessages]);
 
+  // Helper to reload integrations from API
+  const reloadIntegrations = useCallback(async () => {
+    try {
+      const res = await fetch("/api/tools/installed");
+      const data = await res.json();
+      if (data.tools && Array.isArray(data.tools)) {
+        setAddedIntegrations(data.tools.map((t: any) => t.id));
+      }
+    } catch (e) {
+      console.error("Failed to reload installed tools", e);
+    }
+  }, []);
+
   const handleAddIntegration = useCallback(async (id: string) => {
     // Optimistic update
     if (!addedIntegrations.includes(id)) {
@@ -407,8 +418,12 @@ export function ChatUI() {
         body: JSON.stringify({ toolId: id }),
       });
       
-      // Special handling for Calendar
-      if (id === "calendar" && !isCalendarConnected) {
+      // Check current auth status before opening OAuth popup
+      const authResponse = await fetch("/api/auth/google?action=status");
+      const authData = await authResponse.json();
+      
+      // Special handling for Calendar - only open OAuth if not connected
+      if (id === "calendar" && !authData.hasCalendarScopes) {
          const width = 600;
          const height = 700;
          const left = window.screen.width / 2 - width / 2;
@@ -419,10 +434,12 @@ export function ChatUI() {
            "GoogleAuth", 
            `width=${width},height=${height},left=${left},top=${top}`
          );
+      } else if (id === "calendar") {
+        setIsCalendarConnected(true);
       }
 
-      // Special handling for Forms - use unified OAuth endpoint with forms scopes
-      if (id === "forms" && !isFormsConnected) {
+      // Special handling for Forms - only open OAuth if not connected
+      if (id === "forms" && !authData.hasFormsScopes) {
          const width = 600;
          const height = 700;
          const left = window.screen.width / 2 - width / 2;
@@ -433,13 +450,34 @@ export function ChatUI() {
            "GoogleFormsAuth", 
            `width=${width},height=${height},left=${left},top=${top}`
          );
+      } else if (id === "forms") {
+        setIsFormsConnected(true);
       }
+
+      // Special handling for Tasks - only open OAuth if not connected
+      if (id === "tasks" && !authData.hasTasksScopes) {
+         const width = 600;
+         const height = 700;
+         const left = window.screen.width / 2 - width / 2;
+         const top = window.screen.height / 2 - height / 2;
+         
+         window.open(
+           "/api/auth/google?service=tasks", 
+           "GoogleTasksAuth", 
+           `width=${width},height=${height},left=${left},top=${top}`
+         );
+      } else if (id === "tasks") {
+        setIsTasksConnected(true);
+      }
+      
+      // Reload integrations to ensure sync with server
+      await reloadIntegrations();
     } catch (error) {
       console.error("Failed to install tool", error);
       // Revert optimistic update
       setAddedIntegrations((prev) => prev.filter(i => i !== id));
     }
-  }, [addedIntegrations, isCalendarConnected, isFormsConnected]);
+  }, [addedIntegrations, reloadIntegrations]);
 
   const handleRemoveIntegration = useCallback(async (id: string) => {
     setAddedIntegrations((prev) => prev.filter((i) => i !== id));
@@ -453,23 +491,31 @@ export function ChatUI() {
         body: JSON.stringify({ toolId: id }),
       });
 
-      // Special handling for Calendar logout
+      // Delete OAuth tokens when removing integrations
+      // This requires re-authentication when re-adding the integration
       if (id === "calendar") {
         await fetch("/api/auth/google", { method: "DELETE" });
         setIsCalendarConnected(false);
       }
 
-      // Special handling for Forms logout
       if (id === "forms") {
-        await fetch("/api/auth/google-forms", { method: "DELETE" });
+        await fetch("/api/auth/google", { method: "DELETE" });
         setIsFormsConnected(false);
       }
+
+      if (id === "tasks") {
+        await fetch("/api/auth/google", { method: "DELETE" });
+        setIsTasksConnected(false);
+      }
+      
+      // Reload integrations to ensure sync with server
+      await reloadIntegrations();
     } catch (error) {
       console.error("Failed to uninstall tool", error);
       // Revert optimistic update
       setAddedIntegrations((prev) => [...prev, id]);
     }
-  }, [activeIntegration]);
+  }, [activeIntegration, reloadIntegrations]);
 
   // Simplified handleSubmit using AI SDK's new API
   const handleSubmit = async (value: { text: string; files: any[] }) => {

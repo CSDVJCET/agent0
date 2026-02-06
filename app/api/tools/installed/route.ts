@@ -33,6 +33,22 @@ function getToolMetadata(id: string) {
       icon: "mail",
     };
   }
+  if (id === "tasks") {
+    return {
+      name: "Tasks",
+      description: "Create, track, and manage to-do lists with Google Tasks",
+      category: "productivity",
+      icon: "list-todo",
+    };
+  }
+  if (id === "forms") {
+    return {
+      name: "Forms",
+      description: "Create surveys and forms, collect responses with Google Forms",
+      category: "productivity",
+      icon: "file-text",
+    };
+  }
   return {
     name: id,
     description: "Custom tool",

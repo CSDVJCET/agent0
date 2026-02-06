@@ -301,7 +301,6 @@ export async function POST(req: Request) {
           tools.uncompleteTask = tasksTools.uncompleteTask;
           tools.getTask = tasksTools.getTask;
           tools.getTaskLists = tasksTools.getTaskLists;
-          tools.moveTask = tasksTools.moveTask;
         } else {
           console.warn("Tasks tool mentioned but not installed");
         }

@@ -193,11 +193,14 @@ export async function getValidAccessToken(userId: string): Promise<string | null
  * @param state - State parameter for CSRF protection
  * @param service - Which service to authorize: 'calendar', 'forms', or 'all'
  */
-export function getAuthorizationUrl(state?: string, service: 'calendar' | 'forms' | 'all' = 'calendar'): string {
+export function getAuthorizationUrl(state?: string, service: 'calendar' | 'forms' | 'tasks' | 'all' = 'calendar'): string {
   let scopes: string[];
   switch (service) {
     case 'forms':
       scopes = GOOGLE_FORMS_SCOPES;
+      break;
+    case 'tasks':
+      scopes = GOOGLE_CALENDAR_SCOPES; // Tasks scopes are included in calendar scopes
       break;
     case 'all':
       scopes = GOOGLE_ALL_SCOPES;
