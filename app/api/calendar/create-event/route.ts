@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getValidAccessToken } from "@/lib/google-calendar";
+import { v4 as uuidv4 } from "uuid";
 
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
 const DEFAULT_USER_ID = "default-user";
@@ -13,6 +14,7 @@ const createEventSchema = z.object({
   location: z.string().optional(),
   attendees: z.array(z.string().email()).optional(),
   description: z.string().optional(),
+  addMeetLink: z.boolean().optional(), // New: Option to add Google Meet link
 });
 
 function formatEventDateTime(
@@ -60,7 +62,27 @@ export async function POST(req: NextRequest) {
       event.attendees = parsed.attendees.map(email => ({ email }));
     }
 
-    const response = await fetch(`${CALENDAR_API_BASE}/calendars/primary/events`, {
+    // Add Google Meet conference if requested or if location contains a Meet link
+    const shouldAddMeet = parsed.addMeetLink || 
+      (parsed.location && parsed.location.includes("meet.google.com"));
+    
+    if (shouldAddMeet) {
+      event.conferenceData = {
+        createRequest: {
+          requestId: uuidv4(),
+          conferenceSolutionKey: {
+            type: "hangoutsMeet",
+          },
+        },
+      };
+    }
+
+    // Add conferenceDataVersion=1 query parameter if we're adding Meet
+    const url = shouldAddMeet 
+      ? `${CALENDAR_API_BASE}/calendars/primary/events?conferenceDataVersion=1`
+      : `${CALENDAR_API_BASE}/calendars/primary/events`;
+
+    const response = await fetch(url, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -79,6 +101,11 @@ export async function POST(req: NextRequest) {
 
     const data = await response.json();
 
+    // Extract Google Meet link if available
+    const meetLink = data.conferenceData?.entryPoints?.find(
+      (entry: { entryPointType: string }) => entry.entryPointType === "video"
+    )?.uri || data.hangoutLink;
+
     return NextResponse.json({
       error: false,
       eventId: data.id,
@@ -86,6 +113,7 @@ export async function POST(req: NextRequest) {
       startTime: data.start?.dateTime || data.start?.date,
       endTime: data.end?.dateTime || data.end?.date,
       link: data.htmlLink,
+      meetLink: meetLink, // Include Meet link in response
       message: `Event "${data.summary}" created successfully!`,
     });
   } catch (err) {
