@@ -5,11 +5,10 @@ import { format } from "date-fns";
 import { 
   EditIcon, 
   XIcon, 
-  CheckIcon,
-  Loader2Icon,
-  ArrowRightIcon,
-  CalendarIcon,
-  ClockIcon,
+  CheckIcon, 
+  Loader2Icon, 
+  ArrowRightIcon, 
+  CalendarIcon, 
   AlertTriangleIcon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
