@@ -1,4 +1,7 @@
 // Content script for Agent0 Screenshot Extension
+// Prevent multiple initialization
+if (typeof window.__agent0ExtensionLoaded === 'undefined') {
+  window.__agent0ExtensionLoaded = true;
 
 let isCapturing = false;
 let selectionOverlay = null;
@@ -6,11 +9,106 @@ let canvas = null;
 let startPoint = null;
 let currentRect = null;
 
+// Extract main content from the page for summarization
+function extractPageContent() {
+  console.log('=== Extracting page content ===');
+  console.log('Page URL:', window.location.href);
+  console.log('Page title:', document.title);
+  
+  // Try common article selectors first
+  const articleSelectors = [
+    'article',
+    '[role="main"]',
+    '.article-content',
+    '.post-content',
+    'main'
+  ];
+  
+  let mainContent = null;
+  for (const selector of articleSelectors) {
+    const element = document.querySelector(selector);
+    if (element) {
+      mainContent = element;
+      console.log('Found content using selector:', selector);
+      break;
+    }
+  }
+  
+  // Fallback to body if no article found
+  if (!mainContent) {
+    mainContent = document.body;
+    console.log('Using document.body as fallback');
+  }
+  
+  // Clone and clean the content
+  const clone = mainContent.cloneNode(true);
+  
+  // Remove unwanted elements
+  const unwantedSelectors = [
+    'script', 'style', 'nav', 'header', 'footer',
+    'aside', '.ad', '.advertisement', '.social-share',
+    '.comments', '.related-posts', '[role="navigation"]',
+    'iframe', 'noscript', '.sidebar', '.menu', '.popup'
+  ];
+  
+  let removedCount = 0;
+  unwantedSelectors.forEach(selector => {
+    const elements = clone.querySelectorAll(selector);
+    removedCount += elements.length;
+    elements.forEach(el => el.remove());
+  });
+  
+  console.log(`Removed ${removedCount} unwanted elements`);
+  
+  // Extract text with basic formatting
+  const extractedText = clone.innerText.trim();
+  console.log(`Extracted ${extractedText.length} characters of text`);
+  
+  const result = {
+    text: extractedText,
+    title: document.title,
+    url: window.location.href
+  };
+  
+  console.log('Content extraction complete:', {
+    textLength: result.text.length,
+    title: result.title,
+    url: result.url
+  });
+  
+  return result;
+}
+
 // Listen for messages from background script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  console.log('Content script received message:', request.action);
+  
   if (request.action === 'startCapture') {
     startScreenshotCapture();
     sendResponse({ success: true });
+  } else if (request.action === 'extractPageContent') {
+    try {
+      console.log('Processing extractPageContent request...');
+      
+      // Show a visual indicator that extraction is happening
+      showToastNotification('Extracting page content...', 'info');
+      
+      const content = extractPageContent();
+      console.log('Sending extraction response:', {
+        success: true,
+        textLength: content.text.length,
+        title: content.title
+      });
+      
+      // Show success message
+      showToastNotification(`Extracted ${content.text.length} characters. Opening Agent0...`, 'success');
+      
+      sendResponse({ success: true, content });
+    } catch (error) {
+      console.error('Content extraction failed:', error);
+      showToastNotification('Failed to extract content: ' + error.message, 'error');
+      sendResponse({ success: false, error: error.message });
+    }
   }
   return true;
 });
@@ -286,6 +384,23 @@ function showToastNotification(message, type = 'info') {
   
   const toast = document.createElement('div');
   toast.id = 'agent0-toast';
+  
+  // Different colors for different types
+  let bgColor, textColor, borderColor;
+  if (type === 'error') {
+    bgColor = '#fee2e2';
+    textColor = '#991b1b';
+    borderColor = '#fecaca';
+  } else if (type === 'success') {
+    bgColor = '#d1fae5';
+    textColor = '#065f46';
+    borderColor = '#a7f3d0';
+  } else {
+    bgColor = '#dbeafe';
+    textColor = '#1e40af';
+    borderColor = '#bfdbfe';
+  }
+  
   toast.style.cssText = `
     position: fixed;
     bottom: 20px;
@@ -299,9 +414,9 @@ function showToastNotification(message, type = 'info') {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     z-index: 2147483647;
     animation: agent0-toast-fade-in 0.3s ease-out;
-    ${type === 'error' 
-      ? 'background: #fee2e2; color: #991b1b; border: 1px solid #fecaca;' 
-      : 'background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0;'}
+    background: ${bgColor};
+    color: ${textColor};
+    border: 1px solid ${borderColor};
   `;
   toast.textContent = message;
   document.body.appendChild(toast);
@@ -315,3 +430,5 @@ function showToastNotification(message, type = 'info') {
     }
   }, 4000);
 }
+
+} // End of initialization check

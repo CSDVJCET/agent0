@@ -89,6 +89,192 @@ export function ChatUI() {
     isLoaded,
     setIsLoaded: state.setIsLoaded,
   });
+  // Load state from local storage on mount
+  useEffect(() => {
+    try {
+      const savedModelId = localStorage.getItem(STORAGE_KEYS.MODEL);
+      if (savedModelId) {
+        const model = models.find((m) => m.id === savedModelId);
+        if (model) setSelectedModel(model);
+      }
+
+      const savedThinking = localStorage.getItem(STORAGE_KEYS.THINKING);
+      if (savedThinking != null) {
+        setEnableThinking(savedThinking === "true");
+      }
+
+      const savedMessages = localStorage.getItem(STORAGE_KEYS.MESSAGES);
+      if (savedMessages) {
+        try {
+          const parsed = JSON.parse(savedMessages);
+          if (Array.isArray(parsed)) {
+            setMessages(dedupeMessages(parsed));
+          }
+        } catch (e) {
+          console.error("Failed to parse saved messages", e);
+          localStorage.removeItem(STORAGE_KEYS.MESSAGES);
+        }
+      }
+
+      // Fetch installed tools from API
+      fetch("/api/tools/installed")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.tools && Array.isArray(data.tools)) {
+            setAddedIntegrations(data.tools.map((t: any) => t.id));
+          }
+        })
+        .catch((e) => console.error("Failed to fetch installed tools", e));
+
+      // Check Google Calendar auth status
+      fetch("/api/auth/google?action=status")
+        .then((res) => res.json())
+        .then((data) => {
+          setIsCalendarConnected(!!data.connected);
+          // Forms uses the same tokens, check if forms scopes are authorized
+          setIsFormsConnected(!!data.hasFormsScopes);
+        })
+        .catch((e) => console.error("Failed to check calendar auth status", e));
+    } catch (e) {
+      console.error("Failed to load from localStorage", e);
+    }
+    setIsLoaded(true);
+  }, [setMessages]);
+
+  // Save model to local storage when it changes
+  useEffect(() => {
+    if (isLoaded) {
+      try {
+        localStorage.setItem(STORAGE_KEYS.MODEL, selectedModel.id);
+      } catch (e) {
+        // Handle quota exceeded or other localStorage errors
+        console.error("Failed to save model to localStorage", e);
+      }
+    }
+  }, [selectedModel, isLoaded]);
+
+  // Save thinking preference to local storage
+  useEffect(() => {
+    if (isLoaded) {
+      try {
+        localStorage.setItem(STORAGE_KEYS.THINKING, String(enableThinking));
+      } catch (e) {
+        console.error("Failed to save thinking to localStorage", e);
+      }
+    }
+  }, [enableThinking, isLoaded]);
+
+  // Save integrations to local storage
+  useEffect(() => {
+    if (isLoaded) {
+      try {
+        localStorage.setItem(STORAGE_KEYS.INTEGRATIONS, JSON.stringify(addedIntegrations));
+      } catch (e) {
+        console.error("Failed to save integrations to localStorage", e);
+      }
+    }
+  }, [addedIntegrations, isLoaded]);
+
+  // If model doesn't support thinking, force thinking off
+  useEffect(() => {
+    if (!selectedModel.supportsThinking && enableThinking) {
+      setEnableThinking(false);
+    }
+  }, [selectedModel, enableThinking]);
+
+  const dedupedMessages = useMemo(() => dedupeMessages(messages), [messages]);
+
+  // Save messages to local storage when they change
+  useEffect(() => {
+    if (isLoaded) {
+      try {
+        const serialized = JSON.stringify(dedupedMessages);
+        localStorage.setItem(STORAGE_KEYS.MESSAGES, serialized);
+      } catch (e) {
+        // Handle quota exceeded - try to clear old messages
+        if (e instanceof DOMException && e.name === "QuotaExceededError") {
+          console.warn("localStorage quota exceeded, clearing old messages");
+          try {
+            localStorage.removeItem(STORAGE_KEYS.MESSAGES);
+          } catch {
+            // Ignore errors when clearing
+          }
+        } else {
+          console.error("Failed to save messages to localStorage", e);
+        }
+      }
+    }
+  }, [dedupedMessages, isLoaded]);
+
+  // Listen for extension messages (screenshot + text context + summarization)
+  useEffect(() => {
+    console.log('Setting up extension message listener');
+    
+    const setControlledTextareaValue = (textarea: HTMLTextAreaElement, value: string) => {
+      const proto = window.HTMLTextAreaElement.prototype;
+      const descriptor = Object.getOwnPropertyDescriptor(proto, "value");
+      const setter = descriptor?.set;
+      if (setter) {
+        setter.call(textarea, value);
+      } else {
+        textarea.value = value;
+      }
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+
+    const handleExtensionMessage = (event: MessageEvent) => {
+      console.log('Received message event:', {
+        type: event.data?.type,
+        origin: event.origin,
+        windowOrigin: window.location.origin,
+        data: event.data
+      });
+      
+      // Only accept same-origin messages
+      if (event.origin !== window.location.origin) {
+        console.log('Rejected message - origin mismatch');
+        return;
+      }
+
+      if (event.data?.type === 'AGENT0_SCREENSHOT') {
+        const { screenshot, pageUrl, pageTitle, selectedText } = event.data.data;
+        
+        const filename = `${pageTitle || 'Screenshot'}.png`;
+        const screenshotAttachment: FileAttachment = {
+          name: filename,
+          type: 'image/png',
+          size: screenshot.length,
+          url: screenshot,
+        };
+        
+        setAttachments((prev) => [...prev, screenshotAttachment]);
+        
+        if (selectedText) {
+          setInputValue((prev) => {
+            const context = `[Screenshot from: ${pageTitle}]\n${selectedText}\n\n${prev}`;
+            return context;
+          });
+        } else if (pageUrl) {
+          setInputValue((prev) => {
+            const context = `[Screenshot from: ${pageTitle || pageUrl}]\n\n${prev}`;
+            return context;
+          });
+        }
+        
+        setTimeout(() => {
+          const textarea = document.querySelector('textarea[placeholder="Send a message..."]') as HTMLTextAreaElement;
+          textarea?.focus();
+        }, 100);
+        
+        console.log('Screenshot received and attached:', {
+          pageTitle,
+          pageUrl,
+          hasSelectedText: !!selectedText
+        });
+      } else if (event.data?.type === 'AGENT0_CONTEXT_TEXT') {
+        const data = event.data?.data || {};
+        const selectedText = typeof data.selectedText === "string" ? data.selectedText.trim() : "";
+        if (!selectedText) return;
 
   const { handleFileSelect, handleFilesDropped, removeAttachment } = useFileHandlers(setAttachments);
 
@@ -99,6 +285,81 @@ export function ChatUI() {
     setIsFormsConnected,
     setIsTasksConnected
   );
+        const existing = textarea.value || "";
+        setControlledTextareaValue(textarea, `${context}${existing}`);
+        textarea.focus();
+      } else if (event.data?.type === 'AGENT0_SUMMARIZE_PAGE') {
+        console.log('Received AGENT0_SUMMARIZE_PAGE message:', event.data);
+        
+        const { pageUrl, pageTitle, pageContent, fileData, fileName } = event.data.data;
+        
+        // Validate required data
+        if (!fileData || !fileName) {
+          console.error('Missing required data:', { hasFileData: !!fileData, fileName });
+          return;
+        }
+        
+        console.log('Processing page summarization:', {
+          fileName,
+          pageTitle,
+          pageUrl,
+          contentLength: pageContent?.length,
+          fileDataLength: fileData.length
+        });
+        
+        // Create file attachment from the extracted page content
+        const fileAttachment: FileAttachment = {
+          name: fileName,
+          type: 'text/plain',
+          size: fileData.length,
+          url: fileData,
+        };
+        
+        setAttachments((prev) => {
+          console.log('Adding file attachment:', fileName);
+          return [...prev, fileAttachment];
+        });
+        
+        // Auto-enable search for fact-checking
+        setEnableSearch(true);
+        
+        setTimeout(() => {
+          const textarea = document.querySelector('textarea[placeholder="Send a message..."]') as HTMLTextAreaElement;
+          textarea?.focus();
+        }, 100);
+        
+        console.log('Page content successfully loaded for summarization');
+      }
+    };
+    
+    console.log('Adding message event listener');
+    window.addEventListener('message', handleExtensionMessage);
+    
+    // Check for any pending summarization data that arrived before the listener was ready
+    if ((window as any).__agent0PendingSummarization) {
+      console.log('Found pending summarization data, processing now...');
+      const pendingData = (window as any).__agent0PendingSummarization;
+      delete (window as any).__agent0PendingSummarization;
+      
+      // Process the pending data
+      setTimeout(() => {
+        handleExtensionMessage({
+          origin: window.location.origin,
+          data: {
+            type: 'AGENT0_SUMMARIZE_PAGE',
+            data: pendingData
+          }
+        } as MessageEvent);
+      }, 100);
+    }
+    
+    console.log('Extension message listener is ready');
+    
+    return () => {
+      console.log('Removing message event listener');
+      window.removeEventListener('message', handleExtensionMessage);
+    };
+  }, []);
 
   const { handleAddIntegration, handleRemoveIntegration } = useIntegrationHandlers({
     addedIntegrations,
