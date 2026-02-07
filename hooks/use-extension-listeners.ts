@@ -6,9 +6,12 @@ export function useExtensionListeners(
   setInputValue: React.Dispatch<React.SetStateAction<string>>,
   setIsCalendarConnected: React.Dispatch<React.SetStateAction<boolean>>,
   setIsFormsConnected: React.Dispatch<React.SetStateAction<boolean>>,
-  setIsTasksConnected: React.Dispatch<React.SetStateAction<boolean>>
+  setIsTasksConnected: React.Dispatch<React.SetStateAction<boolean>>,
+  setEnableSearch: React.Dispatch<React.SetStateAction<boolean>>
 ) {
   useEffect(() => {
+    console.log('Setting up extension message listener');
+    
     const setControlledTextareaValue = (textarea: HTMLTextAreaElement, value: string) => {
       const proto = window.HTMLTextAreaElement.prototype;
       const descriptor = Object.getOwnPropertyDescriptor(proto, "value");
@@ -22,7 +25,18 @@ export function useExtensionListeners(
     };
 
     const handleExtensionMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
+      console.log('Received message event:', {
+        type: event.data?.type,
+        origin: event.origin,
+        windowOrigin: window.location.origin,
+        data: event.data
+      });
+      
+      // Only accept same-origin messages
+      if (event.origin !== window.location.origin) {
+        console.log('Rejected message - origin mismatch');
+        return;
+      }
 
       if (event.data?.type === 'AGENT0_SCREENSHOT') {
         const { screenshot, pageUrl, pageTitle, selectedText } = event.data.data;
@@ -71,6 +85,47 @@ export function useExtensionListeners(
         const existing = textarea.value || "";
         setControlledTextareaValue(textarea, `${context}${existing}`);
         textarea.focus();
+      } else if (event.data?.type === 'AGENT0_SUMMARIZE_PAGE') {
+        console.log('Received AGENT0_SUMMARIZE_PAGE message:', event.data);
+        
+        const { pageUrl, pageTitle, pageContent, fileData, fileName } = event.data.data;
+        
+        // Validate required data
+        if (!fileData || !fileName) {
+          console.error('Missing required data:', { hasFileData: !!fileData, fileName });
+          return;
+        }
+        
+        console.log('Processing page summarization:', {
+          fileName,
+          pageTitle,
+          pageUrl,
+          contentLength: pageContent?.length,
+          fileDataLength: fileData.length
+        });
+        
+        // Create file attachment from the extracted page content
+        const fileAttachment: FileAttachment = {
+          name: fileName,
+          type: 'text/plain',
+          size: fileData.length,
+          url: fileData,
+        };
+        
+        setAttachments((prev) => {
+          console.log('Adding file attachment:', fileName);
+          return [...prev, fileAttachment];
+        });
+        
+        // Auto-enable search for fact-checking
+        setEnableSearch(true);
+        
+        setTimeout(() => {
+          const textarea = document.querySelector('textarea[placeholder="Send a message..."]') as HTMLTextAreaElement;
+          textarea?.focus();
+        }, 100);
+        
+        console.log('Page content successfully loaded for summarization');
       }
     };
 
@@ -89,12 +144,34 @@ export function useExtensionListeners(
       }
     };
     
+    console.log('Adding message event listener');
     window.addEventListener('message', handleExtensionMessage);
     window.addEventListener('message', handleAuthMessage);
     
+    // Check for any pending summarization data that arrived before the listener was ready
+    if ((window as any).__agent0PendingSummarization) {
+      console.log('Found pending summarization data, processing now...');
+      const pendingData = (window as any).__agent0PendingSummarization;
+      delete (window as any).__agent0PendingSummarization;
+      
+      // Process the pending data
+      setTimeout(() => {
+        handleExtensionMessage({
+          origin: window.location.origin,
+          data: {
+            type: 'AGENT0_SUMMARIZE_PAGE',
+            data: pendingData
+          }
+        } as MessageEvent);
+      }, 100);
+    }
+    
+    console.log('Extension message listener is ready');
+    
     return () => {
+      console.log('Removing message event listener');
       window.removeEventListener('message', handleExtensionMessage);
       window.removeEventListener('message', handleAuthMessage);
     };
-  }, [setAttachments, setInputValue, setIsCalendarConnected, setIsFormsConnected, setIsTasksConnected]);
+  }, [setAttachments, setInputValue, setIsCalendarConnected, setIsFormsConnected, setIsTasksConnected, setEnableSearch]);
 }
