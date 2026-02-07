@@ -10,7 +10,9 @@ import {
   XIcon,
   Loader2Icon,
   AlertTriangleIcon,
-  SparklesIcon
+  SparklesIcon,
+  ClockIcon,
+  AlertCircleIcon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -26,12 +28,20 @@ import {
   ChainOfThoughtStep,
 } from "@/components/ai-elements/chain-of-thought";
 
+interface ConflictingTask {
+  id: string;
+  title: string;
+  due?: string;
+}
+
 interface TaskDetails {
   title: string;
   notes?: string;
   due?: string;
+  dueTime?: string;
   priority?: "high" | "medium" | "low";
   taskListId?: string;
+  generateNotes?: boolean;
 }
 
 interface CreatedTaskResult {
@@ -47,13 +57,31 @@ interface TaskSchedulingConfirmationProps {
   toolCallId: string;
   taskDetails: TaskDetails;
   reasoning: string;
+  conflictingTasks?: ConflictingTask[];
+  conflictWarning?: string;
+  needsTimeInput?: boolean;
 }
 
 export function TaskSchedulingConfirmation({
   toolCallId,
   taskDetails,
   reasoning,
+  conflictingTasks,
+  conflictWarning,
+  needsTimeInput,
 }: TaskSchedulingConfirmationProps) {
+  // Parse existing time from due if present
+  const parseTimeFromDue = (due: string | undefined): string => {
+    if (!due) return "";
+    if (due.includes('T')) {
+      const timePart = due.split('T')[1];
+      if (timePart) {
+        return timePart.substring(0, 5); // HH:mm
+      }
+    }
+    return "";
+  };
+
   const [formData, setFormData] = useState({
     title: taskDetails.title || "",
     notes: taskDetails.notes || "",
@@ -62,29 +90,60 @@ export function TaskSchedulingConfirmation({
         ? taskDetails.due.split('T')[0] 
         : taskDetails.due
       : "",
+    dueTime: taskDetails.dueTime || parseTimeFromDue(taskDetails.due) || "",
     priority: taskDetails.priority || "medium",
+    generateNotes: taskDetails.generateNotes ?? false,
   });
   
   const [status, setStatus] = useState<"pending" | "creating" | "created" | "rejected" | "error">("pending");
   const [createdTask, setCreatedTask] = useState<CreatedTaskResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showTimeWarning, setShowTimeWarning] = useState(needsTimeInput ?? false);
 
-  const handleChange = (field: string, value: string) => {
+  const handleChange = (field: string, value: string | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    if (field === "dueTime" && value) {
+      setShowTimeWarning(false);
+    }
+  };
+
+  // Validate time logic (end time should be after start time on same date)
+  const validateTime = (): { valid: boolean; message?: string } => {
+    if (formData.due && formData.dueTime) {
+      const [hours, minutes] = formData.dueTime.split(':').map(Number);
+      // Warn if task is scheduled for very early morning (before 6 AM) or very late night (after 11 PM)
+      if (hours < 6 || hours >= 23) {
+        return { valid: true, message: `Note: Task scheduled for ${hours < 6 ? 'early morning' : 'late night'}` };
+      }
+    }
+    return { valid: true };
   };
 
   const handleConfirm = async () => {
+    // Check if time is needed but not provided
+    if (needsTimeInput && !formData.dueTime) {
+      setShowTimeWarning(true);
+      setErrorMessage("Please specify a time for this task");
+      return;
+    }
+
     setStatus("creating");
     setErrorMessage(null);
 
     try {
+      // Combine date and time if both are provided
+      let dueDateTime = formData.due;
+      if (formData.due && formData.dueTime) {
+        dueDateTime = `${formData.due}T${formData.dueTime}:00`;
+      }
+
       const response = await fetch("/api/tasks/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: formData.title,
           notes: formData.notes || undefined,
-          due: formData.due || undefined,
+          due: dueDateTime || undefined,
           priority: formData.priority,
           taskListId: taskDetails.taskListId,
         }),
@@ -220,6 +279,46 @@ export function TaskSchedulingConfirmation({
             </div>
           </div>
         </div>
+
+        {/* Conflict Warning */}
+        {conflictingTasks && conflictingTasks.length > 0 && (
+          <div className="border-b border-yellow-500/20 bg-yellow-500/5 p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircleIcon className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="font-medium text-sm text-yellow-700 dark:text-yellow-400">
+                  Scheduling Conflict Detected
+                </h4>
+                <p className="text-xs text-yellow-600/80 mt-1">
+                  {conflictWarning || `You have ${conflictingTasks.length} other task(s) scheduled around this time:`}
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {conflictingTasks.map(task => (
+                    <li key={task.id} className="text-xs text-yellow-600/70 flex items-center gap-1">
+                      <span className="w-1 h-1 rounded-full bg-yellow-500" />
+                      {task.title}
+                      {task.due && ` (${format(new Date(task.due), "MMM d, h:mm a")})`}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Time Required Warning */}
+        {showTimeWarning && (
+          <div className="border-b border-orange-500/20 bg-orange-500/5 p-4">
+            <div className="flex items-center gap-3">
+              <ClockIcon className="w-5 h-5 text-orange-600" />
+              <div className="flex-1">
+                <p className="text-sm text-orange-700 dark:text-orange-400">
+                  Please specify a time for this task
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         
         {/* Form Content */}
         <div className="p-5 space-y-4">
@@ -241,8 +340,8 @@ export function TaskSchedulingConfirmation({
             />
           </div>
 
-          {/* Due Date & Priority */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Due Date, Time & Priority */}
+          <div className="grid grid-cols-3 gap-3">
             <div className="space-y-2">
               <Label htmlFor={`due-${toolCallId}`} className="text-xs font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
                 <CalendarIcon className="w-3 h-3" />
@@ -254,6 +353,23 @@ export function TaskSchedulingConfirmation({
                 value={formData.due}
                 onChange={(e) => handleChange("due", e.target.value)}
                 className="h-10 transition-all"
+                disabled={status === "creating"}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor={`dueTime-${toolCallId}`} className="text-xs font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                <ClockIcon className="w-3 h-3" />
+                Time {needsTimeInput && <span className="text-destructive">*</span>}
+              </Label>
+              <Input
+                id={`dueTime-${toolCallId}`}
+                type="time"
+                value={formData.dueTime}
+                onChange={(e) => handleChange("dueTime", e.target.value)}
+                className={cn(
+                  "h-10 transition-all",
+                  showTimeWarning && !formData.dueTime && "border-orange-500/50 focus-visible:ring-orange-500/20"
+                )}
                 disabled={status === "creating"}
               />
             </div>

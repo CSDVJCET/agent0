@@ -44,6 +44,7 @@ async function getAccessToken(): Promise<string | null> {
 
 /**
  * Format date for Google Tasks API (RFC 3339 format)
+ * Supports both date-only and date-time formats
  */
 function formatTaskDueDate(dateString: string): string {
   // Check if it's a date-only string
@@ -52,12 +53,30 @@ function formatTaskDueDate(dateString: string): string {
     return `${dateString}T23:59:59.000Z`;
   }
   
+  // Check if it already has time component
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(dateString)) {
+    const date = new Date(dateString);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString();
+    }
+  }
+  
   const date = new Date(dateString);
   if (isNaN(date.getTime())) {
     throw new Error(`Invalid date: ${dateString}`);
   }
   
   return date.toISOString();
+}
+
+/**
+ * Check if a time was explicitly mentioned in a date string
+ */
+function hasExplicitTime(dateString: string | undefined): boolean {
+  if (!dateString) return false;
+  // Check for time patterns like "4 pm", "16:00", "4:30pm", etc.
+  return /\d{1,2}:\d{2}|(\d{1,2}\s*(am|pm|AM|PM))/i.test(dateString) ||
+         /T\d{2}:\d{2}/.test(dateString);
 }
 
 /**
@@ -222,9 +241,10 @@ export const getTaskListsTool = tool({
 
 /**
  * Create a new task directly
+ * No additional text should be provided after successful creation - the UI shows the result.
  */
 export const createTaskTool = tool({
-  description: "Create a new task in Google Tasks. Use this when you have sufficient details (at minimum: title). For confirmation workflow, use scheduleTask instead.",
+  description: "Create a new task in Google Tasks. Use this when you have sufficient details (at minimum: title). For confirmation workflow, use scheduleTask instead. DO NOT provide additional text after calling this tool.",
   inputSchema: z.object({
     title: z.string().describe("The title of the task"),
     notes: z.string().optional().describe("Additional notes or description for the task"),
@@ -306,28 +326,91 @@ export const scheduleTaskTool = tool({
   description: `Schedule a task by extracting ALL details from the user's request. NEVER ask for clarification - always infer missing details:
 - If no title is given, infer from context (e.g., "review", "complete", "prepare")
 - If no priority is given, default to medium
-- Always generate the form immediately, the user can edit before confirming
+- If user specifies a time (e.g., "at 4 pm", "by 3:30"), extract it as dueTime in HH:mm format (19:00 for 7pm)
+- If user only provides date without time, set userMentionedTime to false so UI prompts for time
+- CRITICAL: If user asks to "generate notes about X" or "generate a note about X", YOU MUST create detailed, comprehensive notes about topic X (3-5 sentences with helpful information, context, tips, or relevant details) and put them in the 'notes' field
 
-Use this tool IMMEDIATELY when the user mentions creating a task, todo, or reminder.`,
+Use this tool IMMEDIATELY when the user mentions creating a task, todo, or reminder.
+
+IMPORTANT: After calling this tool, DO NOT provide any additional text description or confirmation message. The UI will handle all user communication. Simply call the tool and stop.`,
   inputSchema: z.object({
     title: z.string().describe("Task title - ALWAYS provide one. Infer from context. Never leave empty."),
-    notes: z.string().optional().describe("Additional notes or description"),
-    due: z.string().optional().describe("Due date in ISO 8601 format. Parse 'tomorrow', 'next Monday', etc."),
+    notes: z.string().optional().describe("CRITICAL: When user requests 'generate note about X', YOU MUST write 3-5 sentences of detailed, helpful information about X here. Include relevant tips, context, or useful details. For 'cinematic task' example: write about filmmaking, cinematography techniques, shot composition, lighting, etc. DO NOT leave empty if generation is requested!"),
+    due: z.string().optional().describe("Due date in YYYY-MM-DD format. Parse 'tomorrow', 'next Monday', etc."),
+    dueTime: z.string().optional().describe("Due time in HH:mm 24-hour format. Examples: '19:00' for 7pm, '16:00' for 4pm, '09:30' for 9:30am"),
     priority: z.enum(["high", "medium", "low"]).optional().describe("Priority level. Default to medium if not specified."),
     taskListId: z.string().optional().describe("Task list ID, defaults to @default"),
-    reasoning: z.string().describe("Brief explanation of inferred details"),
+    reasoning: z.string().describe("Brief explanation of inferred details. If you generated notes, mention what topic you wrote about."),
+    userMentionedTime: z.boolean().optional().default(false).describe("Set to true ONLY if user explicitly mentioned a specific time in their request"),
+    generateNotes: z.boolean().optional().default(false).describe("Set to true if user requested note generation"),
   }),
-  execute: async ({ title, notes, due, priority, taskListId, reasoning }) => {
+  execute: async ({ title, notes, due, dueTime, priority, taskListId, reasoning, userMentionedTime, generateNotes }) => {
+    const accessToken = await getAccessToken();
+    
+    // Check for conflicting tasks if we have a due date
+    let conflictingTasks: { id: string; title: string; due?: string }[] = [];
+    let conflictWarning: string | undefined;
+    
+    if (accessToken && due) {
+      try {
+        // Fetch existing tasks to check for conflicts
+        const listId = taskListId || "@default";
+        const dueDate = new Date(due);
+        const startOfDay = new Date(dueDate);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(dueDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        
+        const params = new URLSearchParams({
+          maxResults: "50",
+          showCompleted: "false",
+          dueMin: startOfDay.toISOString(),
+          dueMax: endOfDay.toISOString(),
+        });
+
+        const result = await tasksRequest<{ items: any[] }>(
+          accessToken,
+          `/lists/${encodeURIComponent(listId)}/tasks?${params.toString()}`
+        );
+
+        if (result.success && result.data?.items) {
+          conflictingTasks = result.data.items
+            .filter((t: any) => t.status !== "completed")
+            .map((t: any) => ({
+              id: t.id,
+              title: t.title || "(No title)",
+              due: t.due,
+            }));
+          
+          if (conflictingTasks.length > 0) {
+            conflictWarning = `You have ${conflictingTasks.length} other task(s) scheduled for this day. Consider adjusting the time to avoid overlap.`;
+          }
+        }
+      } catch (err) {
+        // Silently fail conflict check - not critical
+        console.error("Failed to check task conflicts:", err);
+      }
+    }
+
+    // Determine if we need time input from user
+    // Only prompt if user has a date but didn't mention a specific time
+    const needsTimeInput = due && !dueTime && !userMentionedTime;
+
     return {
       status: "pending_confirmation",
       taskDetails: {
         title,
         notes: notes || "",
         due: due || undefined,
+        dueTime: dueTime || undefined,
         priority: priority || "medium",
         taskListId: taskListId || "@default",
+        generateNotes: generateNotes || false,
       },
       reasoning,
+      conflictingTasks: conflictingTasks.length > 0 ? conflictingTasks : undefined,
+      conflictWarning,
+      needsTimeInput,
       message: "Please review the task details and confirm to create the task.",
     };
   },
@@ -335,9 +418,10 @@ Use this tool IMMEDIATELY when the user mentions creating a task, todo, or remin
 
 /**
  * Confirm and create a scheduled task after human approval
+ * No additional text should be provided after calling this tool - the UI handles confirmation.
  */
 export const confirmScheduledTaskTool = tool({
-  description: "Create a task after user confirmation. Use this to finalize task creation after the user has reviewed and approved the details.",
+  description: "Create a task after user confirmation. Use this to finalize task creation after the user has reviewed and approved the details. DO NOT provide additional text after calling this tool.",
   inputSchema: z.object({
     title: z.string().describe("Task title"),
     notes: z.string().optional().describe("Task notes/description"),
@@ -474,19 +558,22 @@ export const listTasksTool = tool({
 });
 
 /**
- * Update an existing task
+ * Update an existing task (with HITL confirmation)
+ * No additional text needed - the UI shows before/after comparison.
  */
 export const updateTaskTool = tool({
-  description: "Update an existing task. Use this when the user wants to modify task details, reschedule, or change priority.",
+  description: "Update an existing task. Shows the proposed changes for user confirmation before applying. Use this when the user wants to modify task details, reschedule, or change priority. DO NOT provide additional text after calling this tool.",
   inputSchema: z.object({
     taskId: z.string().describe("The ID of the task to update"),
     taskListId: z.string().optional().describe("ID of the task list. Defaults to @default."),
     title: z.string().optional().describe("New title for the task"),
     notes: z.string().optional().describe("Updated notes/description"),
-    due: z.string().optional().describe("New due date in ISO 8601 format"),
+    due: z.string().optional().describe("New due date in YYYY-MM-DD format"),
+    dueTime: z.string().optional().describe("New due time in HH:mm format"),
     priority: z.enum(["high", "medium", "low"]).optional().describe("Updated priority level"),
+    confirmed: z.boolean().optional().default(false).describe("Whether the update has been confirmed by the user"),
   }),
-  execute: async ({ taskId, taskListId, title, notes, due, priority }) => {
+  execute: async ({ taskId, taskListId, title, notes, due, dueTime, priority, confirmed }) => {
     const accessToken = await getAccessToken();
     
     if (!accessToken) {
@@ -512,11 +599,38 @@ export const updateTaskTool = tool({
         };
       }
 
+      const existingTask = parseTask(existingResult.data);
+      
+      // If not confirmed, return confirmation request with proposed changes
+      if (!confirmed) {
+        return {
+          status: "pending_confirmation",
+          action: "update",
+          currentTask: existingTask,
+          proposedChanges: {
+            title: title !== undefined ? title : existingTask.title,
+            notes: notes !== undefined ? notes : existingTask.notes,
+            due: due !== undefined ? due : existingTask.due,
+            dueTime: dueTime || undefined,
+            priority: priority !== undefined ? priority : existingTask.priority,
+          },
+          message: `Update task "${existingTask.title}"? Please confirm the changes.`,
+        };
+      }
+
       // Build updated task object
       const task = { ...existingResult.data };
 
       if (title !== undefined) task.title = title;
-      if (due !== undefined) task.due = formatTaskDueDate(due);
+      
+      // Handle due date with optional time
+      if (due !== undefined) {
+        let dueDateTime = due;
+        if (dueTime) {
+          dueDateTime = `${due}T${dueTime}:00`;
+        }
+        task.due = formatTaskDueDate(dueDateTime);
+      }
       
       // Handle notes and priority
       if (notes !== undefined || priority !== undefined) {
@@ -563,9 +677,10 @@ export const updateTaskTool = tool({
 
 /**
  * Complete a task
+ * No additional text needed - the UI shows celebration and confirmation.
  */
 export const completeTaskTool = tool({
-  description: "Mark a task as completed. Use this when the user says they finished, completed, or done with a task.",
+  description: "Mark a task as completed. Use this when the user says they finished, completed, or done with a task. DO NOT provide additional text after calling this tool.",
   inputSchema: z.object({
     taskId: z.string().describe("The ID of the task to complete"),
     taskListId: z.string().optional().describe("ID of the task list. Defaults to @default."),
@@ -710,9 +825,10 @@ export const uncompleteTaskTool = tool({
 
 /**
  * Delete a task (with HITL - returns confirmation request)
+ * No additional text needed - the UI handles the confirmation flow.
  */
 export const deleteTaskTool = tool({
-  description: "Delete a task from Google Tasks. This action cannot be undone. Use this when the user wants to remove or delete a task.",
+  description: "Delete a task from Google Tasks. This action cannot be undone. Use this when the user wants to remove or delete a task. DO NOT provide additional text after calling this tool.",
   inputSchema: z.object({
     taskId: z.string().describe("The ID of the task to delete"),
     taskListId: z.string().optional().describe("ID of the task list. Defaults to @default."),

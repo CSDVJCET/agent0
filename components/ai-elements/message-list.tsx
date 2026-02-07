@@ -44,6 +44,8 @@ import { TaskDisplay } from "@/components/ai-elements/task-display";
 import { TaskList } from "@/components/ai-elements/task-list";
 import { TaskSchedulingConfirmation } from "@/components/ai-elements/task-scheduling-confirmation";
 import { TaskDeleteConfirmation } from "@/components/ai-elements/task-delete-confirmation";
+import { TaskUpdateConfirmation } from "@/components/ai-elements/task-update-confirmation";
+import { TaskCompleteDisplay } from "@/components/ai-elements/task-complete-display";
 import {
   CopyIcon,
   RefreshCwIcon,
@@ -349,6 +351,9 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
                                 toolCallId={toolInvocation.toolCallId}
                                 taskDetails={result.taskDetails}
                                 reasoning={result.reasoning}
+                                conflictingTasks={result.conflictingTasks}
+                                conflictWarning={result.conflictWarning}
+                                needsTimeInput={result.needsTimeInput}
                               />
                             );
                           }
@@ -390,7 +395,7 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
                           }
                         }
 
-                        // List Tasks
+                        // List Tasks - only show when explicitly listing
                         if (toolInvocation.toolName === "listTasks" && isCompleted) {
                           if (!hasError) {
                             return (
@@ -406,16 +411,45 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
                           }
                         }
 
-                        // Complete Task
+                        // Complete Task - show completed task display
                         if (toolInvocation.toolName === "completeTask" && isCompleted) {
                           if (!hasError) {
                             return (
-                              <TaskDisplay
+                              <TaskCompleteDisplay
                                 key={toolInvocation.toolCallId}
                                 taskId={toolInvocation.result.taskId}
                                 title={toolInvocation.result.title}
-                                notes=""
-                                status="completed"
+                                completedAt={toolInvocation.result.completedAt}
+                              />
+                            );
+                          }
+                        }
+
+                        // Update Task (with HITL confirmation)
+                        if (toolInvocation.toolName === "updateTask" && isCompleted) {
+                          const result = toolInvocation.result;
+                          if (result.status === "pending_confirmation" && result.action === "update") {
+                            return (
+                              <TaskUpdateConfirmation
+                                key={toolInvocation.toolCallId}
+                                toolCallId={toolInvocation.toolCallId}
+                                currentTask={result.currentTask}
+                                proposedChanges={result.proposedChanges}
+                                message={result.message}
+                              />
+                            );
+                          }
+                          // If update was confirmed and successful
+                          if (!hasError && result.taskId) {
+                            return (
+                              <TaskDisplay
+                                key={toolInvocation.toolCallId}
+                                taskId={result.taskId}
+                                title={result.title}
+                                notes={result.notes}
+                                due={result.due}
+                                priority={result.priority}
+                                status="needsAction"
                                 isNew={false}
                               />
                             );
@@ -434,6 +468,10 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
                                 message={result.message}
                               />
                             );
+                          }
+                          // If delete was successful, don't show anything (task is gone)
+                          if (!hasError && result.deleted) {
+                            return null;
                           }
                         }
 

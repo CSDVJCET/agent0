@@ -16,8 +16,17 @@ const createTaskSchema = z.object({
 });
 
 function formatTaskDueDate(dateString: string): string {
+  // Handle date-only format
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
     return `${dateString}T23:59:59.000Z`;
+  }
+  
+  // Handle datetime format with time component
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(dateString)) {
+    const date = new Date(dateString);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString();
+    }
   }
   
   const date = new Date(dateString);
@@ -91,7 +100,7 @@ export async function POST(req: NextRequest) {
       taskId: data.id,
       title: data.title,
       notes: data.notes?.replace(/\[PRIORITY:\s*\w+\]\s*/gi, '').trim(),
-      due: data.due?.split('T')[0],
+      due: data.due, // Return full ISO datetime to preserve time
       status: data.status,
       message: `Task "${data.title}" created successfully!`,
     });

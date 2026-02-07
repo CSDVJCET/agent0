@@ -221,7 +221,11 @@ export function TaskDisplay({
                 isCompleted && "line-through"
               )}>
                 {isOverdue ? "Overdue: " : "Due: "}
-                {format(dueDate, "EEEE, MMMM d, yyyy")}
+                {/* Show time only if it's not 23:59 (default end of day) */}
+                {dueDate.getHours() !== 23 || dueDate.getMinutes() !== 59
+                  ? format(dueDate, "EEEE, MMMM d, yyyy 'at' h:mm a")
+                  : format(dueDate, "EEEE, MMMM d, yyyy")
+                }
               </span>
             </div>
           )}
