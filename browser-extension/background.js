@@ -69,8 +69,210 @@ chrome.commands.onCommand.addListener((command) => {
         }
       }
     });
+  } else if (command === 'summarize-page') {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) {
+        handleSummarizePage(tabs[0]);
+      }
+    });
   }
 });
+
+// Handle page summarization
+async function handleSummarizePage(tab) {
+  console.log('=== Starting page summarization ===');
+  console.log('Tab info:', { id: tab.id, url: tab.url, title: tab.title });
+  
+  try {
+    // Check if URL is restricted
+    const restrictedProtocols = ['chrome://', 'chrome-extension://', 'edge://', 'about:', 'view-source:'];
+    const isRestricted = restrictedProtocols.some(protocol => tab.url?.startsWith(protocol));
+    
+    if (isRestricted) {
+      console.warn('Cannot summarize restricted page:', tab.url);
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icons/icon48.png',
+        title: 'Cannot Summarize This Page',
+        message: 'Summarization is not available on browser system pages. Please try on a regular webpage.',
+        priority: 2
+      });
+      return;
+    }
+
+    console.log('Injecting content script...');
+    // Ensure content script is loaded
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['content.js']
+      });
+      console.log('Content script injected successfully');
+    } catch (injectError) {
+      console.log('Content script already loaded or injection failed:', injectError.message);
+    }
+
+    console.log('Requesting page content extraction...');
+    // Request page content extraction
+    const response = await chrome.tabs.sendMessage(tab.id, {
+      action: 'extractPageContent'
+    });
+    
+    console.log('Extraction response:', response);
+    
+    if (!response || !response.success) {
+      throw new Error(response?.error || 'Failed to extract page content');
+    }
+    
+    const { content } = response;
+    
+    // Validate content before proceeding
+    if (!content || !content.text || content.text.trim().length === 0) {
+      throw new Error('No content could be extracted from this page');
+    }
+    
+    console.log(`Extracted ${content.text.length} characters from page: ${content.title}`);
+    
+    // Create a text file with the content
+    const textContent = `Title: ${content.title}\nURL: ${content.url}\n\n${content.text}`;
+    const blob = new Blob([textContent], { type: 'text/plain' });
+    const dataUrl = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+    
+    // Verify dataUrl was created successfully
+    if (!dataUrl || typeof dataUrl !== 'string') {
+      throw new Error('Failed to create file data URL');
+    }
+    
+    console.log(`Created file with ${dataUrl.length} bytes`);
+    
+    // Sanitize filename - remove invalid characters and limit length
+    const safeTitle = content.title
+      .replace(/[<>:"/\\|?*]/g, '')
+      .substring(0, 50)
+      .trim() || 'page-content';
+    
+    // Prepare payload with all data
+    const payload = {
+      pageContent: textContent,
+      pageUrl: content.url,
+      pageTitle: content.title,
+      fileData: dataUrl,
+      fileName: `${safeTitle}.txt`,
+      timestamp: Date.now()
+    };
+    
+    console.log('Payload prepared:', {
+      fileName: payload.fileName,
+      pageTitle: payload.pageTitle,
+      contentLength: payload.pageContent.length,
+      fileDataLength: payload.fileData.length
+    });
+    
+    // Open or focus Agent0 tab
+    const tabs = await chrome.tabs.query({ url: `${agent0Url}/*` });
+    
+    let targetTab;
+    let isNewTab = false;
+    
+    if (tabs.length > 0) {
+      targetTab = tabs[0];
+      await chrome.tabs.update(targetTab.id, { active: true });
+      console.log('Focusing existing Agent0 tab');
+    } else {
+      targetTab = await chrome.tabs.create({ url: agent0Url });
+      isNewTab = true;
+      console.log('Created new Agent0 tab');
+    }
+    
+    // Wait for page to load and send data with retry logic
+    const sendDataToAgent0 = async (retryCount = 0) => {
+      const maxRetries = 5;
+      const retryDelay = isNewTab ? 1000 : 300; // Longer wait for new tabs
+      
+      try {
+        console.log(`Attempting to send data (attempt ${retryCount + 1}/${maxRetries + 1})...`);
+        
+        // Check if tab still exists
+        const tabInfo = await chrome.tabs.get(targetTab.id);
+        console.log('Tab status:', tabInfo.status);
+        
+        // Wait for page to be fully loaded
+        if (tabInfo.status !== 'complete' && retryCount < maxRetries) {
+          console.log(`Page not ready (status: ${tabInfo.status}), retry ${retryCount + 1}/${maxRetries}`);
+          setTimeout(() => sendDataToAgent0(retryCount + 1), retryDelay);
+          return;
+        }
+        
+        // Inject a script that will verify the listener is ready before sending
+        const result = await chrome.scripting.executeScript({
+          target: { tabId: targetTab.id },
+          func: (data) => {
+            console.log('Injected script running in Agent0 page');
+            console.log('Sending AGENT0_SUMMARIZE_PAGE message with data:', {
+              fileName: data.fileName,
+              pageTitle: data.pageTitle,
+              contentLength: data.pageContent?.length,
+              fileDataLength: data.fileData?.length
+            });
+            
+            // Store the data globally in case the React component isn't ready yet
+            window.__agent0PendingSummarization = data;
+            
+            // Send the message
+            window.postMessage({
+              type: 'AGENT0_SUMMARIZE_PAGE',
+              data: data
+            }, '*');
+            
+            console.log('Message posted to window and stored globally');
+            return { success: true };
+          },
+          args: [payload]
+        });
+        
+        console.log('Script execution result:', result);
+        console.log('Successfully sent page content to Agent0');
+        
+        // Show success notification
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icons/icon48.png',
+          title: 'Page Sent to Agent0',
+          message: `"${content.title}" is ready for summarization`,
+          priority: 1
+        });
+        
+      } catch (scriptError) {
+        console.error('Failed to send page content:', scriptError);
+        
+        // Retry if we haven't exceeded max retries
+        if (retryCount < maxRetries) {
+          console.log(`Retrying... (${retryCount + 1}/${maxRetries})`);
+          setTimeout(() => sendDataToAgent0(retryCount + 1), retryDelay);
+        } else {
+          throw new Error('Failed to send data after multiple retries');
+        }
+      }
+    };
+    
+    // Start sending with appropriate delay
+    setTimeout(() => sendDataToAgent0(), isNewTab ? 1500 : 500);
+    
+  } catch (error) {
+    console.error('Failed to summarize page:', error);
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon48.png',
+      title: 'Summarization Failed',
+      message: error.message || 'Unable to extract page content. Please try again.',
+      priority: 1
+    });
+  }
+}
 
 // Create context menu on install
 chrome.runtime.onInstalled.addListener(() => {
