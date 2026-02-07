@@ -44,21 +44,27 @@ async function getAccessToken(): Promise<string | null> {
 
 /**
  * Format date for Google Tasks API (RFC 3339 format)
- * Supports both date-only and date-time formats
+ * Google Tasks stores date and time in RFC 3339 format
  */
-function formatTaskDueDate(dateString: string): string {
-  // Check if it's a date-only string
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-    // Google Tasks API expects RFC 3339 with time, use end of day
-    return `${dateString}T23:59:59.000Z`;
+function formatTaskDueDate(dateString: string, time?: string): string {
+  // If time is provided separately, combine it
+  if (time) {
+    const localDate = new Date(`${dateString}T${time}:00`);
+    return localDate.toISOString();
   }
   
-  // Check if it already has time component
+  // If already in ISO format with time, preserve it
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(dateString)) {
     const date = new Date(dateString);
     if (!isNaN(date.getTime())) {
       return date.toISOString();
     }
+  }
+  
+  // Date-only format - set to end of day
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    const localDate = new Date(`${dateString}T23:59:59`);
+    return localDate.toISOString();
   }
   
   const date = new Date(dateString);
@@ -80,12 +86,23 @@ function hasExplicitTime(dateString: string | undefined): boolean {
 }
 
 /**
- * Parse due date from ISO string to user-friendly format
+ * Parse due date - Google Tasks stores full datetime in RFC 3339 format
  */
-function parseDueDate(isoString: string | undefined): string | undefined {
+function parseDueDateWithTime(isoString: string | undefined, notes: string | undefined): string | undefined {
   if (!isoString) return undefined;
-  const date = new Date(isoString);
-  return date.toISOString().split('T')[0];
+  
+  // Check if there's a time stored in notes metadata as fallback
+  const noteTime = extractTime(notes);
+  
+  if (noteTime) {
+    // Use time from notes if available
+    const date = new Date(isoString);
+    const dateOnly = date.toISOString().split('T')[0];
+    return combineDateAndTime(dateOnly, noteTime);
+  }
+  
+  // Return the full ISO string (includes time from Google Tasks)
+  return isoString;
 }
 
 /**
@@ -98,12 +115,46 @@ function extractPriority(notes: string | undefined): string | undefined {
 }
 
 /**
+ * Extract time from notes (stored as [TIME: HH:mm])
+ */
+function extractTime(notes: string | undefined): string | undefined {
+  if (!notes) return undefined;
+  const match = notes.match(/\[TIME:\s*(\d{2}:\d{2})\]/i);
+  return match ? match[1] : undefined;
+}
+
+/**
  * Add priority to notes
  */
 function addPriorityToNotes(notes: string | undefined, priority: string | undefined): string {
-  const existingNotes = notes?.replace(/\[PRIORITY:\s*\w+\]\s*/gi, '').trim() || '';
+  const existingNotes = notes?.replace(/\[PRIORITY:\s*\w+\]\s*/gi, '').replace(/\[TIME:\s*\d{2}:\d{2}\]\s*/gi, '').trim() || '';
   if (!priority) return existingNotes;
   return `[PRIORITY: ${priority}] ${existingNotes}`.trim();
+}
+
+/**
+ * Add time to notes metadata
+ */
+function addTimeToNotes(notes: string | undefined, time: string | undefined): string {
+  const existingNotes = notes || '';
+  if (!time) return existingNotes;
+  // Add time metadata at the end to preserve other metadata at the start
+  return `${existingNotes} [TIME: ${time}]`.trim();
+}
+
+/**
+ * Combine date and time into full ISO datetime
+ * If time is specified, combine with date; otherwise return date-only ISO
+ */
+function combineDateAndTime(date: string, time?: string): string {
+  if (time) {
+    // Create date in local timezone and convert to ISO
+    const localDate = new Date(`${date}T${time}:00`);
+    return localDate.toISOString();
+  }
+  // Date only - use end of day
+  const localDate = new Date(`${date}T23:59:59`);
+  return localDate.toISOString();
 }
 
 /**
@@ -157,12 +208,14 @@ async function tasksRequest<T>(
  * Parse Google Tasks task to simplified format
  */
 function parseTask(task: any) {
+  const cleanNotes = task.notes?.replace(/\[PRIORITY:\s*\w+\]\s*/gi, '').replace(/\[TIME:\s*\d{2}:\d{2}\]\s*/gi, '').trim() || undefined;
+  
   return {
     id: task.id,
     title: task.title || "(No title)",
-    notes: task.notes?.replace(/\[PRIORITY:\s*\w+\]\s*/gi, '').trim() || undefined,
+    notes: cleanNotes,
     status: task.status,
-    due: parseDueDate(task.due),
+    due: parseDueDateWithTime(task.due, task.notes),
     completed: task.completed,
     priority: extractPriority(task.notes),
     parent: task.parent,
@@ -264,18 +317,41 @@ export const createTaskTool = tool({
     }
 
     try {
+      let dueDateTime: string | undefined;
+      
+      // Process due date/time
+      if (due) {
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(due)) {
+          // Already has time component
+          const date = new Date(due);
+          dueDateTime = date.toISOString();
+        } else {
+          // Date only
+          dueDateTime = due;
+        }
+      }
+
       const task: Record<string, unknown> = {
         title,
         status: TASK_STATUS.NEEDS_ACTION,
       };
 
-      // Add priority to notes
-      if (notes || priority) {
-        task.notes = addPriorityToNotes(notes, priority);
+      // Add priority to notes (keep time in notes as backup)
+      let taskNotes = addPriorityToNotes(notes, priority);
+      
+      // If we have a datetime, extract time and store in notes as backup
+      if (dueDateTime && /T\d{2}:\d{2}/.test(dueDateTime)) {
+        const date = new Date(dueDateTime);
+        const dueTime = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+        taskNotes = addTimeToNotes(taskNotes, dueTime);
+      }
+      
+      if (taskNotes) {
+        task.notes = taskNotes;
       }
 
-      if (due) {
-        task.due = formatTaskDueDate(due);
+      if (dueDateTime) {
+        task.due = formatTaskDueDate(dueDateTime);
       }
 
       // Build URL with optional parent parameter
@@ -440,17 +516,41 @@ export const confirmScheduledTaskTool = tool({
     }
 
     try {
+      let dueDateTime: string | undefined;
+      
+      // Process due date/time
+      if (due) {
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(due)) {
+          // Already has time component
+          const date = new Date(due);
+          dueDateTime = date.toISOString();
+        } else {
+          // Date only
+          dueDateTime = due;
+        }
+      }
+
       const task: Record<string, unknown> = {
         title,
         status: TASK_STATUS.NEEDS_ACTION,
       };
 
-      if (notes || priority) {
-        task.notes = addPriorityToNotes(notes, priority);
+      // Add priority to notes (keep time in notes as backup)
+      let taskNotes = addPriorityToNotes(notes, priority);
+      
+      // If we have a datetime, extract time and store in notes as backup
+      if (dueDateTime && /T\d{2}:\d{2}/.test(dueDateTime)) {
+        const date = new Date(dueDateTime);
+        const dueTime = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+        taskNotes = addTimeToNotes(taskNotes, dueTime);
+      }
+      
+      if (taskNotes) {
+        task.notes = taskNotes;
       }
 
-      if (due) {
-        task.due = formatTaskDueDate(due);
+      if (dueDateTime) {
+        task.due = formatTaskDueDate(dueDateTime);
       }
 
       const listId = taskListId || "@default";

@@ -70,6 +70,31 @@ export function TaskSchedulingConfirmation({
   conflictWarning,
   needsTimeInput,
 }: TaskSchedulingConfirmationProps) {
+  // Convert 24-hour time to 12-hour with AM/PM
+  const formatTime12Hour = (time24: string): string => {
+    if (!time24) return "";
+    const [hours, minutes] = time24.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = hours % 12 || 12;
+    return `${hours12}:${String(minutes).padStart(2, '0')} ${period}`;
+  };
+
+  // Convert 12-hour time to 24-hour
+  const formatTime24Hour = (time12: string): string => {
+    if (!time12) return "";
+    const match = time12.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+    if (!match) return time12; // Return as-is if format doesn't match
+    
+    let hours = parseInt(match[1]);
+    const minutes = match[2];
+    const period = match[3].toUpperCase();
+    
+    if (period === 'PM' && hours !== 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+    
+    return `${String(hours).padStart(2, '0')}:${minutes}`;
+  };
+
   // Parse existing time from due if present
   const parseTimeFromDue = (due: string | undefined): string => {
     if (!due) return "";
@@ -90,7 +115,10 @@ export function TaskSchedulingConfirmation({
         ? taskDetails.due.split('T')[0] 
         : taskDetails.due
       : "",
-    dueTime: taskDetails.dueTime || parseTimeFromDue(taskDetails.due) || "",
+    dueTime: (() => {
+      const time24 = taskDetails.dueTime || parseTimeFromDue(taskDetails.due) || "";
+      return time24 ? formatTime12Hour(time24) : "";
+    })(),
     priority: taskDetails.priority || "medium",
     generateNotes: taskDetails.generateNotes ?? false,
   });
@@ -134,7 +162,15 @@ export function TaskSchedulingConfirmation({
       // Combine date and time if both are provided
       let dueDateTime = formData.due;
       if (formData.due && formData.dueTime) {
-        dueDateTime = `${formData.due}T${formData.dueTime}:00`;
+        // Convert 12-hour time to 24-hour format
+        const time24 = formatTime24Hour(formData.dueTime);
+        // Create a date object in local timezone and convert to ISO string (UTC)
+        const localDate = new Date(`${formData.due}T${time24}:00`);
+        dueDateTime = localDate.toISOString();
+      } else if (formData.due) {
+        // Date only - use end of day in local timezone
+        const localDate = new Date(`${formData.due}T23:59:59`);
+        dueDateTime = localDate.toISOString();
       }
 
       const response = await fetch("/api/tasks/create", {
@@ -363,15 +399,21 @@ export function TaskSchedulingConfirmation({
               </Label>
               <Input
                 id={`dueTime-${toolCallId}`}
-                type="time"
+                type="text"
                 value={formData.dueTime}
                 onChange={(e) => handleChange("dueTime", e.target.value)}
+                placeholder="e.g., 5:00 PM"
                 className={cn(
                   "h-10 transition-all",
                   showTimeWarning && !formData.dueTime && "border-orange-500/50 focus-visible:ring-orange-500/20"
                 )}
                 disabled={status === "creating"}
               />
+              {formData.dueTime && (
+                <p className="text-xs text-muted-foreground">
+                  Format: 12-hour time (e.g., 9:30 AM, 5:00 PM)
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor={`priority-${toolCallId}`} className="text-xs font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">

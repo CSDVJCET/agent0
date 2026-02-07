@@ -221,11 +221,14 @@ export function TaskDisplay({
                 isCompleted && "line-through"
               )}>
                 {isOverdue ? "Overdue: " : "Due: "}
-                {/* Show time only if it's not 23:59 (default end of day) */}
-                {dueDate.getHours() !== 23 || dueDate.getMinutes() !== 59
-                  ? format(dueDate, "EEEE, MMMM d, yyyy 'at' h:mm a")
-                  : format(dueDate, "EEEE, MMMM d, yyyy")
-                }
+                {/* Check if due string contains time (has T and time component) */}
+                {(() => {
+                  // If due contains 'T' and has time (not just date), show it with time
+                  const hasTime = due && /T\d{2}:\d{2}/.test(due);
+                  return hasTime
+                    ? format(dueDate, "EEEE, MMMM d, yyyy 'at' h:mm a")
+                    : format(dueDate, "EEEE, MMMM d, yyyy");
+                })()}
               </span>
             </div>
           )}
