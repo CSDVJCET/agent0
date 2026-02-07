@@ -7,6 +7,37 @@ export function getToolTitle(toolName: string): string {
     url_context: "URL Context",
     code_execution: "Code Execution",
     displayWeather: "Weather",
+    // Calendar tools
+    scheduleCalendarEvent: "Schedule Event",
+    confirmScheduledEvent: "Confirm Event",
+    createCalendarEvent: "Create Event",
+    listCalendarEvents: "List Events",
+    updateCalendarEvent: "Update Event",
+    deleteCalendarEvent: "Delete Event",
+    findCalendarAvailability: "Find Availability",
+    getCalendarEvent: "Get Event",
+    // Tasks tools
+    scheduleTask: "Schedule Task",
+    confirmScheduledTask: "Confirm Task",
+    createTask: "Create Task",
+    listTasks: "List Tasks",
+    updateTask: "Update Task",
+    deleteTask: "Delete Task",
+    completeTask: "Complete Task",
+    uncompleteTask: "Reopen Task",
+    getTask: "Get Task",
+    getTaskLists: "Get Task Lists",
+    // Forms tools
+    createSurveyForm: "Create Form",
+    confirmCreateForm: "Confirm Form",
+    fetchNewResponses: "Fetch Responses",
+    getResponseSummary: "Response Summary",
+    // Gmail tools
+    searchEmails: "Search Emails",
+    getThread: "Get Thread",
+    createDraft: "Create Draft",
+    sendMessage: "Send Email",
+    getMessageContent: "Get Message",
   };
   return titles[toolName] || toolName;
 }

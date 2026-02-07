@@ -1,16 +1,74 @@
 "use client";
 
 import { motion, AnimatePresence } from "motion/react";
-import { X } from "lucide-react";
+import { X, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Weather } from "@/components/weather";
 import { useEffect, useState } from "react";
+import { Badge } from "@/components/ui/badge";
 
 interface IntegrationPanelProps {
   isOpen: boolean;
   onClose: () => void;
   integrationId: string | null;
 }
+
+const INTEGRATION_DETAILS: Record<string, { name: string; description: string; functions: { name: string; description: string }[] }> = {
+  weather: {
+    name: "Weather",
+    description: "Get real-time weather updates for any location.",
+    functions: [
+      { name: "displayWeather", description: "Get current weather for a location using Open-Meteo API" }
+    ]
+  },
+  calendar: {
+    name: "Calendar",
+    description: "Manage events and check availability on Google Calendar.",
+    functions: [
+      { name: "createEvent", description: "Create a new calendar event" },
+      { name: "listEvents", description: "List upcoming calendar events" },
+      { name: "updateEvent", description: "Modify an existing event" },
+      { name: "deleteEvent", description: "Remove an event" },
+      { name: "findAvailability", description: "Find free time slots" }
+    ]
+  },
+  gmail: {
+    name: "Gmail",
+    description: "Manage emails through Gmail.",
+    functions: [
+      { name: "searchEmails", description: "Search for emails using Gmail search operators" },
+      { name: "getThread", description: "Get full email conversation thread" },
+      { name: "createDraft", description: "Create an email draft" },
+      { name: "sendMessage", description: "Send an email or draft" },
+      { name: "getMessageContent", description: "Get detailed content of a specific email" }
+    ]
+  },
+  tasks: {
+    name: "Tasks",
+    description: "Manage to-do lists with Google Tasks.",
+    functions: [
+      { name: "createTask", description: "Create a new task" },
+      { name: "scheduleTask", description: "Schedule task with HITL confirmation" },
+      { name: "listTasks", description: "List tasks in a task list" },
+      { name: "updateTask", description: "Modify an existing task" },
+      { name: "deleteTask", description: "Remove a task" },
+      { name: "completeTask", description: "Mark a task as completed" },
+      { name: "getTaskLists", description: "Get all task lists" },
+      { name: "scheduleTaskWorkTime", description: "Find optimal time slots for task completion" }
+    ]
+  },
+  forms: {
+    name: "Forms",
+    description: "Create surveys and collect responses.",
+    functions: [
+      { name: "createSurveyForm", description: "Create a new survey/form with questions" },
+      { name: "fetchNewResponses", description: "Fetch new responses since last check" },
+      { name: "watchResponsesWebhook", description: "Set up webhook for real-time notifications" },
+      { name: "updateFormSchema", description: "Add or remove questions from a form" },
+      { name: "getResponseSummary", description: "Get aggregate statistics for form responses" }
+    ]
+  }
+};
 
 export function IntegrationPanel({
   isOpen,
@@ -29,6 +87,8 @@ export function IntegrationPanel({
     weatherCode: 1, // Sunny/Cloudy
     weatherDescription: "Partly Cloudy",
   });
+
+  const details = integrationId ? INTEGRATION_DETAILS[integrationId] : null;
 
   return (
     <AnimatePresence>
@@ -49,25 +109,61 @@ export function IntegrationPanel({
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed right-0 top-0 h-full w-full sm:w-[400px] bg-background border-l shadow-xl z-50 flex flex-col"
+            className="fixed right-0 top-0 h-full w-full sm:w-[500px] bg-background border-l shadow-xl z-50 flex flex-col"
           >
             <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="font-semibold text-lg">
-                {integrationId === "weather" ? "Weather" : "Integration"}
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-lg">
+                  {details ? details.name : "Integration"}
+                </h2>
+                {details && (
+                  <Badge variant="secondary" className="text-xs">
+                    Connected
+                  </Badge>
+                )}
+              </div>
               <Button variant="ghost" size="icon" onClick={onClose}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4">
-              {integrationId === "weather" && (
-                <div className="space-y-4">
-                  <Weather {...weatherData} />
-                  
-                  <div className="text-sm text-muted-foreground mt-4">
-                    <p>Integration active. Weather data is simulated for demo purposes.</p>
+            <div className="flex-1 overflow-y-auto p-6">
+              {details ? (
+                <div className="space-y-8">
+                  <div>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-2">Description</h3>
+                    <p className="text-sm">{details.description}</p>
                   </div>
+
+                  <div>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-3">Available Functions</h3>
+                    <div className="grid gap-3">
+                      {details.functions.map((fn) => (
+                        <div key={fn.name} className="p-3 rounded-lg border bg-card/50 hover:bg-card transition-colors">
+                          <code className="text-xs font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                            {fn.name}
+                          </code>
+                          <p className="text-sm text-muted-foreground mt-1.5">
+                            {fn.description}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {integrationId === "weather" && (
+                    <div className="pt-4 border-t">
+                      <h3 className="text-sm font-medium text-muted-foreground mb-4">Live Preview</h3>
+                      <Weather {...weatherData} />
+                      <div className="text-xs text-muted-foreground mt-2">
+                        <p>Integration active. Weather data is simulated for demo purposes.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                  <p>Select an integration to view details</p>
                 </div>
               )}
             </div>

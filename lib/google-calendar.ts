@@ -9,7 +9,7 @@
 import fs from "fs";
 import path from "path";
 
-// Google API scopes (Calendar + Gmail)
+// Google API scopes (Calendar + Gmail + Tasks)
 export const GOOGLE_CALENDAR_SCOPES = [
   // Calendar scopes
   "https://www.googleapis.com/auth/calendar",
@@ -19,6 +19,9 @@ export const GOOGLE_CALENDAR_SCOPES = [
   "https://www.googleapis.com/auth/gmail.modify",
   "https://www.googleapis.com/auth/gmail.compose",
   "https://www.googleapis.com/auth/gmail.readonly",
+  // Tasks scopes
+  "https://www.googleapis.com/auth/tasks",
+  "https://www.googleapis.com/auth/tasks.readonly",
 ];
 
 // Google Forms API scopes
@@ -190,11 +193,14 @@ export async function getValidAccessToken(userId: string): Promise<string | null
  * @param state - State parameter for CSRF protection
  * @param service - Which service to authorize: 'calendar', 'forms', or 'all'
  */
-export function getAuthorizationUrl(state?: string, service: 'calendar' | 'forms' | 'all' = 'calendar'): string {
+export function getAuthorizationUrl(state?: string, service: 'calendar' | 'forms' | 'tasks' | 'all' = 'calendar'): string {
   let scopes: string[];
   switch (service) {
     case 'forms':
       scopes = GOOGLE_FORMS_SCOPES;
+      break;
+    case 'tasks':
+      scopes = GOOGLE_CALENDAR_SCOPES; // Tasks scopes are included in calendar scopes
       break;
     case 'all':
       scopes = GOOGLE_ALL_SCOPES;

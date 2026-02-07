@@ -8,6 +8,7 @@ import { tools as weatherTools } from "@/ai/tools";
 import { calendarTools } from "@/ai/calendar-tools";
 import { formsTools } from "@/ai/forms-tools";
 import { gmailTools } from "@/ai/gmail-tools";
+import { tasksTools } from "@/ai/tasks-tools";
 import { GMAIL_AGENT_PROMPT } from "@/ai/prompts/gmail";
 import { isToolInstalled } from "@/lib/installed-tools";
 import { getNextFallbackModel, isRateLimitError, type ModelRetryMetadata } from "@/lib/model-fallback";
@@ -201,7 +202,72 @@ export async function POST(req: Request) {
   } = parsedBody;
 
   // Type-cast messages to MyUIMessage[] for type safety
-  const uiMessages = messages as MyUIMessage[];
+  let uiMessages = messages as MyUIMessage[];
+
+  // Mermaid prompt injection (backend-only, not visible to UI)
+  const hasMermaid = mentionedTools.some(tool => tool.toLowerCase() === "mermaid");
+  if (hasMermaid && uiMessages.length > 0) {
+    const lastMessage = uiMessages[uiMessages.length - 1];
+    if (lastMessage.role === "user" && lastMessage.parts) {
+      const modifiedParts = lastMessage.parts.map(part => {
+        if (part.type === "text" && typeof part.text === "string") {
+          return {
+            ...part,
+            text: `CRITICAL INSTRUCTIONS - FOLLOW EXACTLY:
+
+You MUST return a Mermaid diagram wrapped in markdown code fence syntax. Do NOT return:
+- HTML code
+- JavaScript code
+- Python code  
+- Any explanatory text before or after the code block
+- Multiple code blocks
+
+REQUIRED OUTPUT FORMAT:
+\`\`\`mermaid
+[Mermaid diagram code here]
+\`\`\`
+
+VALID DIAGRAM TYPES (choose the most appropriate):
+- flowchart TD / flowchart LR (for workflows, processes, decision trees)
+- sequenceDiagram (for interactions between entities over time)
+- classDiagram (for object-oriented class structures)
+- erDiagram (for database entity relationships)
+- gantt (for project timelines and schedules)
+- gitGraph (for version control branches)
+- journey (for user experience flows)
+- stateDiagram-v2 (for state machines)
+- pie (for percentage breakdowns)
+- mindmap (for hierarchical concepts)
+- timeline (for chronological events)
+- graph TD / graph LR (simple node-edge graphs)
+
+EXAMPLE CORRECT OUTPUT for "login page":
+\`\`\`mermaid
+flowchart TD
+    A[User Opens App] --> B[Login Page]
+    B --> C{Valid Credentials?}
+    C -->|Yes| D[Dashboard]
+    C -->|No| E[Error Message]
+    E --> B
+\`\`\`
+
+Now generate the Mermaid diagram for: ${part.text}
+
+Remember: Return ONLY the markdown code block with mermaid syntax. No additional text.`
+          };
+        }
+        return part;
+      });
+
+      uiMessages = [
+        ...uiMessages.slice(0, -1),
+        {
+          ...lastMessage,
+          parts: modifiedParts,
+        }
+      ];
+    }
+  }
 
   // Check if using Google model
   const isGoogleModel = !model.includes(":");
@@ -287,6 +353,23 @@ export async function POST(req: Request) {
           console.warn("Gmail tool mentioned but not installed");
         }
       }
+      // Tasks tools
+      if (lowerToolName === "tasks" || lowerToolName === "task" || lowerToolName === "todo" || lowerToolName === "todos") {
+        if (isToolInstalled("tasks")) {
+          tools.scheduleTask = tasksTools.scheduleTask;
+          tools.confirmScheduledTask = tasksTools.confirmScheduledTask;
+          tools.createTask = tasksTools.createTask;
+          tools.listTasks = tasksTools.listTasks;
+          tools.updateTask = tasksTools.updateTask;
+          tools.deleteTask = tasksTools.deleteTask;
+          tools.completeTask = tasksTools.completeTask;
+          tools.uncompleteTask = tasksTools.uncompleteTask;
+          tools.getTask = tasksTools.getTask;
+          tools.getTaskLists = tasksTools.getTaskLists;
+        } else {
+          console.warn("Tasks tool mentioned but not installed");
+        }
+      }
       // Add more tool mappings here as needed
     }
   } else {
@@ -310,6 +393,19 @@ export async function POST(req: Request) {
 
   const hasTools = Object.keys(tools).length > 0;
 
+  // Build guidance strings outside the retry loop to avoid redeclaration
+  const calendarGuidance = mentionedTools.some(t => t.toLowerCase() === "calendar")
+    ? " When the user asks about calendar events or scheduling, use the calendar tools to fetch, create, update, or delete events. For scheduling, use scheduleCalendarEvent to present options to the user first."
+    : "";
+
+  const formsGuidance = mentionedTools.some(t => t.toLowerCase() === "forms" || t.toLowerCase() === "survey")
+    ? " When the user wants to create a form/survey, ALWAYS call createSurveyForm immediately with inferred questions. Infer question types: yes/no questions → MULTIPLE_CHOICE with ['Yes', 'No'], open-ended → PARAGRAPH or SHORT_ANSWER, rating → LINEAR_SCALE, selection → CHECKBOX or MULTIPLE_CHOICE. Let the user review in the UI before creating. For polling responses, use fetchNewResponses. For statistics, use getResponseSummary."
+    : "";
+
+  const tasksGuidance = mentionedTools.some(t => ["tasks", "task", "todo", "todos"].includes(t.toLowerCase()))
+    ? " When the user wants to create a task/todo, use scheduleTask to present the task details for confirmation. For listing tasks, use listTasks. To mark tasks complete, use completeTask. For updating task details, use updateTask. For deleting tasks, use deleteTask (which requires confirmation). Always parse relative dates like 'tomorrow', 'next week' into proper ISO dates."
+    : "";
+
   // Retry logic with automatic model fallback on rate limiting
   const maxRetries = 3;
   let currentModel = model;
@@ -327,6 +423,7 @@ export async function POST(req: Request) {
     try {
       // Get model instance for current model
       const { modelInstance, providerOptions } = getModelInstance(currentModel, enableThinking);
+
 
       // Check if Google-specific tools should be disabled for non-Google models
       let currentTools = { ...tools };
@@ -356,14 +453,6 @@ export async function POST(req: Request) {
         systemPrompt += "\n\n" + GMAIL_AGENT_PROMPT;
       }
 
-      const calendarGuidance = mentionedTools.some(t => t.toLowerCase() === "calendar")
-        ? " When the user asks about calendar events or scheduling, use the calendar tools to fetch, create, update, or delete events. For scheduling, use scheduleCalendarEvent to present options to the user first."
-        : "";
-
-      const formsGuidance = mentionedTools.some(t => t.toLowerCase() === "forms" || t.toLowerCase() === "survey")
-        ? " When the user wants to create a form/survey, ALWAYS call createSurveyForm immediately with inferred questions. Infer question types: yes/no questions → MULTIPLE_CHOICE with ['Yes', 'No'], open-ended → PARAGRAPH or SHORT_ANSWER, rating → LINEAR_SCALE, selection → CHECKBOX or MULTIPLE_CHOICE. Let the user review in the UI before creating. For polling responses, use fetchNewResponses. For statistics, use getResponseSummary."
-        : "";
-
       // Add retry notification if this is not the first attempt
       if (attempt > 0) {
         systemPrompt += `\n\n[System: Automatically switched from ${retryMetadata.originalModel} to ${currentModel} due to rate limiting]`;
@@ -371,7 +460,7 @@ export async function POST(req: Request) {
 
       const result = streamText({
         model: modelInstance,
-        system: `${systemPrompt}${calendarGuidance}${formsGuidance}`,
+        system: `${systemPrompt}${calendarGuidance}${formsGuidance}${tasksGuidance}`,
         messages: modelMessages,
         tools: hasCurrentTools ? currentTools : undefined,
         toolChoice: hasCurrentTools ? "auto" : "none",
