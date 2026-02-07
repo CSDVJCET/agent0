@@ -7,7 +7,7 @@ import {
   PromptInputSubmit,
   PromptInputButton,
 } from "@/components/ai-elements/prompt-input";
-import { BrainIcon, CalendarIcon, CloudSunIcon, FileTextIcon, PaperclipIcon, SearchIcon } from "lucide-react";
+import { BrainIcon, CalendarIcon, CloudSunIcon, FileTextIcon, PaperclipIcon, SearchIcon, NetworkIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ButtonGroup, ButtonGroupSeparator } from "@/components/ui/button-group";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
@@ -234,6 +234,8 @@ export function PromptInputArea({
                   ? CalendarIcon 
                   : toolLower === "forms" || toolLower === "survey"
                   ? FileTextIcon
+                  : toolLower === "mermaid"
+                  ? NetworkIcon
                   : CloudSunIcon;
                 return (
                   <Badge 
@@ -313,7 +315,16 @@ export function PromptInputArea({
                 Available Tools
               </div>
               <div className="space-y-1 max-h-[280px] overflow-y-auto custom-scrollbar">
-                {filteredTools.map((tool, index) => (
+                {filteredTools.map((tool, index) => {
+                  const toolLower = tool.id.toLowerCase();
+                  const ToolIcon = toolLower === "calendar" 
+                    ? CalendarIcon 
+                    : toolLower === "forms" || toolLower === "survey"
+                    ? FileTextIcon
+                    : toolLower === "mermaid"
+                    ? NetworkIcon
+                    : CloudSunIcon;
+                  return (
                   <button
                     key={tool.id}
                     onClick={() => handleToolSelect(tool.name)}
@@ -325,7 +336,7 @@ export function PromptInputArea({
                       index === selectedIndex && "bg-accent text-accent-foreground"
                     )}
                   >
-                    <CloudSunIcon className="h-4 w-4 mt-0.5 shrink-0" />
+                    <ToolIcon className="h-4 w-4 mt-0.5 shrink-0" />
                     <div className="flex flex-col min-w-0">
                       <span className="font-medium text-sm">@{tool.name}</span>
                       <span className="text-xs text-muted-foreground line-clamp-1">
@@ -333,7 +344,8 @@ export function PromptInputArea({
                       </span>
                     </div>
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>

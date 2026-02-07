@@ -202,7 +202,72 @@ export async function POST(req: Request) {
   } = parsedBody;
 
   // Type-cast messages to MyUIMessage[] for type safety
-  const uiMessages = messages as MyUIMessage[];
+  let uiMessages = messages as MyUIMessage[];
+
+  // Mermaid prompt injection (backend-only, not visible to UI)
+  const hasMermaid = mentionedTools.some(tool => tool.toLowerCase() === "mermaid");
+  if (hasMermaid && uiMessages.length > 0) {
+    const lastMessage = uiMessages[uiMessages.length - 1];
+    if (lastMessage.role === "user" && lastMessage.parts) {
+      const modifiedParts = lastMessage.parts.map(part => {
+        if (part.type === "text" && typeof part.text === "string") {
+          return {
+            ...part,
+            text: `CRITICAL INSTRUCTIONS - FOLLOW EXACTLY:
+
+You MUST return a Mermaid diagram wrapped in markdown code fence syntax. Do NOT return:
+- HTML code
+- JavaScript code
+- Python code  
+- Any explanatory text before or after the code block
+- Multiple code blocks
+
+REQUIRED OUTPUT FORMAT:
+\`\`\`mermaid
+[Mermaid diagram code here]
+\`\`\`
+
+VALID DIAGRAM TYPES (choose the most appropriate):
+- flowchart TD / flowchart LR (for workflows, processes, decision trees)
+- sequenceDiagram (for interactions between entities over time)
+- classDiagram (for object-oriented class structures)
+- erDiagram (for database entity relationships)
+- gantt (for project timelines and schedules)
+- gitGraph (for version control branches)
+- journey (for user experience flows)
+- stateDiagram-v2 (for state machines)
+- pie (for percentage breakdowns)
+- mindmap (for hierarchical concepts)
+- timeline (for chronological events)
+- graph TD / graph LR (simple node-edge graphs)
+
+EXAMPLE CORRECT OUTPUT for "login page":
+\`\`\`mermaid
+flowchart TD
+    A[User Opens App] --> B[Login Page]
+    B --> C{Valid Credentials?}
+    C -->|Yes| D[Dashboard]
+    C -->|No| E[Error Message]
+    E --> B
+\`\`\`
+
+Now generate the Mermaid diagram for: ${part.text}
+
+Remember: Return ONLY the markdown code block with mermaid syntax. No additional text.`
+          };
+        }
+        return part;
+      });
+
+      uiMessages = [
+        ...uiMessages.slice(0, -1),
+        {
+          ...lastMessage,
+          parts: modifiedParts,
+        }
+      ];
+    }
+  }
 
   // Check if using Google model
   const isGoogleModel = !model.includes(":");

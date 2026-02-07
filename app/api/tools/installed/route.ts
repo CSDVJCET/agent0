@@ -49,6 +49,14 @@ function getToolMetadata(id: string) {
       icon: "file-text",
     };
   }
+  if (id === "mermaid") {
+    return {
+      name: "Mermaid",
+      description: "Generate mermaid diagram code for flowcharts, sequences, and more",
+      category: "utility",
+      icon: "network",
+    };
+  }
   return {
     name: id,
     description: "Custom tool",

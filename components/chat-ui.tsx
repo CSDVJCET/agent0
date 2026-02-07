@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { motion } from "motion/react";
@@ -11,92 +11,43 @@ import type { MyUIMessage } from "@/types/chat";
 import { ChatHeader } from "@/components/chat-header";
 import { PromptInputArea } from "@/components/prompt-input-area";
 import { MessageList } from "@/components/ai-elements/message-list";
-import { AttachmentsPreview, FileAttachment } from "@/components/ai-elements/attachments-preview";
+import { AttachmentsPreview } from "@/components/ai-elements/attachments-preview";
 import { FeatureBadgesRow, FeatureBadge } from "@/components/ai-elements/feature-badges-row";
 import { ChatEmptyState } from "@/components/ai-elements/chat-empty-state";
 import { SuggestionsGrid } from "@/components/ai-elements/chat-suggestions-grid";
-import { Model } from "@/components/ai-elements/model-selector-control";
 import { TableOfContents } from "@/components/table-of-contents";
 import { IntegrationsModal } from "@/components/integrations-modal";
 import { IntegrationPanel } from "@/components/integration-panel";
 import { FileDropZone } from "@/components/file-drop-zone";
 
-// Models with their capabilities (tool-calling verified)
-const models: Model[] = [
-  // Google Gemini
-  { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", provider: "google", series: "2.5", supportsThinking: true },
-  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", provider: "google", series: "2.5", supportsThinking: true },
-  { id: "gemini-2.5-flash-lite", name: "Gemini 2.5 Flash Lite", provider: "google", series: "2.5", supportsThinking: true },
-  { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", provider: "google", series: "2.0", supportsThinking: false },
-  { id: "gemini-3-flash-preview", name: "Gemini 3 Flash (Preview)", provider: "google", series: "3", supportsThinking: true },
-
-  // Groq
-  { id: "groq:llama-3.3-70b-versatile", name: "Llama 3.3 70B", provider: "groq", series: "3.3", supportsThinking: false },
-  { id: "groq:llama-3.1-8b-instant", name: "Llama 3.1 8B Instant", provider: "groq", series: "3.1", supportsThinking: false },
-  { id: "groq:qwen/qwen3-32b", name: "Qwen 3 32B", provider: "groq", series: "3", supportsThinking: false },
-  { id: "groq:moonshotai/kimi-k2-instruct-0905", name: "Kimi K2 Instruct", provider: "groq", series: "k2", supportsThinking: false },
-  { id: "groq:meta-llama/llama-4-maverick-17b-128e-instruct", name: "Llama 4 Maverick 17B", provider: "groq", series: "4", supportsThinking: false },
-  { id: "groq:meta-llama/llama-4-scout-17b-16e-instruct", name: "Llama 4 Scout 17B", provider: "groq", series: "4", supportsThinking: false },
-  { id: "groq:openai/gpt-oss-20b", name: "GPT-OSS 20B", provider: "groq", series: "oss", supportsThinking: false },
-  { id: "groq:openai/gpt-oss-120b", name: "GPT-OSS 120B", provider: "groq", series: "oss", supportsThinking: false },
-
-  // Cohere
-  { id: "cohere:command-a-03-2025", name: "Command A", provider: "cohere", series: "a", supportsThinking: false },
-  { id: "cohere:command-r7b-12-2024", name: "Command R7B", provider: "cohere", series: "r7b", supportsThinking: false },
-  { id: "cohere:command-r-08-2024", name: "Command R", provider: "cohere", series: "r", supportsThinking: false },
-  { id: "cohere:command-nightly", name: "Command Nightly", provider: "cohere", series: "nightly", supportsThinking: false },
-];
-
-const defaultSuggestions = [
-  "Search for latest AI news",
-  "Calculate the 50th Fibonacci number",
-  "Explain this URL: https://vercel.com",
-  "Summarize a PDF document",
-];
-
-const STORAGE_KEYS = {
-  MODEL: "agent0-selected-model",
-  MESSAGES: "agent0-chat-messages",
-  THINKING: "agent0-enable-thinking",
-  INTEGRATIONS: "agent0-added-integrations",
-};
-
-function dedupeMessages(input: MyUIMessage[]): MyUIMessage[] {
-  const seen = new Set<string>();
-  const result: MyUIMessage[] = [];
-
-  for (let i = input.length - 1; i >= 0; i -= 1) {
-    const message = input[i];
-    if (!message?.id || seen.has(message.id)) {
-      continue;
-    }
-    seen.add(message.id);
-    result.unshift(message);
-  }
-
-  return result;
-}
+// Hooks and Constants
+import { useChatState } from "@/hooks/use-chat-state";
+import { useLocalStorageSync } from "@/hooks/use-local-storage-sync";
+import { useFileHandlers } from "@/hooks/use-file-handlers";
+import { useExtensionListeners } from "@/hooks/use-extension-listeners";
+import { useIntegrationHandlers } from "@/hooks/use-integration-handlers";
+import { MODELS, DEFAULT_SUGGESTIONS, STORAGE_KEYS } from "@/lib/chat-constants";
 
 export function ChatUI() {
-  const [selectedModel, setSelectedModel] = useState<Model>(models[0]);
-  const [isModelOpen, setIsModelOpen] = useState(false);
-  const [enableSearch, setEnableSearch] = useState(false);
-  const [enableThinking, setEnableThinking] = useState(true);
-  const [mentionedTools, setMentionedTools] = useState<string[]>([]);
-  const [attachments, setAttachments] = useState<FileAttachment[]>([]);
-  const [inputValue, setInputValue] = useState("");
-  const [isLoaded, setIsLoaded] = useState(false);
-  
-  // Integrations state
-  const [isIntegrationsModalOpen, setIsIntegrationsModalOpen] = useState(false);
-  const [activeIntegration, setActiveIntegration] = useState<string | null>(null);
-  const [addedIntegrations, setAddedIntegrations] = useState<string[]>([]);
-  const [isCalendarConnected, setIsCalendarConnected] = useState(false);
-  const [isFormsConnected, setIsFormsConnected] = useState(false);
-  const [isTasksConnected, setIsTasksConnected] = useState(false);
-  
-  // File input ref for native FileList handling
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // State management
+  const state = useChatState();
+  const {
+    selectedModel, setSelectedModel,
+    isModelOpen, setIsModelOpen,
+    enableSearch, setEnableSearch,
+    enableThinking, setEnableThinking,
+    mentionedTools, setMentionedTools,
+    attachments, setAttachments,
+    inputValue, setInputValue,
+    isLoaded,
+    isIntegrationsModalOpen, setIsIntegrationsModalOpen,
+    activeIntegration, setActiveIntegration,
+    addedIntegrations, setAddedIntegrations,
+    isCalendarConnected, setIsCalendarConnected,
+    isFormsConnected, setIsFormsConnected,
+    isTasksConnected, setIsTasksConnected,
+    fileInputRef,
+  } = state;
 
   const {
     messages,
@@ -123,261 +74,45 @@ export function ChatUI() {
     },
   });
 
-  // Load state from local storage on mount
-  useEffect(() => {
-    try {
-      const savedModelId = localStorage.getItem(STORAGE_KEYS.MODEL);
-      if (savedModelId) {
-        const model = models.find((m) => m.id === savedModelId);
-        if (model) setSelectedModel(model);
-      }
+  // Hooks for state management
+  const { dedupedMessages } = useLocalStorageSync({
+    messages,
+    setMessages,
+    selectedModel,
+    setSelectedModel,
+    enableThinking,
+    setEnableThinking,
+    setAddedIntegrations,
+    setIsCalendarConnected,
+    setIsFormsConnected,
+    setIsTasksConnected,
+    isLoaded,
+    setIsLoaded: state.setIsLoaded,
+  });
 
-      const savedThinking = localStorage.getItem(STORAGE_KEYS.THINKING);
-      if (savedThinking != null) {
-        setEnableThinking(savedThinking === "true");
-      }
+  const { handleFileSelect, handleFilesDropped, removeAttachment } = useFileHandlers(setAttachments);
 
-      const savedMessages = localStorage.getItem(STORAGE_KEYS.MESSAGES);
-      if (savedMessages) {
-        try {
-          const parsed = JSON.parse(savedMessages);
-          if (Array.isArray(parsed)) {
-            setMessages(dedupeMessages(parsed));
-          }
-        } catch (e) {
-          console.error("Failed to parse saved messages", e);
-          localStorage.removeItem(STORAGE_KEYS.MESSAGES);
-        }
-      }
+  useExtensionListeners(
+    setAttachments,
+    setInputValue,
+    setIsCalendarConnected,
+    setIsFormsConnected,
+    setIsTasksConnected
+  );
 
-      // Fetch installed tools from API
-      fetch("/api/tools/installed")
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.tools && Array.isArray(data.tools)) {
-            setAddedIntegrations(data.tools.map((t: any) => t.id));
-          }
-        })
-        .catch((e) => console.error("Failed to fetch installed tools", e));
-
-      // Check Google Calendar auth status
-      fetch("/api/auth/google?action=status")
-        .then((res) => res.json())
-        .then((data) => {
-          setIsCalendarConnected(!!data.connected);
-          // Forms uses the same tokens, check if forms scopes are authorized
-          setIsFormsConnected(!!data.hasFormsScopes);
-          // Tasks uses the same tokens, check if tasks scopes are authorized
-          setIsTasksConnected(!!data.hasTasksScopes);
-        })
-        .catch((e) => console.error("Failed to check calendar auth status", e));
-    } catch (e) {
-      console.error("Failed to load from localStorage", e);
-    }
-    setIsLoaded(true);
-  }, [setMessages]);
-
-  // Save model to local storage when it changes
-  useEffect(() => {
-    if (isLoaded) {
-      try {
-        localStorage.setItem(STORAGE_KEYS.MODEL, selectedModel.id);
-      } catch (e) {
-        // Handle quota exceeded or other localStorage errors
-        console.error("Failed to save model to localStorage", e);
-      }
-    }
-  }, [selectedModel, isLoaded]);
-
-  // Save thinking preference to local storage
-  useEffect(() => {
-    if (isLoaded) {
-      try {
-        localStorage.setItem(STORAGE_KEYS.THINKING, String(enableThinking));
-      } catch (e) {
-        console.error("Failed to save thinking to localStorage", e);
-      }
-    }
-  }, [enableThinking, isLoaded]);
-
-  // Note: integrations are persisted via API, not localStorage
-
-  // If model doesn't support thinking, force thinking off
-  useEffect(() => {
-    if (!selectedModel.supportsThinking && enableThinking) {
-      setEnableThinking(false);
-    }
-  }, [selectedModel, enableThinking]);
-
-  const dedupedMessages = useMemo(() => dedupeMessages(messages), [messages]);
-
-  // Save messages to local storage when they change
-  useEffect(() => {
-    if (isLoaded) {
-      try {
-        const serialized = JSON.stringify(dedupedMessages);
-        localStorage.setItem(STORAGE_KEYS.MESSAGES, serialized);
-      } catch (e) {
-        // Handle quota exceeded - try to clear old messages
-        if (e instanceof DOMException && e.name === "QuotaExceededError") {
-          console.warn("localStorage quota exceeded, clearing old messages");
-          try {
-            localStorage.removeItem(STORAGE_KEYS.MESSAGES);
-          } catch {
-            // Ignore errors when clearing
-          }
-        } else {
-          console.error("Failed to save messages to localStorage", e);
-        }
-      }
-    }
-  }, [dedupedMessages, isLoaded]);
-
-  // Listen for extension messages (screenshot + text context)
-  useEffect(() => {
-    const setControlledTextareaValue = (textarea: HTMLTextAreaElement, value: string) => {
-      const proto = window.HTMLTextAreaElement.prototype;
-      const descriptor = Object.getOwnPropertyDescriptor(proto, "value");
-      const setter = descriptor?.set;
-      if (setter) {
-        setter.call(textarea, value);
-      } else {
-        textarea.value = value;
-      }
-      textarea.dispatchEvent(new Event("input", { bubbles: true }));
-    };
-
-    const handleExtensionMessage = (event: MessageEvent) => {
-      // Only accept same-origin messages
-      if (event.origin !== window.location.origin) return;
-
-      if (event.data?.type === 'AGENT0_SCREENSHOT') {
-        const { screenshot, pageUrl, pageTitle, selectedText } = event.data.data;
-        
-        const filename = `${pageTitle || 'Screenshot'}.png`;
-        const screenshotAttachment: FileAttachment = {
-          name: filename,
-          type: 'image/png',
-          size: screenshot.length,
-          url: screenshot,
-        };
-        
-        setAttachments((prev) => [...prev, screenshotAttachment]);
-        
-        if (selectedText) {
-          setInputValue((prev) => {
-            const context = `[Screenshot from: ${pageTitle}]\n${selectedText}\n\n${prev}`;
-            return context;
-          });
-        } else if (pageUrl) {
-          setInputValue((prev) => {
-            const context = `[Screenshot from: ${pageTitle || pageUrl}]\n\n${prev}`;
-            return context;
-          });
-        }
-        
-        setTimeout(() => {
-          const textarea = document.querySelector('textarea[placeholder="Send a message..."]') as HTMLTextAreaElement;
-          textarea?.focus();
-        }, 100);
-        
-        console.log('Screenshot received and attached:', {
-          pageTitle,
-          pageUrl,
-          hasSelectedText: !!selectedText
-        });
-      } else if (event.data?.type === 'AGENT0_CONTEXT_TEXT') {
-        const data = event.data?.data || {};
-        const selectedText = typeof data.selectedText === "string" ? data.selectedText.trim() : "";
-        if (!selectedText) return;
-
-        const context = `${selectedText}\n\n`;
-        const textarea = document.querySelector('textarea[placeholder="Send a message..."]') as HTMLTextAreaElement | null;
-        if (!textarea) return;
-
-        const existing = textarea.value || "";
-        setControlledTextareaValue(textarea, `${context}${existing}`);
-        textarea.focus();
-      }
-    };
-    
-    window.addEventListener('message', handleExtensionMessage);
-    return () => window.removeEventListener('message', handleExtensionMessage);
-  }, []);
-
-  // Listen for Google Auth callback
-  useEffect(() => {
-    const handleAuthMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
-        console.log('Google Calendar Auth success received');
-        setIsCalendarConnected(true);
-      }
-      if (event.data?.type === 'GOOGLE_FORMS_AUTH_SUCCESS') {
-        console.log('Google Forms Auth success received');
-        setIsFormsConnected(true);
-      }
-      if (event.data?.type === 'GOOGLE_TASKS_AUTH_SUCCESS') {
-        console.log('Google Tasks Auth success received');
-        setIsTasksConnected(true);
-      }
-    };
-    window.addEventListener('message', handleAuthMessage);
-    return () => window.removeEventListener('message', handleAuthMessage);
-  }, []);
+  const { handleAddIntegration, handleRemoveIntegration } = useIntegrationHandlers({
+    addedIntegrations,
+    setAddedIntegrations,
+    setActiveIntegration,
+    activeIntegration,
+    setIsCalendarConnected,
+    setIsFormsConnected,
+    setIsTasksConnected,
+  });
 
   const isLoading = status === "streaming" || status === "submitted";
 
-  // File selection handler - now using native FileList
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-
-    // Convert FileList to FileAttachment array for preview
-    const filePromises = Array.from(files).map((file) => {
-      return new Promise<FileAttachment>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          resolve({
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            url: reader.result as string,
-          });
-        };
-        reader.readAsDataURL(file);
-      });
-    });
-
-    Promise.all(filePromises).then((newAttachments) => {
-      setAttachments((prev) => [...prev, ...newAttachments]);
-    });
-  }, []);
-
-  // Handler for drag-and-drop files (from FileDropZone)
-  const handleFilesDropped = useCallback((files: File[]) => {
-    const filePromises = files.map((file) => {
-      return new Promise<FileAttachment>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          resolve({
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            url: reader.result as string,
-          });
-        };
-        reader.readAsDataURL(file);
-      });
-    });
-
-    Promise.all(filePromises).then((newAttachments) => {
-      setAttachments((prev) => [...prev, ...newAttachments]);
-    });
-  }, []);
-
-  const removeAttachment = useCallback((index: number) => {
-    setAttachments((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  // Chat handlers
 
   const handleNewChat = useCallback(() => {
     setMessages([]);
@@ -390,133 +125,6 @@ export function ChatUI() {
     }
   }, [setMessages]);
 
-  // Helper to reload integrations from API
-  const reloadIntegrations = useCallback(async () => {
-    try {
-      const res = await fetch("/api/tools/installed");
-      const data = await res.json();
-      if (data.tools && Array.isArray(data.tools)) {
-        setAddedIntegrations(data.tools.map((t: any) => t.id));
-      }
-    } catch (e) {
-      console.error("Failed to reload installed tools", e);
-    }
-  }, []);
-
-  const handleAddIntegration = useCallback(async (id: string) => {
-    // Optimistic update
-    if (!addedIntegrations.includes(id)) {
-      setAddedIntegrations((prev) => [...prev, id]);
-    }
-    setActiveIntegration(id);
-
-    // Backend sync
-    try {
-      await fetch("/api/tools/install", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ toolId: id }),
-      });
-      
-      // Check current auth status before opening OAuth popup
-      const authResponse = await fetch("/api/auth/google?action=status");
-      const authData = await authResponse.json();
-      
-      // Special handling for Calendar - only open OAuth if not connected
-      if (id === "calendar" && !authData.hasCalendarScopes) {
-         const width = 600;
-         const height = 700;
-         const left = window.screen.width / 2 - width / 2;
-         const top = window.screen.height / 2 - height / 2;
-         
-         window.open(
-           "/api/auth/google", 
-           "GoogleAuth", 
-           `width=${width},height=${height},left=${left},top=${top}`
-         );
-      } else if (id === "calendar") {
-        setIsCalendarConnected(true);
-      }
-
-      // Special handling for Forms - only open OAuth if not connected
-      if (id === "forms" && !authData.hasFormsScopes) {
-         const width = 600;
-         const height = 700;
-         const left = window.screen.width / 2 - width / 2;
-         const top = window.screen.height / 2 - height / 2;
-         
-         window.open(
-           "/api/auth/google?service=forms", 
-           "GoogleFormsAuth", 
-           `width=${width},height=${height},left=${left},top=${top}`
-         );
-      } else if (id === "forms") {
-        setIsFormsConnected(true);
-      }
-
-      // Special handling for Tasks - only open OAuth if not connected
-      if (id === "tasks" && !authData.hasTasksScopes) {
-         const width = 600;
-         const height = 700;
-         const left = window.screen.width / 2 - width / 2;
-         const top = window.screen.height / 2 - height / 2;
-         
-         window.open(
-           "/api/auth/google?service=tasks", 
-           "GoogleTasksAuth", 
-           `width=${width},height=${height},left=${left},top=${top}`
-         );
-      } else if (id === "tasks") {
-        setIsTasksConnected(true);
-      }
-      
-      // Reload integrations to ensure sync with server
-      await reloadIntegrations();
-    } catch (error) {
-      console.error("Failed to install tool", error);
-      // Revert optimistic update
-      setAddedIntegrations((prev) => prev.filter(i => i !== id));
-    }
-  }, [addedIntegrations, reloadIntegrations]);
-
-  const handleRemoveIntegration = useCallback(async (id: string) => {
-    setAddedIntegrations((prev) => prev.filter((i) => i !== id));
-    if (activeIntegration === id) {
-      setActiveIntegration(null);
-    }
-     try {
-      await fetch("/api/tools/install", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ toolId: id }),
-      });
-
-      // Delete OAuth tokens when removing integrations
-      // This requires re-authentication when re-adding the integration
-      if (id === "calendar") {
-        await fetch("/api/auth/google", { method: "DELETE" });
-        setIsCalendarConnected(false);
-      }
-
-      if (id === "forms") {
-        await fetch("/api/auth/google", { method: "DELETE" });
-        setIsFormsConnected(false);
-      }
-
-      if (id === "tasks") {
-        await fetch("/api/auth/google", { method: "DELETE" });
-        setIsTasksConnected(false);
-      }
-      
-      // Reload integrations to ensure sync with server
-      await reloadIntegrations();
-    } catch (error) {
-      console.error("Failed to uninstall tool", error);
-      // Revert optimistic update
-      setAddedIntegrations((prev) => [...prev, id]);
-    }
-  }, [activeIntegration, reloadIntegrations]);
-
   // Simplified handleSubmit using AI SDK's new API
   const handleSubmit = async (value: { text: string; files: any[] }) => {
     if (!value.text.trim() && attachments.length === 0) return;
@@ -524,7 +132,7 @@ export function ChatUI() {
     // Build parts array for the message
     const parts: Array<{ type: "text"; text: string } | { type: "file"; url: string; mediaType: string }> = [];
     
-    // Add text part
+    // Add text part (prompt processing happens on backend)
     if (value.text.trim()) {
       parts.push({ type: "text", text: value.text });
     }
@@ -610,7 +218,7 @@ export function ChatUI() {
       <div className="flex h-screen w-full flex-col bg-background text-foreground bg-grid">
         {/* Header */}
         <ChatHeader
-          models={models}
+          models={MODELS}
           selectedModel={selectedModel}
           onSelectModel={setSelectedModel}
           isModelOpen={isModelOpen}
@@ -680,7 +288,7 @@ export function ChatUI() {
             {/* Suggestions Grid - only show when chat hasn't started */}
             {!isStarted && (
               <SuggestionsGrid
-                suggestions={defaultSuggestions}
+                suggestions={DEFAULT_SUGGESTIONS}
                 onSuggestionClick={handleSuggestionClick}
               />
             )}
