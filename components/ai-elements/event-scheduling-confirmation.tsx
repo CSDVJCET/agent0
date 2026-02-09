@@ -13,7 +13,8 @@ import {
   Loader2Icon,
   BrainIcon,
   SparklesIcon,
-  ExternalLinkIcon
+  ExternalLinkIcon,
+  VideoIcon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -85,9 +86,33 @@ export function EventSchedulingConfirmation({
   const [status, setStatus] = useState<"pending" | "creating" | "created" | "rejected" | "error">("pending");
   const [createdEvent, setCreatedEvent] = useState<CreatedEventResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isGeneratingMeet, setIsGeneratingMeet] = useState(false);
 
   const handleChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleGenerateMeetLink = async () => {
+    setIsGeneratingMeet(true);
+    try {
+      const response = await fetch("/api/calendar/generate-meet-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const result = await response.json();
+
+      if (result.error) {
+        setErrorMessage(result.message || "Failed to generate Google Meet link");
+      } else {
+        // Update location field with the Meet link
+        handleChange("location", result.meetLink);
+      }
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Failed to generate Google Meet link");
+    } finally {
+      setIsGeneratingMeet(false);
+    }
   };
 
   const handleConfirm = async () => {
@@ -337,14 +362,34 @@ export function EventSchedulingConfirmation({
               <MapPinIcon className="w-3 h-3" />
               Location
             </Label>
-            <Input
-              id={`location-${toolCallId}`}
-              value={formData.location}
-              onChange={(e) => handleChange("location", e.target.value)}
-              placeholder="Office, Zoom link, or address"
-              className="h-10"
-              disabled={status === "creating"}
-            />
+            <div className="flex gap-2">
+              <Input
+                id={`location-${toolCallId}`}
+                value={formData.location}
+                onChange={(e) => handleChange("location", e.target.value)}
+                placeholder="Office, Zoom link, or address"
+                className="h-10 flex-1"
+                disabled={status === "creating"}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={handleGenerateMeetLink}
+                disabled={status === "creating" || isGeneratingMeet}
+                className="h-10 w-10 shrink-0"
+                title="Generate Google Meet link"
+              >
+                {isGeneratingMeet ? (
+                  <Loader2Icon className="h-4 w-4 animate-spin" />
+                ) : (
+                  <VideoIcon className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Click the video icon to generate a Google Meet link
+            </p>
           </div>
 
           {/* Attendees */}
