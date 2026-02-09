@@ -5,7 +5,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
-import type { MyUIMessage } from "@/types/chat";
+import type { MyUIMessage, PdfOperationResult } from "@/types/chat";
 
 // Components
 import { ChatHeader } from "@/components/chat-header";
@@ -113,6 +113,46 @@ export function ChatUI() {
 
   const isLoading = status === "streaming" || status === "submitted";
 
+  // One-time cleanup: remove any legacy PDF tool parts from message history
+  // These were created by the old implementation and break the AI SDK's message processing
+  useEffect(() => {
+    if (!isLoaded || messages.length === 0) return;
+    
+    let needsCleanup = false;
+    const cleaned = messages.map((msg) => {
+      if (!msg.parts || !Array.isArray(msg.parts)) return msg;
+      
+      const hasPdfToolPart = msg.parts.some((part: any) => 
+        part.type === "tool-mergePDFs" || 
+        part.type === "tool-compressPDF" ||
+        (part.type === "tool-invocation" && (part.toolName === "mergePDFs" || part.toolName === "compressPDF"))
+      );
+      
+      if (!hasPdfToolPart) return msg;
+      needsCleanup = true;
+      
+      // Convert tool parts to text, preserving the result message
+      const cleanedParts = msg.parts
+        .filter((part: any) => {
+          if (part.type === "tool-mergePDFs" || part.type === "tool-compressPDF") return false;
+          if (part.type === "tool-invocation" && (part.toolName === "mergePDFs" || part.toolName === "compressPDF")) return false;
+          return true;
+        });
+      
+      // If all parts were removed, add a placeholder text
+      if (cleanedParts.length === 0) {
+        cleanedParts.push({ type: "text", text: "(PDF operation completed)" });
+      }
+      
+      return { ...msg, parts: cleanedParts } as MyUIMessage;
+    });
+    
+    if (needsCleanup) {
+      console.log("[PDF cleanup] Removed legacy PDF tool parts from message history");
+      setMessages(cleaned);
+    }
+  }, [isLoaded]); // Only run once on load
+
   // Chat handlers
 
   const handleNewChat = useCallback(() => {
@@ -129,6 +169,162 @@ export function ChatUI() {
   // Simplified handleSubmit using AI SDK's new API
   const handleSubmit = async (value: { text: string; files: any[] }) => {
     if (!value.text.trim() && attachments.length === 0) return;
+
+    // --- PDF: handle entirely client-side (zero AI tokens) ---
+    const isPdfOnly = mentionedTools.length > 0 && mentionedTools.every(t => t.toLowerCase() === "pdf");
+    const pdfFiles = attachments.filter(a => a.type === "application/pdf");
+
+    if (isPdfOnly) {
+      const userText = value.text.trim().toLowerCase();
+      const isMerge = /merge|combine|join|concat/.test(userText);
+      const isCompress = /compress|reduce|shrink|optimi|smaller/.test(userText);
+
+      let operation: "merge" | "compress";
+      if (isMerge) operation = "merge";
+      else if (isCompress) operation = "compress";
+      else operation = pdfFiles.length >= 2 ? "merge" : "compress";
+
+      const ts = Date.now();
+      const userMsgId = `pdf-user-${ts}`;
+      const assistantMsgId = `pdf-asst-${ts}`;
+
+      // Build user message parts — text only, NO base64 file parts
+      const userParts: any[] = [];
+      if (value.text.trim()) userParts.push({ type: "text", text: value.text });
+      for (const att of attachments) {
+        if (att.type === "application/pdf") {
+          userParts.push({ type: "text", text: `📎 ${att.name || "PDF file"}` });
+        } else {
+          userParts.push({ type: "file", url: att.url, mediaType: att.type });
+        }
+      }
+
+      // Handle missing PDF files
+      if (pdfFiles.length === 0) {
+        setMessages((prev) => [
+          ...prev,
+          { id: userMsgId, role: "user", parts: userParts } as MyUIMessage,
+          { id: assistantMsgId, role: "assistant", parts: [{ type: "text", text: "Please attach PDF files to use @pdf. For merging attach 2+ PDFs, for compression attach 1+ PDFs." }] } as MyUIMessage,
+        ]);
+        setInputValue(""); setAttachments([]); setMentionedTools([]);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
+      if (operation === "merge" && pdfFiles.length < 2) {
+        setMessages((prev) => [
+          ...prev,
+          { id: userMsgId, role: "user", parts: userParts } as MyUIMessage,
+          { id: assistantMsgId, role: "assistant", parts: [{ type: "text", text: "Please attach at least 2 PDF files to merge." }] } as MyUIMessage,
+        ]);
+        setInputValue(""); setAttachments([]); setMentionedTools([]);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
+
+      // Show loading message (plain text, no tool parts)
+      setMessages((prev) => [
+        ...prev,
+        { id: userMsgId, role: "user", parts: userParts } as MyUIMessage,
+        {
+          id: assistantMsgId,
+          role: "assistant",
+          parts: [{ type: "text", text: operation === "merge" ? "⏳ Merging PDFs..." : `⏳ Compressing ${pdfFiles.length} PDF(s)...` }],
+        } as MyUIMessage,
+      ]);
+      setInputValue(""); setAttachments([]); setMentionedTools([]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+
+      // Call PDF API directly — no AI model involved
+      let pdfResultData: PdfOperationResult;
+      try {
+        if (operation === "merge") {
+          const res = await fetch("/api/pdf/merge", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ files: pdfFiles.map(f => f.url) }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            const refId = `pdf-merge-${ts}`;
+            if (typeof window !== "undefined") {
+              (window as any).__pdfResults = (window as any).__pdfResults || {};
+              (window as any).__pdfResults[refId] = data.fileUrl;
+            }
+            pdfResultData = {
+              operation: "merge",
+              fileName: data.fileName || "merged.pdf",
+              fileUrl: `__pdf_ref__:${refId}`,
+              pageCount: data.pageCount,
+              fileSize: data.fileSize,
+              inputFileCount: pdfFiles.length,
+              message: `Successfully merged ${pdfFiles.length} PDFs into "${data.fileName}" (${data.pageCount} pages, ${data.fileSize})`,
+            };
+          } else {
+            pdfResultData = { operation: "merge", error: true, message: data.error || "Failed to merge PDFs" };
+          }
+        } else {
+          // Compress each PDF file individually
+          const results: PdfOperationResult["results"] = [];
+          for (let i = 0; i < pdfFiles.length; i++) {
+            const pdf = pdfFiles[i];
+            try {
+              const res = await fetch("/api/pdf/compress", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  file: pdf.url,
+                  outputFileName: pdf.name ? `compressed-${pdf.name}` : `compressed-${i + 1}.pdf`,
+                }),
+              });
+              const data = await res.json();
+              if (res.ok) {
+                const refId = `pdf-compress-${ts}-${i}`;
+                if (typeof window !== "undefined") {
+                  (window as any).__pdfResults = (window as any).__pdfResults || {};
+                  (window as any).__pdfResults[refId] = data.fileUrl;
+                }
+                results.push({
+                  fileName: data.fileName || `compressed-${i + 1}.pdf`,
+                  fileUrl: `__pdf_ref__:${refId}`,
+                  pageCount: data.pageCount,
+                  originalSize: data.originalSize,
+                  compressedSize: data.compressedSize,
+                  compressionRatio: data.compressionRatio,
+                });
+              }
+            } catch {
+              // Skip individual failures
+            }
+          }
+          if (results.length > 0) {
+            pdfResultData = {
+              operation: "compress",
+              results,
+              message: `Successfully compressed ${results.length} PDF(s)`,
+            };
+          } else {
+            pdfResultData = { operation: "compress", error: true, message: "Failed to compress PDFs" };
+          }
+        }
+      } catch (err) {
+        pdfResultData = { operation, error: true, message: err instanceof Error ? err.message : "PDF operation failed" };
+      }
+
+      // Update assistant message — text summary + metadata with pdfResult (NO tool parts)
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMsgId
+            ? ({
+                ...msg,
+                parts: [{ type: "text", text: pdfResultData.error ? `❌ ${pdfResultData.message}` : `✅ ${pdfResultData.message}` }],
+                metadata: { pdfResult: pdfResultData },
+              } as MyUIMessage)
+            : msg
+        )
+      );
+      return;
+    }
+    // --- End PDF client-side handling ---
 
     // Build parts array for the message
     const parts: Array<{ type: "text"; text: string } | { type: "file"; url: string; mediaType: string }> = [];

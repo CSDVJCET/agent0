@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { CloudSun, Plus, Trash2, ExternalLink, Calendar, FileText, Mail, ListTodo, Network } from "lucide-react";
+import { CloudSun, Plus, Trash2, ExternalLink, Calendar, FileText, Mail, ListTodo, Network, FileStack } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -60,6 +60,14 @@ const INTEGRATIONS = [
     icon: Mail,
     color: "text-red-600",
     bgColor: "bg-red-600/10",
+  },
+  {
+    id: "pdf",
+    name: "PDF",
+    description: "Merge multiple PDFs or compress PDF files for smaller size.",
+    icon: FileStack,
+    color: "text-orange-500",
+    bgColor: "bg-orange-500/10",
   },
   {
     id: "mermaid",

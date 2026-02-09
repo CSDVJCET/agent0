@@ -57,6 +57,14 @@ function getToolMetadata(id: string) {
       icon: "network",
     };
   }
+  if (id === "pdf") {
+    return {
+      name: "PDF",
+      description: "Merge multiple PDFs or compress PDF files for smaller size",
+      category: "utility",
+      icon: "file-stack",
+    };
+  }
   return {
     name: id,
     description: "Custom tool",

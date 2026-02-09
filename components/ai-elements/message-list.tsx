@@ -46,6 +46,7 @@ import { TaskSchedulingConfirmation } from "@/components/ai-elements/task-schedu
 import { TaskDeleteConfirmation } from "@/components/ai-elements/task-delete-confirmation";
 import { TaskUpdateConfirmation } from "@/components/ai-elements/task-update-confirmation";
 import { TaskCompleteDisplay } from "@/components/ai-elements/task-complete-display";
+import { PdfResult, PdfLoading } from "@/components/ai-elements/pdf-result";
 import {
   CopyIcon,
   RefreshCwIcon,
@@ -63,7 +64,7 @@ import {
   getMessageSources,
   getToolTitle,
 } from "@/lib/chat-message-utils";
-import type { MyUIMessage } from "@/types/chat";
+import type { MyUIMessage, PdfOperationResult } from "@/types/chat";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Weather, WeatherLoading } from "@/components/weather";
 
@@ -191,35 +192,42 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
                     {message.role === "assistant" && (() => {
 const seenIds = new Set();
 const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, toolIndex: number) => {
+  // Handle nested toolInvocation property or direct tool part
   const t = ti?.toolInvocation || ti;
-  if (!t) return acc;
+  if (!t || typeof t !== "object") return acc;
 
-  // Extract tool name
-  let toolName = t.toolName;
-  if (!toolName && t.type && t.type.startsWith("tool-")) {
+  // Extract tool name from various possible locations
+  let toolName = t.toolName || t.name;
+  if (!toolName && t.type && typeof t.type === "string" && t.type.startsWith("tool-")) {
     toolName = t.type.replace("tool-", "");
   }
-  toolName = toolName || "tool";
+  if (!toolName) {
+    console.warn("Tool invocation without toolName:", t);
+    return acc; // Skip tools without names
+  }
 
-  // Normalize state
+  // Normalize state - be defensive about undefined
   let state = t.state;
   if (state === "output-available") state = "result";
   if (state === "input-available") state = "call";
-  if (!state) {
-    state = t.result || t.output ? "result" : "call";
+  if (!state || typeof state !== "string") {
+    // Default based on presence of result/output
+    const hasResult = t.result !== undefined || t.output !== undefined;
+    state = hasResult ? "result" : "call";
   }
 
   // Generate stable toolCallId
-  const toolCallId = t.toolCallId || `${message.id}-tool-${toolIndex}`;
+  const toolCallId = t.toolCallId || t.id || `${message.id}-tool-${toolIndex}`;
 
+  // Only add if not duplicate
   if (!seenIds.has(toolCallId)) {
     seenIds.add(toolCallId);
     acc.push({
       toolCallId,
       toolName,
       state,
-      args: t.args || t.input,
-      result: t.result || t.output,
+      args: t.args || t.input || {},
+      result: t.result || t.output || null,
     });
   }
 
@@ -475,6 +483,12 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
                           }
                         }
 
+                        // PDF tools are now rendered from message.metadata.pdfResult (see below)
+                        // Skip any legacy PDF tool parts that may still be in history
+                        if (toolInvocation.toolName === "mergePDFs" || toolInvocation.toolName === "compressPDF") {
+                          return null;
+                        }
+
                         // Special rendering for Weather tool - wrapped in Tool UI
                         if (toolInvocation.toolName === "displayWeather") {
                           
@@ -537,6 +551,49 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
                           </Tool>
                         );
                       });
+                    })()}
+
+                    {/* PDF Result from metadata (not tool parts) */}
+                    {message.role === "assistant" && (message.metadata as any)?.pdfResult && (() => {
+                      const pdf = (message.metadata as any).pdfResult as PdfOperationResult;
+                      if (pdf.error) return null; // Error already shown in text content
+                      
+                      if (pdf.operation === "merge" && pdf.fileName && pdf.fileUrl) {
+                        return (
+                          <PdfResult
+                            key={`pdf-merge-${message.id}`}
+                            operation="merge"
+                            fileName={pdf.fileName}
+                            fileUrl={pdf.fileUrl}
+                            pageCount={pdf.pageCount}
+                            fileSize={pdf.fileSize}
+                            message={pdf.message}
+                            inputFileCount={pdf.inputFileCount}
+                          />
+                        );
+                      }
+                      
+                      if (pdf.operation === "compress" && pdf.results && pdf.results.length > 0) {
+                        return (
+                          <div className="flex flex-col gap-3 w-full">
+                            {pdf.results.map((r, i) => (
+                              <PdfResult
+                                key={`pdf-compress-${message.id}-${i}`}
+                                operation="compress"
+                                fileName={r.fileName}
+                                fileUrl={r.fileUrl}
+                                pageCount={r.pageCount}
+                                originalSize={r.originalSize}
+                                compressedSize={r.compressedSize}
+                                compressionRatio={r.compressionRatio}
+                                message={`${r.originalSize} → ${r.compressedSize} (${r.compressionRatio}% reduction)`}
+                              />
+                            ))}
+                          </div>
+                        );
+                      }
+                      
+                      return null;
                     })()}
 
                     {message.role === "assistant" && sources.length > 0 && (
