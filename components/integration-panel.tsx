@@ -67,6 +67,14 @@ const INTEGRATION_DETAILS: Record<string, { name: string; description: string; f
       { name: "updateFormSchema", description: "Add or remove questions from a form" },
       { name: "getResponseSummary", description: "Get aggregate statistics for form responses" }
     ]
+  },
+  pdf: {
+    name: "PDF",
+    description: "Merge multiple PDFs or compress PDF files.",
+    functions: [
+      { name: "mergePDFs", description: "Merge multiple PDF files into a single PDF" },
+      { name: "compressPDF", description: "Compress a PDF file to reduce its size" }
+    ]
   }
 };
 

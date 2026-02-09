@@ -9,6 +9,7 @@ import { calendarTools } from "@/ai/calendar-tools";
 import { formsTools } from "@/ai/forms-tools";
 import { gmailTools } from "@/ai/gmail-tools";
 import { tasksTools } from "@/ai/tasks-tools";
+// PDF tools removed — handled entirely client-side to avoid tool part serialization issues
 import { GMAIL_AGENT_PROMPT } from "@/ai/prompts/gmail";
 import { isToolInstalled } from "@/lib/installed-tools";
 import { getNextFallbackModel, isRateLimitError, type ModelRetryMetadata } from "@/lib/model-fallback";
@@ -77,15 +78,37 @@ function sanitizeToolParts(messages: MyUIMessage[]): MyUIMessage[] {
           return false;
         }
 
+        // Handle tool-invocation structure
         if (part.type === "tool-invocation") {
           const toolName =
             part.toolName || part.toolInvocation?.toolName || part.tool?.name;
-          return typeof toolName === "string" && toolName.trim().length > 0;
+          if (typeof toolName !== "string" || toolName.trim().length === 0) {
+            return false;
+          }
+          // Ensure state exists
+          if (!part.state) {
+            part.state = part.result || part.output ? "result" : "call";
+          }
+          return true;
         }
 
+        // Handle tool-{name} format (AI SDK 5.0+)
         if (part.type.startsWith("tool-")) {
           const toolName = part.type.slice(5);
-          return toolName.trim().length > 0;
+          if (toolName.trim().length === 0) {
+            return false;
+          }
+          // Ensure these have proper structure
+          if (!part.toolName) {
+            part.toolName = toolName;
+          }
+          if (!part.state) {
+            part.state = part.result || part.output ? "result" : "call";
+          }
+          if (!part.toolCallId) {
+            part.toolCallId = `generated-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          }
+          return true;
         }
 
         return true;
@@ -269,6 +292,84 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
     }
   }
 
+  // ALWAYS strip large base64 PDF file parts from ALL messages to prevent body size explosion
+  // Also strip any PDF tool parts that may have leaked into message history
+  uiMessages = uiMessages.map(msg => {
+    if (msg.parts) {
+      const cleanedParts = (msg.parts as any[])
+        .filter(part => {
+          // Remove PDF tool parts entirely — these are client-side only
+          if (part.type === "tool-mergePDFs" || part.type === "tool-compressPDF") return false;
+          if (part.type === "tool-invocation" && (part.toolName === "mergePDFs" || part.toolName === "compressPDF")) return false;
+          return true;
+        })
+        .map(part => {
+        // Strip base64 PDF data URLs (they can be 10MB+ each)
+        if (part.type === "file" && typeof part.url === "string" && part.url.startsWith("data:application/pdf")) {
+          return { type: "text", text: "(PDF file - processed separately)" };
+        }
+        if (part.type === "file" && part.mediaType === "application/pdf" && typeof part.url === "string" && part.url.length > 1000) {
+          return { type: "text", text: "(PDF file - processed separately)" };
+        }
+        // Also strip any giant tool result data (e.g. base64 PDF output stored in result)
+        // Check both tool-invocation structure and tool-{name} structure
+        if (part.type === "tool-invocation" || part.type?.startsWith?.("tool-")) {
+          // Handle tool-invocation with nested result
+          if (part.toolInvocation?.result?.fileUrl) {
+            const url = part.toolInvocation.result.fileUrl;
+            if (typeof url === "string" && url.length > 1000) {
+              return {
+                ...part,
+                toolInvocation: {
+                  ...part.toolInvocation,
+                  result: { ...part.toolInvocation.result, fileUrl: "(stripped for API)" }
+                }
+              };
+            }
+          }
+          // Handle tool-{name} with direct result property
+          if (part.result?.fileUrl) {
+            const url = part.result.fileUrl;
+            if (typeof url === "string" && url.length > 1000) {
+              return {
+                ...part,
+                result: { ...part.result, fileUrl: "(stripped for API)" }
+              };
+            }
+          }
+          // Handle args with file URLs (input PDFs)
+          if (part.args?.fileUrls && Array.isArray(part.args.fileUrls)) {
+            const hasLargeFiles = part.args.fileUrls.some((url: any) => 
+              typeof url === "string" && url.length > 1000
+            );
+            if (hasLargeFiles) {
+              return {
+                ...part,
+                args: { 
+                  ...part.args, 
+                  fileUrls: part.args.fileUrls.map(() => "(stripped for API)")
+                }
+              };
+            }
+          }
+          if (part.args?.fileUrl && typeof part.args.fileUrl === "string" && part.args.fileUrl.length > 1000) {
+            return {
+              ...part,
+              args: { ...part.args, fileUrl: "(stripped for API)" }
+            };
+          }
+        }
+        return part;
+      });
+      return { ...msg, parts: cleanedParts } as MyUIMessage;
+    }
+    return msg;
+  }).filter(msg => {
+    // Remove messages with empty parts (e.g., messages that only had PDF tool parts)
+    if (msg.parts && Array.isArray(msg.parts) && msg.parts.length === 0) return false;
+    return true;
+  });
+
   // Check if using Google model
   const isGoogleModel = !model.includes(":");
 
@@ -288,6 +389,14 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
     modelMessages = await convertToModelMessages(sanitizedMessages);
   } catch (error) {
     console.error("convertToModelMessages failed", error);
+    console.error("Sanitized messages that caused failure:", JSON.stringify(sanitizedMessages, null, 2));
+    
+    // Try to identify which message caused the issue
+    for (let i = 0; i < sanitizedMessages.length; i++) {
+      const msg = sanitizedMessages[i];
+      console.error(`Message ${i} (${msg.role}):`, JSON.stringify(msg, null, 2));
+    }
+    
     return new Response(
       JSON.stringify({
         error: "Invalid messages",
@@ -370,6 +479,8 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
           console.warn("Tasks tool mentioned but not installed");
         }
       }
+      // PDF tools — handled entirely client-side (no LLM involvement)
+      // The @pdf mention is intercepted in chat-ui.tsx before reaching this route
       // Add more tool mappings here as needed
     }
   } else {
@@ -403,8 +514,10 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
     : "";
 
   const tasksGuidance = mentionedTools.some(t => ["tasks", "task", "todo", "todos"].includes(t.toLowerCase()))
-    ? " When the user wants to create a task/todo, use scheduleTask to present the task details for confirmation. For listing tasks, use listTasks. To mark tasks complete, use completeTask. For updating task details, use updateTask. For deleting tasks, use deleteTask (which requires confirmation). Always parse relative dates like 'tomorrow', 'next week' into proper ISO dates."
+    ? " When the user wants to create a task/todo, use scheduleTask to present the task details for confirmation. For listing tasks, use listTasks. To mark tasks complete, use completeTask. For updating task details, use updateTask. For deleting tasks, use deleteTask (which requires confirmation). Always parse relative dates like 'tomorrow', 'next week' into proper ISO dates. CRITICAL: After calling any task tool (scheduleTask, createTask, updateTask, deleteTask, completeTask, listTasks), DO NOT provide any additional text explanation. The generative UI component displays all necessary information to the user. ONLY provide additional text if you need clarification from the user (e.g., asking which task to update if there are multiple matches)."
     : "";
+
+  // PDF guidance removed — PDF operations are handled client-side
 
   // Retry logic with automatic model fallback on rate limiting
   const maxRetries = 3;
