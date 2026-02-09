@@ -78,7 +78,7 @@ const INTEGRATION_DETAILS: Record<string, { name: string; description: string; f
   },
   mermaid: {
     name: "Mermaid",
-    description: "Generate mermaid diagram code for flowcharts, sequences, and more.",
+    description: "Generate Mermaid diagram code for flowcharts, sequences, and more.",
     functions: [
       { name: "generateDiagram", description: "Generate Mermaid diagram code based on description" },
       { name: "createFlowchart", description: "Create flowchart diagrams" },
