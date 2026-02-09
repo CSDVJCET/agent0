@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { CloudSun, Plus, Trash2, ExternalLink, Calendar, FileText, Mail, ListTodo, Network, FileStack } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
+import { GlowEffect } from "@/components/ui/glow-effect";
 
 interface IntegrationsModalProps {
   isOpen: boolean;
@@ -88,89 +89,99 @@ export function IntegrationsModal({
 }: IntegrationsModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[80vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Integrations</DialogTitle>
-          <DialogDescription>
+      <DialogContent className="sm:max-w-[90vw] md:max-w-[85vw] lg:max-w-[1000px] xl:max-w-[1200px] h-[70vh] flex flex-col p-4 sm:p-6 md:p-8 gap-6">
+        <DialogHeader className="shrink-0">
+          <DialogTitle className="text-2xl">Integrations</DialogTitle>
+          <DialogDescription className="text-base">
             Add integrations to enhance your chat experience.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4 overflow-y-auto max-h-[60vh]">
-          <AnimatePresence>
-            {INTEGRATIONS.map((integration) => {
-              const isAdded = addedIntegrations.includes(integration.id);
-              return (
-                <motion.div
-                  key={integration.id}
-                  layout
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors group"
-                >
-                  <div className="flex items-center gap-4">
-                    <motion.div 
-                      whileHover={{ scale: 1.1, rotate: 5 }}
-                      className={cn("p-2 rounded-md transition-colors", integration.bgColor)}
-                    >
-                      <integration.icon className={cn("w-6 h-6", integration.color)} />
-                    </motion.div>
-                    <div>
-                      <h4 className="font-medium flex items-center gap-2">
-                        {integration.name}
-                        {isAdded && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-600 font-medium border border-green-500/20">
-                            Active
-                          </span>
-                        )}
-                      </h4>
-                      <p className="text-sm text-muted-foreground">
-                        {integration.description}
-                      </p>
+        <div className="flex-1 overflow-y-auto min-h-0 px-6 -mx-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-8 p-8">
+            <AnimatePresence mode="popLayout">
+              {INTEGRATIONS.map((integration) => {
+                const isAdded = addedIntegrations.includes(integration.id);
+                return (
+                  <motion.div
+                    key={integration.id}
+                    layout
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="group relative flex flex-col h-full"
+                  >
+                    <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <GlowEffect
+                        colors={['#0894FF', '#C959DD', '#FF2E54', '#FF9004']}
+                        mode="static"
+                        blur="medium"
+                      />
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {isAdded ? (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => {
-                            onAddIntegration(integration.id); // Opens the panel
-                            onOpenChange(false);
-                          }}
-                        >
-                          <ExternalLink className="w-4 h-4 mr-1" />
-                          View Details
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => onRemoveIntegration(integration.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </>
-                    ) : (
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() => {
-                          onAddIntegration(integration.id);
-                          onOpenChange(false);
-                        }}
-                      >
-                        <Plus className="w-4 h-4 mr-1" />
-                        Add
-                      </Button>
-                    )}
-                  </div>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
+                    <div className="relative h-full min-h-[220px] flex flex-col rounded-xl border bg-card p-5 shadow-sm transition-all duration-300 group-hover:bg-card/90">
+                      <div className="flex flex-col gap-4">
+                        <div className="flex items-center justify-between">
+                          <div className={cn("p-2.5 rounded-lg w-fit", integration.bgColor)}>
+                            <integration.icon className={cn("w-6 h-6", integration.color)} />
+                          </div>
+                          {isAdded && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 font-medium border border-green-500/20 shadow-sm">
+                              Active
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-lg leading-tight mb-2 opacity-90">{integration.name}</h4>
+                          <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
+                            {integration.description}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-auto pt-4 border-t w-full">
+                        {isAdded ? (
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1 px-2 whitespace-nowrap"
+                              onClick={() => {
+                                onAddIntegration(integration.id);
+                                onOpenChange(false);
+                              }}
+                            >
+                              <ExternalLink className="w-4 h-4 mr-1.5 shrink-0" />
+                              Details
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="flex-1 px-2 whitespace-nowrap"
+                              onClick={() => onRemoveIntegration(integration.id)}
+                            >
+                              <Trash2 className="w-4 h-4 mr-1.5 shrink-0" />
+                              Remove
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            variant="default"
+                            className="w-full"
+                            onClick={() => {
+                              onAddIntegration(integration.id);
+                              onOpenChange(false);
+                            }}
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add Integration
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
