@@ -75,6 +75,16 @@ const INTEGRATION_DETAILS: Record<string, { name: string; description: string; f
       { name: "mergePDFs", description: "Merge multiple PDF files into a single PDF" },
       { name: "compressPDF", description: "Compress a PDF file to reduce its size" }
     ]
+  },
+  mermaid: {
+    name: "Mermaid",
+    description: "Generate mermaid diagram code for flowcharts, sequences, and more.",
+    functions: [
+      { name: "generateDiagram", description: "Generate Mermaid diagram code based on description" },
+      { name: "createFlowchart", description: "Create flowchart diagrams" },
+      { name: "createSequenceDiagram", description: "Create sequence diagrams for interactions" },
+      { name: "createGanttChart", description: "Create Gantt charts for project timelines" }
+    ]
   }
 };
 

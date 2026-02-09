@@ -30,6 +30,7 @@ export type PromptInputAreaProps = {
   mentionedTools?: string[];
   onToolMentionsChange?: (tools: string[]) => void;
   addedIntegrations?: string[];
+  onRefreshTools?: () => void; // New prop for triggering tool refresh
 };
 
 export function PromptInputArea({
@@ -46,6 +47,7 @@ export function PromptInputArea({
   mentionedTools = [],
   onToolMentionsChange,
   addedIntegrations = [],
+  onRefreshTools,
 }: PromptInputAreaProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);

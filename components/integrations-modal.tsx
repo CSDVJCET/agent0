@@ -88,14 +88,14 @@ export function IntegrationsModal({
 }: IntegrationsModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[700px] max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Integrations</DialogTitle>
           <DialogDescription>
             Add integrations to enhance your chat experience.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
+        <div className="grid gap-4 py-4 overflow-y-auto max-h-[60vh]">
           <AnimatePresence>
             {INTEGRATIONS.map((integration) => {
               const isAdded = addedIntegrations.includes(integration.id);
@@ -142,7 +142,7 @@ export function IntegrationsModal({
                           }}
                         >
                           <ExternalLink className="w-4 h-4 mr-1" />
-                          Open
+                          View Details
                         </Button>
                         <Button
                           variant="destructive"

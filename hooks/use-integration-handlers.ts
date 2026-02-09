@@ -8,6 +8,7 @@ interface UseIntegrationHandlersProps {
   setIsCalendarConnected: React.Dispatch<React.SetStateAction<boolean>>;
   setIsFormsConnected: React.Dispatch<React.SetStateAction<boolean>>;
   setIsTasksConnected: React.Dispatch<React.SetStateAction<boolean>>;
+  onIntegrationsChange?: () => void; // New callback
 }
 
 export function useIntegrationHandlers({
@@ -18,6 +19,7 @@ export function useIntegrationHandlers({
   setIsCalendarConnected,
   setIsFormsConnected,
   setIsTasksConnected,
+  onIntegrationsChange,
 }: UseIntegrationHandlersProps) {
   const reloadIntegrations = useCallback(async () => {
     try {
@@ -75,11 +77,14 @@ export function useIntegrationHandlers({
       }
       
       await reloadIntegrations();
+      
+      // Notify parent component of integration changes
+      onIntegrationsChange?.();
     } catch (error) {
       console.error("Failed to install tool", error);
       setAddedIntegrations((prev) => prev.filter(i => i !== id));
     }
-  }, [addedIntegrations, reloadIntegrations, setAddedIntegrations, setActiveIntegration, setIsCalendarConnected, setIsFormsConnected, setIsTasksConnected]);
+  }, [addedIntegrations, reloadIntegrations, setAddedIntegrations, setActiveIntegration, setIsCalendarConnected, setIsFormsConnected, setIsTasksConnected, onIntegrationsChange]);
 
   const handleRemoveIntegration = useCallback(async (id: string) => {
     setAddedIntegrations((prev) => prev.filter((i) => i !== id));
@@ -110,11 +115,14 @@ export function useIntegrationHandlers({
       }
       
       await reloadIntegrations();
+      
+      // Notify parent component of integration changes
+      onIntegrationsChange?.();
     } catch (error) {
       console.error("Failed to uninstall tool", error);
       setAddedIntegrations((prev) => [...prev, id]);
     }
-  }, [activeIntegration, reloadIntegrations, setAddedIntegrations, setActiveIntegration, setIsCalendarConnected, setIsFormsConnected, setIsTasksConnected]);
+  }, [activeIntegration, reloadIntegrations, setAddedIntegrations, setActiveIntegration, setIsCalendarConnected, setIsFormsConnected, setIsTasksConnected, onIntegrationsChange]);
 
   return {
     reloadIntegrations,
