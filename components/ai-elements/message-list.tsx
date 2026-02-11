@@ -315,6 +315,30 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
                           }
                         }
 
+                        // Create Survey Form (with human-in-the-loop confirmation)
+                        if (toolInvocation.toolName === "createSurveyForm" && isCompleted) {
+                          const result = toolInvocation.result;
+                          if (result.status === "pending_confirmation") {
+                            return (
+                              <FormCreationConfirmation
+                                key={toolInvocation.toolCallId}
+                                toolCallId={toolInvocation.toolCallId}
+                                formData={result.formData}
+                                reasoning={result.reasoning}
+                              />
+                            );
+                          }
+                        }
+
+                        // Confirm Create Form (shows success after creation)
+                        if (toolInvocation.toolName === "confirmCreateForm" && isCompleted) {
+                          if (!hasError && toolInvocation.result?.status === "created") {
+                            // The form was created successfully
+                            // Could render a success card here if desired
+                            return null; // FormCreationConfirmation handles the success state
+                          }
+                        }
+
                         // Fetch Form Responses
                         if (toolInvocation.toolName === "fetchNewResponses" && isCompleted) {
                           if (!hasError) {

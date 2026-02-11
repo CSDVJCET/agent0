@@ -440,7 +440,8 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
       if (lowerToolName === "forms" || lowerToolName === "survey") {
         if (isToolInstalled("forms")) {
           tools.createSurveyForm = formsTools.createSurveyForm;
-          tools.confirmCreateForm = formsTools.confirmCreateForm;
+          // confirmCreateForm is NOT registered here to prevent AI from bypassing HITL.
+          // The UI handles confirmation via /api/forms/create directly (same pattern as calendar).
           tools.fetchNewResponses = formsTools.fetchNewResponses;
           tools.watchResponsesWebhook = formsTools.watchResponsesWebhook;
           tools.updateFormSchema = formsTools.updateFormSchema;
