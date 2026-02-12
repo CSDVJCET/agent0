@@ -23,6 +23,11 @@ import { Octokit } from "@octokit/rest";
 
 let _octokit: Octokit | null = null;
 
+type RepoContext = {
+  owner: string;
+  repo: string;
+};
+
 function getOctokit(): Octokit {
   if (_octokit) return _octokit;
 
@@ -45,16 +50,72 @@ function getOctokit(): Octokit {
 const ownerRepoSchema = {
   owner: z
     .string()
-    .min(1)
+    .optional()
     .describe("GitHub repository owner (user or organisation)"),
   repo: z
     .string()
-    .min(1)
+    .optional()
     .describe("GitHub repository name (without the owner prefix)"),
 };
 
 /** Protected branch names that require explicit confirmation before merge */
 const PROTECTED_BRANCHES = ["main", "master", "production", "release"];
+
+function getDefaultRepoContext(): Partial<RepoContext> {
+  const defaultOwner = process.env.GITHUB_DEFAULT_OWNER?.trim();
+  const defaultRepo = process.env.GITHUB_DEFAULT_REPO?.trim();
+  const repoFromCombined = process.env.GITHUB_REPOSITORY?.trim(); // owner/repo
+
+  if (defaultOwner && defaultRepo) {
+    return { owner: defaultOwner, repo: defaultRepo };
+  }
+
+  if (repoFromCombined && repoFromCombined.includes("/")) {
+    const [owner, repo] = repoFromCombined.split("/");
+    if (owner && repo) {
+      return { owner, repo };
+    }
+  }
+
+  return {};
+}
+
+function resolveRepoContext(owner?: string, repo?: string): RepoContext {
+  const defaults = getDefaultRepoContext();
+  const finalOwner = owner?.trim() || defaults.owner;
+  const finalRepo = repo?.trim() || defaults.repo;
+
+  if (!finalOwner || !finalRepo) {
+    throw new Error(
+      "Missing repository context. Provide owner/repo in the tool call or set GITHUB_DEFAULT_OWNER and GITHUB_DEFAULT_REPO (or GITHUB_REPOSITORY=owner/repo)."
+    );
+  }
+
+  return { owner: finalOwner, repo: finalRepo };
+}
+
+function formatGitHubError(error: any, action: string): string {
+  const status = error?.status;
+  const message = error?.message || "Unknown GitHub API error";
+
+  if (status === 401) {
+    return `${action} failed: invalid/expired GitHub token. Update GITHUB_TOKEN.`;
+  }
+
+  if (status === 403) {
+    return `${action} failed: token does not have sufficient permissions for this repository/action.`;
+  }
+
+  if (status === 404) {
+    return `${action} failed: repository/resource not found OR token lacks access. Verify owner/repo and token scopes (Issues:write, Pull requests:write, Contents:write, Metadata:read).`;
+  }
+
+  if (typeof message === "string" && message.includes("Must have admin rights")) {
+    return `${action} failed: this action requires elevated repository permission (admin/maintain/triage depending on repo policy).`;
+  }
+
+  return `${action} failed: ${message}`;
+}
 
 // ---------------------------------------------------------------------------
 // 1. Create Issue
@@ -81,10 +142,11 @@ export const createIssue = tool({
   }),
   execute: async ({ owner, repo, title, body, labels, assignees }) => {
     try {
+      const { owner: repoOwner, repo: repoName } = resolveRepoContext(owner, repo);
       const octokit = getOctokit();
       const { data } = await octokit.issues.create({
-        owner,
-        repo,
+        owner: repoOwner,
+        repo: repoName,
         title,
         body: body ?? undefined,
         labels: labels ?? undefined,
@@ -96,12 +158,14 @@ export const createIssue = tool({
         url: data.html_url,
         number: data.number,
         title: data.title,
+        owner: repoOwner,
+        repo: repoName,
         message: `Issue #${data.number} created successfully`,
       };
     } catch (error: any) {
       return {
         success: false,
-        error: error?.message ?? "Failed to create issue",
+        error: formatGitHubError(error, "Create issue"),
       };
     }
   },
@@ -124,12 +188,13 @@ export const createBranch = tool({
   }),
   execute: async ({ owner, repo, baseBranch, newBranch }) => {
     try {
+      const { owner: repoOwner, repo: repoName } = resolveRepoContext(owner, repo);
       const octokit = getOctokit();
 
       // Get the SHA of the base branch
       const { data: refData } = await octokit.git.getRef({
-        owner,
-        repo,
+        owner: repoOwner,
+        repo: repoName,
         ref: `heads/${baseBranch}`,
       });
 
@@ -137,8 +202,8 @@ export const createBranch = tool({
 
       // Create the new branch ref
       await octokit.git.createRef({
-        owner,
-        repo,
+        owner: repoOwner,
+        repo: repoName,
         ref: `refs/heads/${newBranch}`,
         sha,
       });
@@ -148,12 +213,21 @@ export const createBranch = tool({
         branch: newBranch,
         baseBranch,
         sha,
+        owner: repoOwner,
+        repo: repoName,
         message: `Branch '${newBranch}' created from '${baseBranch}' at ${sha.slice(0, 7)}`,
       };
     } catch (error: any) {
+      if (error?.status === 422 && String(error?.message || "").toLowerCase().includes("reference already exists")) {
+        return {
+          success: false,
+          error: `Create branch failed: branch '${newBranch}' already exists. Use a different branch name.`,
+        };
+      }
+
       return {
         success: false,
-        error: error?.message ?? "Failed to create branch",
+        error: formatGitHubError(error, "Create branch"),
       };
     }
   },
@@ -185,10 +259,11 @@ export const createPullRequest = tool({
   }),
   execute: async ({ owner, repo, title, head, base, body, draft }) => {
     try {
+      const { owner: repoOwner, repo: repoName } = resolveRepoContext(owner, repo);
       const octokit = getOctokit();
       const { data } = await octokit.pulls.create({
-        owner,
-        repo,
+        owner: repoOwner,
+        repo: repoName,
         title,
         head,
         base,
@@ -203,12 +278,14 @@ export const createPullRequest = tool({
         title: data.title,
         state: data.state,
         draft: data.draft,
+        owner: repoOwner,
+        repo: repoName,
         message: `Pull request #${data.number} created successfully`,
       };
     } catch (error: any) {
       return {
         success: false,
-        error: error?.message ?? "Failed to create pull request",
+        error: formatGitHubError(error, "Create pull request"),
       };
     }
   },
@@ -250,12 +327,13 @@ export const mergePullRequest = tool({
     confirmed,
   }) => {
     try {
+      const { owner: repoOwner, repo: repoName } = resolveRepoContext(owner, repo);
       const octokit = getOctokit();
 
       // Fetch the PR first to validate it exists and check its target branch
       const { data: pr } = await octokit.pulls.get({
-        owner,
-        repo,
+        owner: repoOwner,
+        repo: repoName,
         pull_number: pullNumber,
       });
 
@@ -282,8 +360,8 @@ export const mergePullRequest = tool({
       }
 
       const { data: mergeResult } = await octokit.pulls.merge({
-        owner,
-        repo,
+        owner: repoOwner,
+        repo: repoName,
         pull_number: pullNumber,
         merge_method: mergeMethod,
         commit_message: commitMessage ?? undefined,
@@ -293,12 +371,14 @@ export const mergePullRequest = tool({
         success: true,
         merged: mergeResult.merged,
         sha: mergeResult.sha,
+        owner: repoOwner,
+        repo: repoName,
         message: mergeResult.message ?? `PR #${pullNumber} merged successfully`,
       };
     } catch (error: any) {
       return {
         success: false,
-        error: error?.message ?? "Failed to merge pull request",
+        error: formatGitHubError(error, "Merge pull request"),
       };
     }
   },
@@ -322,10 +402,11 @@ export const commentOnPR = tool({
   }),
   execute: async ({ owner, repo, issueNumber, body }) => {
     try {
+      const { owner: repoOwner, repo: repoName } = resolveRepoContext(owner, repo);
       const octokit = getOctokit();
       const { data } = await octokit.issues.createComment({
-        owner,
-        repo,
+        owner: repoOwner,
+        repo: repoName,
         issue_number: issueNumber,
         body,
       });
@@ -334,12 +415,14 @@ export const commentOnPR = tool({
         success: true,
         url: data.html_url,
         commentId: data.id,
+        owner: repoOwner,
+        repo: repoName,
         message: `Comment added to #${issueNumber}`,
       };
     } catch (error: any) {
       return {
         success: false,
-        error: error?.message ?? "Failed to add comment",
+        error: formatGitHubError(error, "Comment on pull request"),
       };
     }
   },
@@ -376,10 +459,11 @@ export const listPullRequests = tool({
   }),
   execute: async ({ owner, repo, state, perPage, sort, direction }) => {
     try {
+      const { owner: repoOwner, repo: repoName } = resolveRepoContext(owner, repo);
       const octokit = getOctokit();
       const { data } = await octokit.pulls.list({
-        owner,
-        repo,
+        owner: repoOwner,
+        repo: repoName,
         state,
         per_page: perPage,
         sort,
@@ -403,12 +487,14 @@ export const listPullRequests = tool({
         success: true,
         count: pullRequests.length,
         pullRequests,
+        owner: repoOwner,
+        repo: repoName,
         message: `Found ${pullRequests.length} pull request(s)`,
       };
     } catch (error: any) {
       return {
         success: false,
-        error: error?.message ?? "Failed to list pull requests",
+        error: formatGitHubError(error, "List pull requests"),
       };
     }
   },
