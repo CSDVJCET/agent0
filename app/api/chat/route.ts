@@ -9,8 +9,10 @@ import { calendarTools } from "@/ai/calendar-tools";
 import { formsTools } from "@/ai/forms-tools";
 import { gmailTools } from "@/ai/gmail-tools";
 import { tasksTools } from "@/ai/tasks-tools";
+import { githubTools } from "@/ai/github-tools";
 // PDF tools removed — handled entirely client-side to avoid tool part serialization issues
 import { GMAIL_AGENT_PROMPT } from "@/ai/prompts/gmail";
+import { GITHUB_AGENT_PROMPT } from "@/ai/prompts/github";
 import { isToolInstalled } from "@/lib/installed-tools";
 import { getNextFallbackModel, isRateLimitError, type ModelRetryMetadata } from "@/lib/model-fallback";
 
@@ -479,6 +481,19 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
           console.warn("Tasks tool mentioned but not installed");
         }
       }
+      // GitHub tools
+      if (lowerToolName === "github") {
+        if (isToolInstalled("github")) {
+          tools.createIssue = githubTools.createIssue;
+          tools.createBranch = githubTools.createBranch;
+          tools.createPullRequest = githubTools.createPullRequest;
+          tools.mergePullRequest = githubTools.mergePullRequest;
+          tools.commentOnPR = githubTools.commentOnPR;
+          tools.listPullRequests = githubTools.listPullRequests;
+        } else {
+          console.warn("GitHub tool mentioned but not installed");
+        }
+      }
       // PDF tools — handled entirely client-side (no LLM involvement)
       // The @pdf mention is intercepted in chat-ui.tsx before reaching this route
       // Add more tool mappings here as needed
@@ -515,6 +530,10 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
 
   const tasksGuidance = mentionedTools.some(t => ["tasks", "task", "todo", "todos"].includes(t.toLowerCase()))
     ? " When the user wants to create a task/todo, use scheduleTask to present the task details for confirmation. For listing tasks, use listTasks. To mark tasks complete, use completeTask. For updating task details, use updateTask. For deleting tasks, use deleteTask (which requires confirmation). Always parse relative dates like 'tomorrow', 'next week' into proper ISO dates. CRITICAL: After calling any task tool (scheduleTask, createTask, updateTask, deleteTask, completeTask, listTasks), DO NOT provide any additional text explanation. The generative UI component displays all necessary information to the user. ONLY provide additional text if you need clarification from the user (e.g., asking which task to update if there are multiple matches)."
+    : "";
+
+  const githubGuidance = mentionedTools.some(t => t.toLowerCase() === "github")
+    ? " When the user asks about GitHub operations (issues, PRs, branches), use the GitHub tools. Always confirm before merging into main/master/production/release. Never delete branches. Present results with URLs and numbers. For creating branch + PR together, create the branch first then the PR."
     : "";
 
   // PDF guidance removed — PDF operations are handled client-side
@@ -566,6 +585,11 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
         systemPrompt += "\n\n" + GMAIL_AGENT_PROMPT;
       }
 
+      // Add GitHub agent persona when GitHub tools are active
+      if (mentionedTools.some(tool => tool.toLowerCase() === "github")) {
+        systemPrompt += "\n\n" + GITHUB_AGENT_PROMPT;
+      }
+
       // Add retry notification if this is not the first attempt
       if (attempt > 0) {
         systemPrompt += `\n\n[System: Automatically switched from ${retryMetadata.originalModel} to ${currentModel} due to rate limiting]`;
@@ -573,7 +597,7 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
 
       const result = streamText({
         model: modelInstance,
-        system: `${systemPrompt}${calendarGuidance}${formsGuidance}${tasksGuidance}`,
+        system: `${systemPrompt}${calendarGuidance}${formsGuidance}${tasksGuidance}${githubGuidance}`,
         messages: modelMessages,
         tools: hasCurrentTools ? currentTools : undefined,
         toolChoice: hasCurrentTools ? "auto" : "none",
