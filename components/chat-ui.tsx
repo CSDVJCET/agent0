@@ -413,55 +413,56 @@ export function ChatUI() {
   return (
     <FileDropZone onFilesDropped={handleFilesDropped}>
       <div 
-        className="flex h-screen w-full flex-col text-foreground relative transition-all duration-500 ease-in-out"
-        style={{ 
-          backgroundImage: isStarted ? "none" : "url('/Dashboard.png')", 
-          backgroundSize: "cover", 
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-          backgroundColor: isStarted ? "hsl(var(--background))" : "transparent"
-        }}
+        className="flex h-screen w-full flex-col text-foreground bg-cover bg-center bg-no-repeat selection:bg-[#8ca7bc]/30"
+        style={{ backgroundImage: 'url("/Dashboard.png")' }}
       >
         {/* Header */}
-        <ChatHeader
-          models={MODELS}
-          selectedModel={selectedModel}
-          onSelectModel={setSelectedModel}
-          isModelOpen={isModelOpen}
-          onModelOpenChange={setIsModelOpen}
-          onNewChat={handleNewChat}
-          onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
-        />
+        {!isStarted && (
+          <ChatHeader
+            models={MODELS}
+            selectedModel={selectedModel}
+            onSelectModel={setSelectedModel}
+            isModelOpen={isModelOpen}
+            onModelOpenChange={setIsModelOpen}
+            onNewChat={handleNewChat}
+            onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
+          />
+        )}
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-hidden relative flex flex-col">
-        {isStarted ? (
-          <div className="flex-1 overflow-y-auto px-4 py-4 scroll-smooth">
-            <div className="max-w-3xl mx-auto space-y-6 pb-4">
-               <MessageList 
-                  messages={dedupedMessages} 
-                  isLoading={isLoading} 
-                  status={status}
-                  onRegenerate={handleRegenerate}
-                  error={error}
-               />
-            </div>
-          </div>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center p-4">
-             {/* 
-                Dashboard View (Empty State) 
-                The background image is on the parent container, so we just need to preserve empty space 
-                or show suggestions if desired. For now, we keep it clean as per "Dashboard screen".
-             */}
-          </div>
-        )}
+        {!isStarted && <TableOfContents messages={dedupedMessages} />}
+        
+        {/* Conversation Area */}
+        <div className={cn("flex-1 overflow-y-auto relative text-black font-semibold", !isStarted && "hidden")}>
+          <MessageList 
+            messages={dedupedMessages} 
+            isLoading={isLoading} 
+            onRegenerate={handleRegenerate}
+            status={status}
+            error={error}
+          />
+          {/* Spacer for floating input */}
+          <div className="h-40 w-full" />
+        </div>
 
         {/* Input Area Container */}
-        <div className="w-full px-4 flex justify-center pb-8 pt-4">
-          <div className="max-w-3xl w-full">
-            {/* Prompt Input (includes attachments preview) */}
-            <div className="w-full">
+        <motion.div
+          className={cn(
+            "w-full px-4 z-20",
+            isStarted
+              ? "absolute bottom-10 left-1/2 -translate-x-1/2 max-w-4xl"
+              : "flex-1 flex flex-col items-center justify-center pb-20"
+          )}
+          layout
+          transition={{ type: "spring", bounce: 0, duration: 0.5 }}
+        >
+          <div className="max-w-4xl mx-auto w-full space-y-8">
+            {/* Empty State */}
+            {!isStarted && <ChatEmptyState />}
+
+            {/* Prompt Input */}
+            <motion.div layout className="w-full">
               <PromptInputArea
                 value={inputValue}
                 onChange={setInputValue}
@@ -482,12 +483,13 @@ export function ChatUI() {
                 onToolMentionsChange={setMentionedTools}
                 addedIntegrations={addedIntegrations}
               />
-            </div>
-            
-            {/* Suggestions removed per user request */}
+            </motion.div>
+
+
           </div>
-        </div>
+        </motion.div>
       </div>
+
       <IntegrationsModal
         isOpen={isIntegrationsModalOpen}
         onOpenChange={setIsIntegrationsModalOpen}

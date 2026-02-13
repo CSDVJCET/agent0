@@ -25,7 +25,7 @@ export function ChatHeader({
   onOpenIntegrations,
 }: ChatHeaderProps) {
   return (
-    <header className="flex h-14 items-center justify-between px-4 lg:px-8 bg-transparent sticky top-0 z-10">
+    <header className="flex h-14 items-center justify-between border-b border-white/20 px-4 lg:px-8 bg-white/10 backdrop-blur-xl sticky top-0 z-50">
       <div 
         className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity" 
         onClick={onNewChat}
