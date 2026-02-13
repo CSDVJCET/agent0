@@ -159,7 +159,7 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
                     className={cn(
                       message.role === "user"
                         ? "bg-primary text-primary-foreground shadow-sm"
-                        : ""
+                        : "text-white"
                     )}
                   >
                     {message.role === "user" && message.parts && (
@@ -613,12 +613,12 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
 
                     {message.role === "assistant" ? (
                       hasAssistantContent ? (
-                        <MessageResponse>{textContent}</MessageResponse>
+                        <MessageResponse className="text-white">{textContent}</MessageResponse>
                       ) : shouldShowThinkingPlaceholder ? (
                         <ThinkingIndicator />
                       ) : null
                     ) : (
-                      <div className="whitespace-pre-wrap">{textContent}</div>
+                      <div className="whitespace-pre-wrap text-lg leading-relaxed text-white">{textContent}</div>
                     )}
                   </MessageContent>
                   {message.role === "assistant" && (
@@ -653,7 +653,7 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
             >
               <Message from="assistant">
                 <MessageContent className="w-fit">
-                  <Shimmer className="text-sm font-medium text-muted-foreground">
+                  <Shimmer className="text-lg font-medium text-white/80">
                     {"Sending..."}
                   </Shimmer>
                 </MessageContent>
@@ -669,11 +669,11 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
             >
               <AlertCircleIcon className="size-5 text-destructive shrink-0 mt-0.5" />
               <div className="flex-1 space-y-2">
-                <p className="text-sm text-destructive font-medium">Something went wrong</p>
-                <p className="text-sm text-muted-foreground">{error.message || "An error occurred while generating the response."}</p>
+                <p className="text-base text-white font-medium">Something went wrong</p>
+                <p className="text-base text-white/80">{error.message || "An error occurred while generating the response."}</p>
                 <button
                   onClick={() => onRegenerate()}
-                  className="text-sm text-primary hover:underline"
+                  className="text-base text-primary hover:underline"
                 >
                   Try again
                 </button>
@@ -691,7 +691,7 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
 const ThinkingIndicator = () => (
   <motion.span
     aria-live="polite"
-    className="text-sm font-medium text-muted-foreground"
+    className="text-lg font-medium text-white/80"
     animate={{ opacity: [0.5, 1, 0.5] }}
     transition={{ duration: 1.2, repeat: Number.POSITIVE_INFINITY }}
   >

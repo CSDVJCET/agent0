@@ -8,9 +8,10 @@ import type { MyUIMessage } from "@/types/chat";
 
 interface TableOfContentsProps {
   messages: MyUIMessage[];
+  className?: string;
 }
 
-export function TableOfContents({ messages }: TableOfContentsProps) {
+export function TableOfContents({ messages, className }: TableOfContentsProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const tocScrollRef = useRef<HTMLDivElement>(null);
 
@@ -69,7 +70,10 @@ export function TableOfContents({ messages }: TableOfContentsProps) {
     <motion.div
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
-      className="hidden xl:flex fixed right-8 top-1/2 -translate-y-1/2 w-64 flex-col gap-2 p-4 z-50"
+      className={cn(
+        "hidden xl:flex fixed right-8 top-1/2 -translate-y-1/2 w-64 flex-col gap-2 p-4 z-50",
+        className
+      )}
     >
       <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider pl-4">
         Contents

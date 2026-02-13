@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import type { MyUIMessage, PdfOperationResult } from "@/types/chat";
 
@@ -12,10 +12,7 @@ import { ChatHeader } from "@/components/chat-header";
 import { PromptInputArea } from "@/components/prompt-input-area";
 import { MessageList } from "@/components/ai-elements/message-list";
 import { AttachmentsPreview } from "@/components/ai-elements/attachments-preview";
-import { FeatureBadgesRow, FeatureBadge } from "@/components/ai-elements/feature-badges-row";
-import { ChatEmptyState } from "@/components/ai-elements/chat-empty-state";
 import { SuggestionsGrid } from "@/components/ai-elements/chat-suggestions-grid";
-import { TableOfContents } from "@/components/table-of-contents";
 import { IntegrationsModal } from "@/components/integrations-modal";
 import { IntegrationPanel } from "@/components/integration-panel";
 import { FileDropZone } from "@/components/file-drop-zone";
@@ -29,6 +26,8 @@ import { useIntegrationHandlers } from "@/hooks/use-integration-handlers";
 import { MODELS, DEFAULT_SUGGESTIONS, STORAGE_KEYS } from "@/lib/chat-constants";
 
 export function ChatUI() {
+  const [isChatModalOpen, setIsChatModalOpen] = useState(false);
+
   // State management
   const state = useChatState();
   const {
@@ -159,6 +158,7 @@ export function ChatUI() {
     setMessages([]);
     setAttachments([]);
     setInputValue("");
+    setIsChatModalOpen(false);
     localStorage.removeItem(STORAGE_KEYS.MESSAGES);
     // Clear the file input
     if (fileInputRef.current) {
@@ -166,9 +166,22 @@ export function ChatUI() {
     }
   }, [setMessages]);
 
+  // Handle Escape key to close modal
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isChatModalOpen) {
+        setIsChatModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [isChatModalOpen]);
+
   // Simplified handleSubmit using AI SDK's new API
   const handleSubmit = async (value: { text: string; files: any[] }) => {
     if (!value.text.trim() && attachments.length === 0) return;
+
+    setIsChatModalOpen(true);
 
     // --- PDF: handle entirely client-side (zero AI tokens) ---
     const isPdfOnly = mentionedTools.length > 0 && mentionedTools.every(t => t.toLowerCase() === "pdf");
@@ -371,6 +384,7 @@ export function ChatUI() {
 
   // Handle regenerate/reload
   const handleRegenerate = useCallback(() => {
+    setIsChatModalOpen(true);
     regenerate({
       body: {
         model: selectedModel.id,
@@ -392,23 +406,6 @@ export function ChatUI() {
   if (!isLoaded) return null;
 
   const isStarted = dedupedMessages.length > 0;
-  const hasCustomTools = mentionedTools.length > 0;
-  
-  const featureBadges: FeatureBadge[] = [
-    { label: "Google Search", enabled: enableSearch && !hasCustomTools, color: "blue" },
-    ...(selectedModel.supportsThinking
-      ? [{ label: "Thinking", enabled: enableThinking, color: "amber" as const }]
-      : []),
-    { label: "URL Context", enabled: !hasCustomTools, color: "green" },
-    { label: "Code Execution", enabled: !hasCustomTools, color: "purple" },
-    ...(hasCustomTools
-      ? mentionedTools.map((tool) => ({
-          label: `@${tool}`,
-          enabled: true,
-          color: "cyan" as const,
-        }))
-      : []),
-  ];
 
   return (
     <FileDropZone onFilesDropped={handleFilesDropped}>
@@ -417,78 +414,174 @@ export function ChatUI() {
         style={{ backgroundImage: 'url("/Dashboard.png")' }}
       >
         {/* Header */}
-        {!isStarted && (
-          <ChatHeader
-            models={MODELS}
-            selectedModel={selectedModel}
-            onSelectModel={setSelectedModel}
-            isModelOpen={isModelOpen}
-            onModelOpenChange={setIsModelOpen}
-            onNewChat={handleNewChat}
-            onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
-          />
-        )}
+        <ChatHeader
+          models={MODELS}
+          selectedModel={selectedModel}
+          onSelectModel={setSelectedModel}
+          isModelOpen={isModelOpen}
+          onModelOpenChange={setIsModelOpen}
+          onNewChat={handleNewChat}
+          onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
+        />
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-hidden relative flex flex-col">
-        {!isStarted && <TableOfContents messages={dedupedMessages} />}
-        
-        {/* Conversation Area */}
-        <div className={cn("flex-1 overflow-y-auto relative text-black font-semibold", !isStarted && "hidden")}>
-          <MessageList 
-            messages={dedupedMessages} 
-            isLoading={isLoading} 
-            onRegenerate={handleRegenerate}
-            status={status}
-            error={error}
-          />
-          {/* Spacer for floating input */}
-          <div className="h-40 w-full" />
-        </div>
+      <div className="flex-1 overflow-hidden relative">
+        {/* Empty State / Suggestions (when no messages) */}
+        {!isStarted && !isChatModalOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col items-center justify-center h-full px-4"
+          >
+            <div className="max-w-3xl w-full space-y-6 pb-32">
+              <div className="text-center space-y-3">
+                <h2 className="text-4xl font-bold text-white/90">What can I help you with?</h2>
+                <p className="text-lg text-white/60">Ask me anything or try one of these suggestions</p>
+              </div>
+              <SuggestionsGrid
+                suggestions={DEFAULT_SUGGESTIONS}
+                onSuggestionClick={handleSuggestionClick}
+              />
+            </div>
+          </motion.div>
+        )}
 
         {/* Input Area Container */}
-        <motion.div
-          className={cn(
-            "w-full px-4 z-20",
-            isStarted
-              ? "absolute bottom-10 left-1/2 -translate-x-1/2 max-w-4xl"
-              : "flex-1 flex flex-col items-center justify-center pb-20"
-          )}
-          layout
-          transition={{ type: "spring", bounce: 0, duration: 0.5 }}
-        >
-          <div className="max-w-4xl mx-auto w-full space-y-8">
-            {/* Empty State */}
-            {!isStarted && <ChatEmptyState />}
-
-            {/* Prompt Input */}
-            <motion.div layout className="w-full">
-              <PromptInputArea
-                value={inputValue}
-                onChange={setInputValue}
-                onSubmit={handleSubmit}
-                isLoading={isLoading}
-                enableSearch={enableSearch}
-                onToggleSearch={() => setEnableSearch(!enableSearch)}
-                enableThinking={enableThinking}
-                thinkingSupported={selectedModel.supportsThinking}
-                onToggleThinking={() => {
-                  if (!selectedModel.supportsThinking) return;
-                  setEnableThinking((prev) => !prev);
-                }}
-                onFilesSelected={handleFileSelect}
-                attachments={attachments}
-                onRemoveAttachment={removeAttachment}
-                mentionedTools={mentionedTools}
-                onToolMentionsChange={setMentionedTools}
-                addedIntegrations={addedIntegrations}
-              />
-            </motion.div>
-
-
+        <div className="absolute inset-x-0 bottom-8 z-20 px-4">
+          <div className="max-w-4xl mx-auto w-full">
+            <PromptInputArea
+              value={inputValue}
+              onChange={setInputValue}
+              onSubmit={handleSubmit}
+              isLoading={isLoading}
+              enableSearch={enableSearch}
+              onToggleSearch={() => setEnableSearch(!enableSearch)}
+              enableThinking={enableThinking}
+              thinkingSupported={selectedModel.supportsThinking}
+              onToggleThinking={() => {
+                if (!selectedModel.supportsThinking) return;
+                setEnableThinking((prev) => !prev);
+              }}
+              onFilesSelected={handleFileSelect}
+              attachments={attachments}
+              onRemoveAttachment={removeAttachment}
+              mentionedTools={mentionedTools}
+              onToolMentionsChange={setMentionedTools}
+              addedIntegrations={addedIntegrations}
+              onUpArrow={() => setIsChatModalOpen(true)}
+            />
           </div>
-        </motion.div>
+        </div>
       </div>
+
+      {/* Liquid Glass Modal with Smooth Animation */}
+      <AnimatePresence>
+        {isChatModalOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
+              onClick={() => setIsChatModalOpen(false)}
+            />
+
+            {/* Modal Container with Liquid Glass Effect */}
+            <motion.div
+              initial={{
+                opacity: 0,
+                scale: 0.92,
+                y: 40,
+              }}
+              animate={{
+                opacity: 1,
+                scale: 1,
+                y: 0,
+              }}
+              exit={{
+                opacity: 0,
+                scale: 0.92,
+                y: 40,
+              }}
+              transition={{
+                duration: 0.5,
+                ease: [0.16, 1, 0.3, 1],
+              }}
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] h-[90vh] z-50 overflow-hidden rounded-3xl no-horizontal-scroll"
+              style={{
+                background: "linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 100%)",
+                backdropFilter: "blur(60px) saturate(180%)",
+                border: "1px solid rgba(255,255,255,0.25)",
+                boxShadow: "0 25px 80px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(255,255,255,0.1)",
+              }}
+            >
+              {/* Glass Shine Effect */}
+              <motion.div
+                initial={{ x: "-100%" }}
+                animate={{ x: "200%" }}
+                transition={{
+                  duration: 2,
+                  ease: [0.4, 0, 0.2, 1],
+                  delay: 0.2,
+                }}
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)",
+                  width: "40%",
+                }}
+              />
+
+              {/* Modal Content */}
+              <div className="relative h-full flex flex-col no-horizontal-scroll">
+                {/* Close Button */}
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.3, duration: 0.3 }}
+                  onClick={() => setIsChatModalOpen(false)}
+                  className="absolute right-6 top-6 z-10 flex items-center justify-center size-12 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 hover:bg-white/20 transition-all duration-200 group"
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <svg
+                    className="size-6 text-white/80 group-hover:text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </motion.button>
+
+                {/* Messages Area with Custom Scrollbar */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2, duration: 0.4 }}
+                  className="flex-1 overflow-hidden px-8 pt-8 no-horizontal-scroll"
+                >
+                  <div className="h-full overflow-y-auto custom-scrollbar no-horizontal-scroll">
+                    <MessageList
+                      messages={dedupedMessages}
+                      isLoading={isLoading}
+                      onRegenerate={handleRegenerate}
+                      status={status}
+                      error={error}
+                    />
+                  </div>
+                </motion.div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       <IntegrationsModal
         isOpen={isIntegrationsModalOpen}

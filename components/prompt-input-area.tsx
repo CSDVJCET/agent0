@@ -37,6 +37,7 @@ export type PromptInputAreaProps = {
   onToolMentionsChange?: (tools: string[]) => void;
   addedIntegrations?: string[];
   onRefreshTools?: () => void;
+  onUpArrow?: () => void; // New prop for reopening modal
 };
 
 export function PromptInputArea({
@@ -50,6 +51,7 @@ export function PromptInputArea({
   mentionedTools = [],
   onToolMentionsChange,
   addedIntegrations = [],
+  onUpArrow,
 }: PromptInputAreaProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -106,32 +108,6 @@ export function PromptInputArea({
     }
   };
 
-  // Helper to render text with pills
-  const renderStyledContent = (text: string) => {
-    // Regex to find @mentions. 
-    // We'll highlight anything starting with @ followed by word characters.
-    // If strict matching is desired, filtering against availableTools would be added here.
-    const parts = text.split(/(@[\w-]+)/g);
-    
-    return parts.map((part, index) => {
-      if (part.startsWith("@")) {
-          // Check if it's a "valid" tool invocation style or just highlight all mentions
-          // For now, highlight all for immediate feedback, or check strict list if prefered.
-          // The user asked for "inline tool calls", so simple highlighting works best visually.
-          return (
-            <span 
-                key={index} 
-                className="inline-flex items-center justify-center bg-blue-500/20 text-blue-500 rounded px-1 py-0.5 mx-0.5 text-[0.9em] align-baseline font-semibold box-decoration-clone"
-                style={{ verticalAlign: "baseline" }}
-            >
-                {part}
-            </span>
-          );
-      }
-      return <span key={index}>{part}</span>;
-    });
-  };
-
   // Handle global "/" focus
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -180,6 +156,7 @@ export function PromptInputArea({
       
       // Preserve the position and location: Keep it in the text, formatted as @toolname
       const newValue = `${beforeAt}@${toolName} ${afterMention}`;
+      const nextCursorPos = `${beforeAt}@${toolName} `.length;
       onChange(newValue);
       
       if (!mentionedTools.includes(toolName)) {
@@ -187,7 +164,12 @@ export function PromptInputArea({
       }
       
       setShowToolSuggestions(false);
-      textareaRef.current?.focus();
+
+      requestAnimationFrame(() => {
+        if (!textareaRef.current) return;
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(nextCursorPos, nextCursorPos);
+      });
     }
   };
 
@@ -224,6 +206,16 @@ export function PromptInputArea({
       if (e.key === "Escape") {
         e.preventDefault();
         setShowToolSuggestions(false);
+        return;
+      }
+    }
+
+    // Up arrow to reopen modal when input is empty and cursor at start
+    if (e.key === "ArrowUp" && textareaRef.current) {
+      const { selectionStart } = textareaRef.current;
+      if (selectionStart === 0 && value.trim() === "") {
+        e.preventDefault();
+        onUpArrow?.();
         return;
       }
     }
@@ -294,7 +286,7 @@ export function PromptInputArea({
         layout
         transition={{ type: "spring", bounce: 0, duration: 0.25 }}
         className={cn(
-          "relative flex items-end gap-2 p-2 rounded-[1.25rem]", 
+          "relative flex items-end gap-2 p-2 rounded-4xl", 
           "bg-transparent backdrop-blur-xl border border-white/40 shadow-[4px_9px_4.5px_0_rgba(0,0,0,0.25)]",
           isFocused ? "shadow-[4px_9px_12px_0_rgba(0,0,0,0.3)] bg-white/5" : "hover:bg-white/5"
         )}
@@ -340,7 +332,7 @@ export function PromptInputArea({
                 <div 
                     ref={renderRef}
                     aria-hidden="true"
-                    className="absolute top-0 left-0 w-full h-full text-[20px] px-3 py-1 font-medium whitespace-pre-wrap break-words pointer-events-none custom-scrollbar font-sans"
+                    className="absolute top-0 left-0 w-full h-full text-[20px] px-3 py-1 font-medium whitespace-pre-wrap wrap-break-word pointer-events-none custom-scrollbar font-sans"
                     style={{ 
                         lineHeight: "1.5",
                         color: "#322d31", // VISIBLE text color (black-ish) to match theme
@@ -361,7 +353,7 @@ export function PromptInputArea({
                                 <span 
                                     key={index} 
                                     className={cn(
-                                        "inline-block rounded-lg px-1.5 py-0.5 mx-0.5 text-[0.9em] font-semibold align-baseline",
+                                  "inline rounded-[0.35rem] font-semibold box-decoration-clone",
                                         colorClass
                                     )}
                                 >
@@ -440,7 +432,7 @@ export function PromptInputArea({
                 className="absolute bottom-full left-0 mb-4 w-full z-50 px-4"
             >
                 <div 
-                    className="bg-black/80 backdrop-blur-xl border border-white/10 shadow-[4px_9px_4.5px_0_rgba(0,0,0,0.25)] rounded-[1.25rem] overflow-hidden p-2"
+                    className="bg-black/80 backdrop-blur-xl border border-white/10 shadow-[4px_9px_4.5px_0_rgba(0,0,0,0.25)] rounded-4xl overflow-hidden p-2"
                 >
                 <div className="px-3 py-2 text-xs font-semibold text-white/70 uppercase tracking-wider">
                     Available Tools
