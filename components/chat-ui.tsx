@@ -412,7 +412,16 @@ export function ChatUI() {
 
   return (
     <FileDropZone onFilesDropped={handleFilesDropped}>
-      <div className="flex h-screen w-full flex-col bg-background text-foreground bg-grid">
+      <div 
+        className="flex h-screen w-full flex-col text-foreground relative transition-all duration-500 ease-in-out"
+        style={{ 
+          backgroundImage: isStarted ? "none" : "url('/Dashboard.png')", 
+          backgroundSize: "cover", 
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          backgroundColor: isStarted ? "hsl(var(--background))" : "transparent"
+        }}
+      >
         {/* Header */}
         <ChatHeader
           models={MODELS}
@@ -426,39 +435,33 @@ export function ChatUI() {
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-hidden relative flex flex-col">
-        <TableOfContents messages={dedupedMessages} />
-        
-        {/* Conversation Area */}
-        <div className={cn("flex-1 overflow-hidden relative", !isStarted && "hidden")}>
-          <MessageList 
-            messages={dedupedMessages} 
-            isLoading={isLoading} 
-            onRegenerate={handleRegenerate}
-            status={status}
-            error={error}
-          />
-        </div>
+        {isStarted ? (
+          <div className="flex-1 overflow-y-auto px-4 py-4 scroll-smooth">
+            <div className="max-w-3xl mx-auto space-y-6 pb-4">
+               <MessageList 
+                  messages={dedupedMessages} 
+                  isLoading={isLoading} 
+                  status={status}
+                  onRegenerate={handleRegenerate}
+                  error={error}
+               />
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center p-4">
+             {/* 
+                Dashboard View (Empty State) 
+                The background image is on the parent container, so we just need to preserve empty space 
+                or show suggestions if desired. For now, we keep it clean as per "Dashboard screen".
+             */}
+          </div>
+        )}
 
         {/* Input Area Container */}
-        <motion.div
-          className={cn(
-            "w-full px-4",
-            isStarted
-              ? "border-t bg-background/80 backdrop-blur-sm pb-6 pt-4"
-              : "flex-1 flex flex-col items-center justify-center pb-20"
-          )}
-          layout
-          transition={{ duration: 0.5, ease: "easeInOut" }}
-        >
-          <div className="max-w-3xl mx-auto w-full space-y-8">
-            {/* Empty State */}
-            {!isStarted && <ChatEmptyState />}
-
-            {/* Attachments Preview */}
-            <AttachmentsPreview attachments={attachments} onRemove={removeAttachment} />
-
-            {/* Prompt Input */}
-            <motion.div layout className="w-full">
+        <div className="w-full px-4 flex justify-center pb-8 pt-4">
+          <div className="max-w-3xl w-full">
+            {/* Prompt Input (includes attachments preview) */}
+            <div className="w-full">
               <PromptInputArea
                 value={inputValue}
                 onChange={setInputValue}
@@ -473,26 +476,18 @@ export function ChatUI() {
                   setEnableThinking((prev) => !prev);
                 }}
                 onFilesSelected={handleFileSelect}
+                attachments={attachments}
+                onRemoveAttachment={removeAttachment}
                 mentionedTools={mentionedTools}
                 onToolMentionsChange={setMentionedTools}
                 addedIntegrations={addedIntegrations}
               />
-            </motion.div>
-
-            {/* Feature Indicators - only show when chat hasn't started */}
-            {!isStarted && <FeatureBadgesRow badges={featureBadges} />}
-
-            {/* Suggestions Grid - only show when chat hasn't started */}
-            {!isStarted && (
-              <SuggestionsGrid
-                suggestions={DEFAULT_SUGGESTIONS}
-                onSuggestionClick={handleSuggestionClick}
-              />
-            )}
+            </div>
+            
+            {/* Suggestions removed per user request */}
           </div>
-        </motion.div>
+        </div>
       </div>
-
       <IntegrationsModal
         isOpen={isIntegrationsModalOpen}
         onOpenChange={setIsIntegrationsModalOpen}

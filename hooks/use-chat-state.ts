@@ -6,7 +6,7 @@ import { MODELS } from "@/lib/chat-constants";
 export function useChatState() {
   const [selectedModel, setSelectedModel] = useState<Model>(MODELS[0]);
   const [isModelOpen, setIsModelOpen] = useState(false);
-  const [enableSearch, setEnableSearch] = useState(false);
+  const [enableSearch, setEnableSearch] = useState(true);
   const [enableThinking, setEnableThinking] = useState(true);
   const [mentionedTools, setMentionedTools] = useState<string[]>([]);
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
