@@ -9,8 +9,10 @@ import { calendarTools } from "@/ai/calendar-tools";
 import { formsTools } from "@/ai/forms-tools";
 import { gmailTools } from "@/ai/gmail-tools";
 import { tasksTools } from "@/ai/tasks-tools";
+import { githubTools } from "@/ai/github-tools";
 // PDF tools removed — handled entirely client-side to avoid tool part serialization issues
 import { GMAIL_AGENT_PROMPT } from "@/ai/prompts/gmail";
+import { GITHUB_AGENT_PROMPT } from "@/ai/prompts/github";
 import { isToolInstalled } from "@/lib/installed-tools";
 import { getNextFallbackModel, isRateLimitError, type ModelRetryMetadata } from "@/lib/model-fallback";
 
@@ -480,6 +482,25 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
           console.warn("Tasks tool mentioned but not installed");
         }
       }
+      // GitHub tools
+      if (lowerToolName === "github") {
+        if (isToolInstalled("github")) {
+          tools.createIssue = githubTools.createIssue;
+          tools.createBranch = githubTools.createBranch;
+          tools.createPullRequest = githubTools.createPullRequest;
+          tools.mergePullRequest = githubTools.mergePullRequest;
+          tools.commentOnPR = githubTools.commentOnPR;
+          tools.listPullRequests = githubTools.listPullRequests;
+          tools.listRepositories = githubTools.listRepositories;
+          tools.getRepository = githubTools.getRepository;
+          tools.listBranches = githubTools.listBranches;
+          tools.scheduleIssueCreation = githubTools.scheduleIssueCreation;
+          tools.schedulePRCreation = githubTools.schedulePRCreation;
+          tools.scheduleMerge = githubTools.scheduleMerge;
+        } else {
+          console.warn("GitHub tool mentioned but not installed");
+        }
+      }
       // PDF tools — handled entirely client-side (no LLM involvement)
       // The @pdf mention is intercepted in chat-ui.tsx before reaching this route
       // Add more tool mappings here as needed
@@ -516,6 +537,18 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
 
   const tasksGuidance = mentionedTools.some(t => ["tasks", "task", "todo", "todos"].includes(t.toLowerCase()))
     ? " When the user wants to create a task/todo, use scheduleTask to present the task details for confirmation. For listing tasks, use listTasks. To mark tasks complete, use completeTask. For updating task details, use updateTask. For deleting tasks, use deleteTask (which requires confirmation). Always parse relative dates like 'tomorrow', 'next week' into proper ISO dates. CRITICAL: After calling any task tool (scheduleTask, createTask, updateTask, deleteTask, completeTask, listTasks), DO NOT provide any additional text explanation. The generative UI component displays all necessary information to the user. ONLY provide additional text if you need clarification from the user (e.g., asking which task to update if there are multiple matches)."
+    : "";
+
+  const githubGuidance = mentionedTools.some(t => t.toLowerCase() === "github")
+    ? " GitHub Agent Instructions: You are a multi-step agentic GitHub assistant. CRITICAL WORKFLOW: " +
+      "1) ALWAYS call listRepositories FIRST to get repo context before any operation. " +
+      "2) For PRs: call listBranches to validate branch names and self-correct user input (e.g. 'worktree' → 'work-tree'). " +
+      "3) For issues: use scheduleIssueCreation with pre-filled repo from listRepositories + availableRepos list for dropdown. NEVER list repos as text. " +
+      "4) For PRs: use schedulePRCreation with validated branches + availableBranches list for dropdown. " +
+      "5) For merges: call listPullRequests first to find the correct PR, then use scheduleMerge. " +
+      "6) NEVER call createIssue, createPullRequest, or mergePullRequest directly — ALWAYS use schedule variants for Gen UI. " +
+      "7) After calling schedule tools, DO NOT add extra text — the Gen UI handles display. " +
+      "8) When user says 'PR from X to Y', that means head=X, base=Y — validate both branches exist first."
     : "";
 
   // PDF guidance removed — PDF operations are handled client-side
@@ -567,6 +600,11 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
         systemPrompt += "\n\n" + GMAIL_AGENT_PROMPT;
       }
 
+      // Add GitHub agent persona when GitHub tools are active
+      if (mentionedTools.some(tool => tool.toLowerCase() === "github")) {
+        systemPrompt += "\n\n" + GITHUB_AGENT_PROMPT;
+      }
+
       // Add retry notification if this is not the first attempt
       if (attempt > 0) {
         systemPrompt += `\n\n[System: Automatically switched from ${retryMetadata.originalModel} to ${currentModel} due to rate limiting]`;
@@ -574,13 +612,13 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
 
       const result = streamText({
         model: modelInstance,
-        system: `${systemPrompt}${calendarGuidance}${formsGuidance}${tasksGuidance}`,
+        system: `${systemPrompt}${calendarGuidance}${formsGuidance}${tasksGuidance}${githubGuidance}`,
         messages: modelMessages,
         tools: hasCurrentTools ? currentTools : undefined,
         toolChoice: hasCurrentTools ? "auto" : "none",
         providerOptions,
         // Use stopWhen for multi-step tool calls when custom tools are mentioned
-        ...(mentionedTools.length > 0 && { stopWhen: stepCountIs(5) }),
+        ...(mentionedTools.length > 0 && { stopWhen: stepCountIs(8) }),
         onError: (error) => {
           console.error("Stream error:", error);
         },
