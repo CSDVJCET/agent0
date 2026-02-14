@@ -89,15 +89,15 @@ export function IntegrationsModal({
 }: IntegrationsModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[90vw] md:max-w-[85vw] lg:max-w-[1000px] xl:max-w-[1200px] h-[70vh] flex flex-col p-4 sm:p-6 md:p-8 gap-6">
-        <DialogHeader className="shrink-0">
-          <DialogTitle className="text-2xl">Integrations</DialogTitle>
-          <DialogDescription className="text-base">
+      <DialogContent className="sm:max-w-[70vw] md:max-w-[65vw] lg:max-w-[800px] xl:max-w-[900px] h-[70vh] flex flex-col p-4 sm:p-6 md:p-8 gap-6">
+        <DialogHeader className="shrink-0 pr-8">
+          <DialogTitle className="text-2xl text-foreground">Integrations</DialogTitle>
+          <DialogDescription className="text-base text-muted-foreground">
             Add integrations to enhance your chat experience.
           </DialogDescription>
         </DialogHeader>
-        <div className="flex-1 overflow-y-auto min-h-0 px-6 -mx-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-8 p-8">
+        <div className="flex-1 overflow-y-auto min-h-0 pr-2 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent hover:scrollbar-thumb-white/30">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 py-4">
             <AnimatePresence mode="popLayout">
               {INTEGRATIONS.map((integration) => {
                 const isAdded = addedIntegrations.includes(integration.id);

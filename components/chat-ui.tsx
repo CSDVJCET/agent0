@@ -16,6 +16,7 @@ import { SuggestionsGrid } from "@/components/ai-elements/chat-suggestions-grid"
 import { IntegrationsModal } from "@/components/integrations-modal";
 import { IntegrationPanel } from "@/components/integration-panel";
 import { FileDropZone } from "@/components/file-drop-zone";
+import { ScrollProgress } from "@/components/ui/scroll-progress";
 
 // Hooks and Constants
 import { useChatState } from "@/hooks/use-chat-state";
@@ -111,6 +112,16 @@ export function ChatUI() {
   });
 
   const isLoading = status === "streaming" || status === "submitted";
+
+  const modalScrollRef = useRef<HTMLDivElement>(null);
+  const [isModalRefHydrated, setIsModalRefHydrated] = useState(false);
+
+  // Reset hydration state when modal closes
+  useEffect(() => {
+    if (!isChatModalOpen) {
+      setIsModalRefHydrated(false);
+    }
+  }, [isChatModalOpen]);
 
   // One-time cleanup: remove any legacy PDF tool parts from message history
   // These were created by the old implementation and break the AI SDK's message processing
@@ -435,8 +446,8 @@ export function ChatUI() {
           >
             <div className="max-w-3xl w-full space-y-6 pb-32">
               <div className="text-center space-y-3">
-                <h2 className="text-4xl font-bold text-white/90">What can I help you with?</h2>
-                <p className="text-lg text-white/60">Ask me anything or try one of these suggestions</p>
+                <h2 className="text-4xl font-bold text-foreground">What can I help you with?</h2>
+                <p className="text-lg text-foreground/60">Ask me anything or try one of these suggestions</p>
               </div>
               <SuggestionsGrid
                 suggestions={DEFAULT_SUGGESTIONS}
@@ -447,8 +458,11 @@ export function ChatUI() {
         )}
 
         {/* Input Area Container */}
-        <div className="absolute inset-x-0 bottom-8 z-20 px-4">
-          <div className="max-w-4xl mx-auto w-full">
+        <div className={cn(
+          "absolute inset-x-0 bottom-8 px-4 transition-all duration-300",
+          isChatModalOpen ? "z-60" : "z-20"
+        )}>
+          <div className="max-w-4xl mx-auto w-full flex flex-col items-center gap-3">
             <PromptInputArea
               value={inputValue}
               onChange={setInputValue}
@@ -478,14 +492,13 @@ export function ChatUI() {
       <AnimatePresence>
         {isChatModalOpen && (
           <>
-            {/* Backdrop */}
+            {/* Backdrop for clicking outside to close (Transparent, NO BLUR) */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
-              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
               onClick={() => setIsChatModalOpen(false)}
+              className="fixed inset-0 z-40" 
             />
 
             {/* Modal Container with Liquid Glass Effect */}
@@ -499,6 +512,7 @@ export function ChatUI() {
                 opacity: 1,
                 scale: 1,
                 y: 0,
+                top: attachments.length > 0 ? "40%" : "46%", // Shift up when attachments present
               }}
               exit={{
                 opacity: 0,
@@ -509,12 +523,12 @@ export function ChatUI() {
                 duration: 0.5,
                 ease: [0.16, 1, 0.3, 1],
               }}
-              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] h-[90vh] z-50 overflow-hidden rounded-3xl no-horizontal-scroll"
+              className="fixed left-1/2 -translate-x-1/2 -translate-y-1/2 w-[85vw] max-w-6xl h-[75vh] z-50 overflow-hidden rounded-3xl no-horizontal-scroll"
               style={{
-                background: "linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 100%)",
+                background: "linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.1) 100%)",
                 backdropFilter: "blur(60px) saturate(180%)",
-                border: "1px solid rgba(255,255,255,0.25)",
-                boxShadow: "0 25px 80px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(255,255,255,0.1)",
+                border: "1px solid rgba(255,255,255,0.3)",
+                boxShadow: "0 25px 80px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(255,255,255,0.1)",
               }}
             >
               {/* Glass Shine Effect */}
@@ -535,18 +549,28 @@ export function ChatUI() {
 
               {/* Modal Content */}
               <div className="relative h-full flex flex-col no-horizontal-scroll">
+                {/* Scroll Progress at the very top border */}
+                <div className="absolute top-0 left-0 w-full z-50 pointer-events-none">
+                   {isModalRefHydrated && (
+                     <ScrollProgress
+                        containerRef={modalScrollRef}
+                        className="h-1 bg-primary"
+                     />
+                   )}
+                </div>
+
                 {/* Close Button */}
                 <motion.button
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: 0.3, duration: 0.3 }}
                   onClick={() => setIsChatModalOpen(false)}
-                  className="absolute right-6 top-6 z-10 flex items-center justify-center size-12 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 hover:bg-white/20 transition-all duration-200 group"
+                  className="absolute right-6 top-6 z-10 flex items-center justify-center size-12 rounded-full bg-black/10 backdrop-blur-xl border border-black/10 hover:bg-black/20 transition-all duration-200 group"
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.95 }}
                 >
                   <svg
-                    className="size-6 text-white/80 group-hover:text-white"
+                    className="size-6 text-foreground/80 group-hover:text-foreground"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -574,6 +598,8 @@ export function ChatUI() {
                       onRegenerate={handleRegenerate}
                       status={status}
                       error={error}
+                      containerRef={modalScrollRef}
+                      onRefHydrated={() => setIsModalRefHydrated(true)}
                     />
                   </div>
                 </motion.div>

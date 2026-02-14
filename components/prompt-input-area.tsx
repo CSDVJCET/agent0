@@ -287,8 +287,8 @@ export function PromptInputArea({
         transition={{ type: "spring", bounce: 0, duration: 0.25 }}
         className={cn(
           "relative flex items-end gap-2 p-2 rounded-4xl", 
-          "bg-transparent backdrop-blur-xl border border-white/40 shadow-[4px_9px_4.5px_0_rgba(0,0,0,0.25)]",
-          isFocused ? "shadow-[4px_9px_12px_0_rgba(0,0,0,0.3)] bg-white/5" : "hover:bg-white/5"
+          "bg-white/10 backdrop-blur-3xl border border-white/40 shadow-[4px_9px_4.5px_0_rgba(0,0,0,0.25)]",
+          isFocused ? "shadow-[4px_9px_12px_0_rgba(0,0,0,0.3)] bg-white/20" : "hover:bg-white/15"
         )}
       >
         <div className="flex items-center gap-1.5 pb-1 pl-1">
@@ -300,19 +300,19 @@ export function PromptInputArea({
             multiple
             className="hidden"
           />
-          <motion.button
-            whileHover={{ backgroundColor: "rgba(255, 140, 0, 0.4)" }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => fileInputRef.current?.click()}
-            className="group flex items-center justify-center size-[52px] rounded-full bg-white/20 backdrop-blur-xl text-white transition-all duration-300 border border-white/30 shadow-[0_4px_10px_0_rgba(0,0,0,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]"
-            title="Attach files"
-          >
-            <PaperclipIcon className="size-6" />
-          </motion.button>
-          
-          <SpeechInput
-            className="flex items-center justify-center size-[52px] rounded-full bg-white/20 backdrop-blur-xl text-white border border-white/30 shadow-[0_4px_10px_0_rgba(0,0,0,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)] [&_svg]:size-6"
-            onTranscriptionChange={(transcript) => {
+            <motion.button
+              whileHover={{ backgroundColor: "rgba(140, 167, 188, 0.4)" }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => fileInputRef.current?.click()}
+              className="group flex items-center justify-center size-[52px] rounded-full bg-black/10 backdrop-blur-xl text-white transition-all duration-300 border border-black/10 shadow-[0_4px_10px_0_rgba(0,0,0,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]"
+              title="Attach files"
+            >
+              <PaperclipIcon className="size-6" />
+            </motion.button>
+            
+            <SpeechInput
+              className="flex items-center justify-center size-[52px] rounded-full bg-black/10 backdrop-blur-xl text-white border border-black/10 shadow-[0_4px_10px_0_rgba(0,0,0,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)] [&_svg]:size-6"
+              onTranscriptionChange={(transcript) => {
               const currentValue = textareaRef.current?.value ?? value;
               const trimmedTranscript = transcript.trim();
               if (!trimmedTranscript) return;
@@ -335,7 +335,7 @@ export function PromptInputArea({
                     className="absolute top-0 left-0 w-full h-full text-[20px] px-3 py-1 font-medium whitespace-pre-wrap wrap-break-word pointer-events-none custom-scrollbar font-sans"
                     style={{ 
                         lineHeight: "1.5",
-                        color: "#322d31", // VISIBLE text color (black-ish) to match theme
+                        color: "var(--foreground)", // Dark text color for visibility
                         fontFamily: "inherit",
                         scrollbarWidth: "none",
                         msOverflowStyle: "none"
@@ -377,7 +377,7 @@ export function PromptInputArea({
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => setIsFocused(false)}
                     placeholder={mentionedTools.length > 0 ? "Send a message..." : "What would you like to ask me?"}
-                    className="relative w-full bg-transparent border-none resize-none focus:ring-0 focus:outline-none text-[20px] px-3 py-1 max-h-[200px] overflow-y-auto placeholder:text-[#322d31]/50 font-medium font-sans"
+                    className="relative w-full bg-transparent border-none resize-none focus:ring-0 focus:outline-none text-[20px] px-3 py-1 max-h-[200px] overflow-y-auto placeholder:text-foreground/50 text-foreground font-medium font-sans"
                     style={{ 
                         minHeight: "34px", 
                         lineHeight: "1.5",
@@ -385,7 +385,7 @@ export function PromptInputArea({
                         scrollbarWidth: "none", 
                         transition: "height 0.15s ease-out",
                         color: "transparent", 
-                        caretColor: "#322d31", // Visible cursor
+                        caretColor: "var(--foreground)", // Visible cursor
                         fontFamily: "inherit", 
                     }}
                     rows={1}
@@ -403,17 +403,17 @@ export function PromptInputArea({
         {/* Right Action (Send) */}
         <div className="pb-1 pr-1">
             <motion.button
-                whileHover={{ scale: 1.05, backgroundColor: "rgba(140, 167, 188, 0.9)" }}
+                whileHover={{ scale: 1.05, backgroundColor: "rgba(37, 99, 235, 0.9)" }}
                 whileTap={{ scale: 0.95 }}
                 onClick={handleSubmit}
                 disabled={isLoading || (!value.trim() && attachments.length === 0)}
                 className={cn(
-                    "flex items-center justify-center size-[52px] rounded-full transition-all duration-300",
+                    "flex items-center justify-center size-[52px] rounded-full transition-all duration-500",
                     isLoading 
                         ? "bg-slate-400/50 cursor-not-allowed" 
                         : value.trim() || attachments.length > 0
-                            ? "bg-[#8ca7bc]/90 text-white shadow-[0_4px_12px_0_rgba(0,0,0,0.2),inset_0_1px_0_0_rgba(255,255,255,0.4)] backdrop-blur-xl border border-white/30 hover:bg-[#8ca7bc] hover:shadow-[0_6px_16px_0_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.5)]"
-                            : "bg-white/10 text-white/40 border border-white/5"
+                            ? "bg-blue-600 text-white shadow-[0_8px_32px_0_rgba(37,99,235,0.3),inset_0_1px_0_0_rgba(255,255,255,0.2)] border border-blue-500/50 hover:bg-blue-700"
+                            : "bg-blue-600/20 text-blue-600/40 border border-blue-600/20"
                 )}
             >
                 <ArrowUpIcon className="size-6" />
@@ -432,9 +432,9 @@ export function PromptInputArea({
                 className="absolute bottom-full left-0 mb-4 w-full z-50 px-4"
             >
                 <div 
-                    className="bg-black/80 backdrop-blur-xl border border-white/10 shadow-[4px_9px_4.5px_0_rgba(0,0,0,0.25)] rounded-4xl overflow-hidden p-2"
+                    className="bg-white/30 backdrop-blur-3xl border border-black/10 shadow-[4px_9px_4.5px_0_rgba(0,0,0,0.25)] rounded-4xl overflow-hidden p-2"
                 >
-                <div className="px-3 py-2 text-xs font-semibold text-white/70 uppercase tracking-wider">
+                <div className="px-3 py-2 text-xs font-semibold text-foreground/70 uppercase tracking-wider">
                     Available Tools
                 </div>
                 <div 
@@ -470,19 +470,19 @@ export function PromptInputArea({
                         className={cn(
                             "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all duration-200",
                             index === selectedIndex 
-                            ? "bg-white/20 text-white" 
-                            : "hover:bg-white/10 text-white/90"
+                            ? "bg-black/10 text-foreground" 
+                            : "hover:bg-black/5 text-foreground/90"
                         )}
                         >
                         <div className={cn(
                             "flex items-center justify-center size-8 rounded-lg",
-                            index === selectedIndex ? "bg-white/20" : "bg-white/5"
+                            index === selectedIndex ? "bg-black/10" : "bg-black/5"
                         )}>
-                            <ToolIcon className="size-4 text-white" />
+                            <ToolIcon className="size-4 text-foreground" />
                         </div>
                         <div className="flex flex-col flex-1 min-w-0">
-                            <span className="font-medium text-sm text-white">@{tool.name}</span>
-                            <span className="text-xs text-white/50 line-clamp-1">{tool.description}</span>
+                            <span className="font-medium text-sm text-foreground">@{tool.name}</span>
+                            <span className="text-xs text-foreground/50 line-clamp-1">{tool.description}</span>
                         </div>
                         </button>
                     );
