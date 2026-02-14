@@ -490,6 +490,12 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
           tools.mergePullRequest = githubTools.mergePullRequest;
           tools.commentOnPR = githubTools.commentOnPR;
           tools.listPullRequests = githubTools.listPullRequests;
+          tools.listRepositories = githubTools.listRepositories;
+          tools.getRepository = githubTools.getRepository;
+          tools.listBranches = githubTools.listBranches;
+          tools.scheduleIssueCreation = githubTools.scheduleIssueCreation;
+          tools.schedulePRCreation = githubTools.schedulePRCreation;
+          tools.scheduleMerge = githubTools.scheduleMerge;
         } else {
           console.warn("GitHub tool mentioned but not installed");
         }
@@ -533,7 +539,15 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
     : "";
 
   const githubGuidance = mentionedTools.some(t => t.toLowerCase() === "github")
-    ? " When the user asks about GitHub operations (issues, PRs, branches), use the GitHub tools. Always confirm before merging into main/master/production/release. Never delete branches. Present results with URLs and numbers. For creating branch + PR together, create the branch first then the PR."
+    ? " GitHub Agent Instructions: You are a multi-step agentic GitHub assistant. CRITICAL WORKFLOW: " +
+      "1) ALWAYS call listRepositories FIRST to get repo context before any operation. " +
+      "2) For PRs: call listBranches to validate branch names and self-correct user input (e.g. 'worktree' → 'work-tree'). " +
+      "3) For issues: use scheduleIssueCreation with pre-filled repo from listRepositories + availableRepos list for dropdown. NEVER list repos as text. " +
+      "4) For PRs: use schedulePRCreation with validated branches + availableBranches list for dropdown. " +
+      "5) For merges: call listPullRequests first to find the correct PR, then use scheduleMerge. " +
+      "6) NEVER call createIssue, createPullRequest, or mergePullRequest directly — ALWAYS use schedule variants for Gen UI. " +
+      "7) After calling schedule tools, DO NOT add extra text — the Gen UI handles display. " +
+      "8) When user says 'PR from X to Y', that means head=X, base=Y — validate both branches exist first."
     : "";
 
   // PDF guidance removed — PDF operations are handled client-side
@@ -603,7 +617,7 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
         toolChoice: hasCurrentTools ? "auto" : "none",
         providerOptions,
         // Use stopWhen for multi-step tool calls when custom tools are mentioned
-        ...(mentionedTools.length > 0 && { stopWhen: stepCountIs(5) }),
+        ...(mentionedTools.length > 0 && { stopWhen: stepCountIs(8) }),
         onError: (error) => {
           console.error("Stream error:", error);
         },

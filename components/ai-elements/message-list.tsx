@@ -36,6 +36,13 @@ import {
 import { CalendarDraft } from "@/components/ai-elements/calendar-draft";
 import { CalendarEvent } from "@/components/ai-elements/calendar-event";
 import { EventSchedulingConfirmation } from "@/components/ai-elements/event-scheduling-confirmation";
+import { GitHubIssueConfirmation } from "@/components/ai-elements/github-issue-confirmation";
+import { GitHubPRConfirmation } from "@/components/ai-elements/github-pr-confirmation";
+import { GitHubMergeConfirmation } from "@/components/ai-elements/github-merge-confirmation";
+import { GitHubBranchResult } from "@/components/ai-elements/github-branch-result";
+import { GitHubPRList } from "@/components/ai-elements/github-pr-list";
+import { GitHubRepoList } from "@/components/ai-elements/github-repo-list";
+import { GitHubCommentResult } from "@/components/ai-elements/github-comment-result";
 import { EmailDraftConfirmation } from "@/components/ai-elements/email-draft-confirmation";
 import { FormCreationConfirmation } from "@/components/ai-elements/form-creation-confirmation";
 import { FormResponsesList } from "@/components/ai-elements/form-responses-list";
@@ -303,6 +310,162 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
                                 reasoning={result.reasoning}
                               />
                             );
+                          }
+                        }
+
+                        // Schedule GitHub Issue Creation (with human-in-the-loop confirmation)
+                        if (toolInvocation.toolName === "scheduleIssueCreation" && isCompleted) {
+                          const result = toolInvocation.result;
+                          if (result.status === "pending_confirmation") {
+                            return (
+                              <GitHubIssueConfirmation
+                                key={toolInvocation.toolCallId}
+                                toolCallId={toolInvocation.toolCallId}
+                                issueDetails={result.issueDetails}
+                                reasoning={result.reasoning}
+                                availableRepos={result.availableRepos}
+                              />
+                            );
+                          }
+                        }
+
+                        // Schedule GitHub PR Creation (with human-in-the-loop confirmation)
+                        if (toolInvocation.toolName === "schedulePRCreation" && isCompleted) {
+                          const result = toolInvocation.result;
+                          if (result.status === "pending_confirmation") {
+                            return (
+                              <GitHubPRConfirmation
+                                key={toolInvocation.toolCallId}
+                                toolCallId={toolInvocation.toolCallId}
+                                prDetails={result.prDetails}
+                                reasoning={result.reasoning}
+                                availableRepos={result.availableRepos}
+                                availableBranches={result.availableBranches}
+                              />
+                            );
+                          }
+                        }
+
+                        // Schedule GitHub Merge (with human-in-the-loop confirmation)
+                        if (toolInvocation.toolName === "scheduleMerge" && isCompleted) {
+                          const result = toolInvocation.result;
+                          if (result.status === "pending_confirmation") {
+                            return (
+                              <GitHubMergeConfirmation
+                                key={toolInvocation.toolCallId}
+                                toolCallId={toolInvocation.toolCallId}
+                                mergeDetails={result.mergeDetails}
+                                reasoning={result.reasoning}
+                              />
+                            );
+                          }
+                        }
+
+                        // GitHub Branch Creation Result
+                        if (toolInvocation.toolName === "createBranch" && isCompleted) {
+                          if (!hasError && toolInvocation.result?.success) {
+                            return (
+                              <GitHubBranchResult
+                                key={toolInvocation.toolCallId}
+                                branch={toolInvocation.result.branch}
+                                baseBranch={toolInvocation.result.baseBranch}
+                                sha={toolInvocation.result.sha}
+                                owner={toolInvocation.result.owner}
+                                repo={toolInvocation.result.repo}
+                                message={toolInvocation.result.message}
+                              />
+                            );
+                          }
+                        }
+
+                        // GitHub List Pull Requests Result
+                        if (toolInvocation.toolName === "listPullRequests" && isCompleted) {
+                          if (!hasError && toolInvocation.result?.success) {
+                            return (
+                              <GitHubPRList
+                                key={toolInvocation.toolCallId}
+                                pullRequests={toolInvocation.result.pullRequests}
+                                count={toolInvocation.result.count}
+                                owner={toolInvocation.result.owner}
+                                repo={toolInvocation.result.repo}
+                                message={toolInvocation.result.message}
+                              />
+                            );
+                          }
+                        }
+
+                        // GitHub List Repositories Result
+                        if (toolInvocation.toolName === "listRepositories" && isCompleted) {
+                          if (!hasError && toolInvocation.result?.success) {
+                            return (
+                              <GitHubRepoList
+                                key={toolInvocation.toolCallId}
+                                repositories={toolInvocation.result.repositories}
+                                count={toolInvocation.result.count}
+                                message={toolInvocation.result.message}
+                              />
+                            );
+                          }
+                        }
+
+                        // GitHub Comment Result
+                        if (toolInvocation.toolName === "commentOnPR" && isCompleted) {
+                          if (!hasError && toolInvocation.result?.success) {
+                            return (
+                              <GitHubCommentResult
+                                key={toolInvocation.toolCallId}
+                                issueNumber={toolInvocation.args?.issueNumber}
+                                url={toolInvocation.result.url}
+                                owner={toolInvocation.result.owner}
+                                repo={toolInvocation.result.repo}
+                                message={toolInvocation.result.message}
+                              />
+                            );
+                          }
+                        }
+
+                        // GitHub Issue Creation (direct) — show success Gen UI
+                        if (toolInvocation.toolName === "createIssue" && isCompleted) {
+                          if (!hasError && toolInvocation.result?.success) {
+                            return (
+                              <GitHubIssueConfirmation
+                                key={toolInvocation.toolCallId}
+                                toolCallId={toolInvocation.toolCallId}
+                                issueDetails={{
+                                  owner: toolInvocation.result.owner,
+                                  repo: toolInvocation.result.repo,
+                                  title: toolInvocation.result.title,
+                                }}
+                                reasoning="Issue created directly"
+                              />
+                            );
+                          }
+                        }
+
+                        // GitHub PR Creation (direct) — show success Gen UI
+                        if (toolInvocation.toolName === "createPullRequest" && isCompleted) {
+                          if (!hasError && toolInvocation.result?.success) {
+                            return (
+                              <GitHubPRConfirmation
+                                key={toolInvocation.toolCallId}
+                                toolCallId={toolInvocation.toolCallId}
+                                prDetails={{
+                                  owner: toolInvocation.result.owner,
+                                  repo: toolInvocation.result.repo,
+                                  title: toolInvocation.result.title,
+                                  head: toolInvocation.args?.head || "",
+                                  base: toolInvocation.args?.base || "main",
+                                }}
+                                reasoning="PR created directly"
+                              />
+                            );
+                          }
+                        }
+
+                        // GitHub Merge (direct) — show success Gen UI
+                        if (toolInvocation.toolName === "mergePullRequest" && isCompleted) {
+                          if (!hasError && toolInvocation.result?.success) {
+                            return null; // Handled by scheduleMerge
                           }
                         }
 
