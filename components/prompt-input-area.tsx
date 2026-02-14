@@ -264,8 +264,8 @@ export function PromptInputArea({
   };
 
   return (
-    <div className="relative w-full max-w-4xl mx-auto px-4">
-      {/* File Attachments Preview (On Top) */}
+    <div className="relative w-full max-w-4xl mx-auto px-4 space-y-3">
+      {/* File Attachments Preview */}
       <AnimatePresence mode="popLayout">
         {attachments.length > 0 && (
           <motion.div
@@ -274,7 +274,7 @@ export function PromptInputArea({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ type: "spring", bounce: 0, duration: 0.3 }}
-            className="mb-4 w-full"
+            className="w-full"
           >
            <AttachmentsPreview attachments={attachments} onRemove={onRemoveAttachment} />
           </motion.div>

@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useState, useRef } from "react";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import type { MyUIMessage, PdfOperationResult } from "@/types/chat";
+import { StripLargeDataChatTransport } from "@/lib/chat-transport";
 
 // Components
 import { ChatHeader } from "@/components/chat-header";
@@ -57,7 +57,7 @@ export function ChatUI() {
     setMessages,
   } = useChat<MyUIMessage>({
     id: "gemini-chat",
-    transport: new DefaultChatTransport({
+    transport: new StripLargeDataChatTransport({
       api: "/api/chat",
     }),
     experimental_throttle: 50, // Throttle UI updates for better performance
