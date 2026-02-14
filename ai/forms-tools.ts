@@ -133,7 +133,7 @@ const QuestionSchema = z.object({
 async function formsRequest<T>(
   accessToken: string,
   endpoint: string,
-  method: "GET" | "POST" | "PATCH" | "DELETE" = "GET",
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" = "GET",
   body?: Record<string, unknown>
 ): Promise<{ success: boolean; data?: T; error?: string }> {
   try {
@@ -177,7 +177,7 @@ async function formsRequest<T>(
 /**
  * Convert our question format to Google Forms API format
  */
-function convertQuestionToFormItem(question: z.infer<typeof QuestionSchema>, index: number) {
+function convertQuestionToFormItem(question: z.infer<typeof QuestionSchema>) {
   const baseItem: any = {
     title: question.title,
     questionItem: {
@@ -384,7 +384,7 @@ export const confirmCreateFormTool = tool({
       questions.forEach((question, index) => {
         requests.push({
           createItem: {
-            item: convertQuestionToFormItem(question, index),
+            item: convertQuestionToFormItem(question),
             location: {
               index,
             },
@@ -658,7 +658,7 @@ export const updateFormSchemaTool = tool({
         addQuestions.forEach((question, i) => {
           requests.push({
             createItem: {
-              item: convertQuestionToFormItem(question, newStartIndex + i),
+              item: convertQuestionToFormItem(question),
               location: {
                 index: newStartIndex + i,
               },
