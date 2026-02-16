@@ -33,7 +33,13 @@ export function PresentationResult({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.html`;
+      // Clean filename: remove special chars, replace with underscores, clean up multiple/trailing underscores
+      const cleanFilename = title
+        .replace(/[^a-z0-9]/gi, "_")
+        .toLowerCase()
+        .replace(/_+/g, "_")
+        .replace(/^_|_$/g, "");
+      a.download = `${cleanFilename || "presentation"}.html`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

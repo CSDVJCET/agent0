@@ -508,7 +508,7 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
         if (isToolInstalled("slides")) {
           tools.createPresentation = slidesTools.createPresentation;
         } else {
-          console.warn("GitHub tool mentioned but not installed");
+          console.warn("Slides tool mentioned but not installed");
         }
       }
       // PDF tools — handled entirely client-side (no LLM involvement)
