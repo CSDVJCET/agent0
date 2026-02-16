@@ -84,7 +84,10 @@ export const createPresentationTool = tool({
       `;
 
       // Generate content slides
-      let imageCounter = 0; // Use incrementing counter for unique images
+      // Use incrementing counter for Unsplash image URLs to ensure uniqueness
+      // The counter is appended as a cache-busting parameter so each image request
+      // fetches a different image from Unsplash's source API, preventing duplicates
+      let imageCounter = 0;
       for (let i = 0; i < slides.length; i++) {
         const slide = slides[i];
         const transition = slide.transition || "slide";
