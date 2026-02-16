@@ -10,9 +10,11 @@ import { formsTools } from "@/ai/forms-tools";
 import { gmailTools } from "@/ai/gmail-tools";
 import { tasksTools } from "@/ai/tasks-tools";
 import { githubTools } from "@/ai/github-tools";
+import { slidesTools } from "@/ai/slides-tools";
 // PDF tools removed — handled entirely client-side to avoid tool part serialization issues
 import { GMAIL_AGENT_PROMPT } from "@/ai/prompts/gmail";
 import { GITHUB_AGENT_PROMPT } from "@/ai/prompts/github";
+import { SLIDES_PROMPT } from "@/ai/prompts/slides";
 import { isToolInstalled } from "@/lib/installed-tools";
 import { getNextFallbackModel, isRateLimitError, type ModelRetryMetadata } from "@/lib/model-fallback";
 
@@ -501,6 +503,14 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
           console.warn("GitHub tool mentioned but not installed");
         }
       }
+      // Slides/Presentation tools
+      if (lowerToolName === "slides" || lowerToolName === "presentation" || lowerToolName === "ppt") {
+        if (isToolInstalled("slides")) {
+          tools.createPresentation = slidesTools.createPresentation;
+        } else {
+          console.warn("GitHub tool mentioned but not installed");
+        }
+      }
       // PDF tools — handled entirely client-side (no LLM involvement)
       // The @pdf mention is intercepted in chat-ui.tsx before reaching this route
       // Add more tool mappings here as needed
@@ -549,6 +559,10 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
       "6) NEVER call createIssue, createPullRequest, or mergePullRequest directly — ALWAYS use schedule variants for Gen UI. " +
       "7) After calling schedule tools, DO NOT add extra text — the Gen UI handles display. " +
       "8) When user says 'PR from X to Y', that means head=X, base=Y — validate both branches exist first."
+    : "";
+
+  const slidesGuidance = mentionedTools.some(t => ["slides", "presentation", "ppt"].includes(t.toLowerCase()))
+    ? ` ${SLIDES_PROMPT}\n\nWhen creating presentations, you MUST follow the guidelines above. Include relevant images on every slide, apply CSS image frame classes, add fragment animations, and create visually stunning slides.`
     : "";
 
   // PDF guidance removed — PDF operations are handled client-side
@@ -612,7 +626,7 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
 
       const result = streamText({
         model: modelInstance,
-        system: `${systemPrompt}${calendarGuidance}${formsGuidance}${tasksGuidance}${githubGuidance}`,
+        system: `${systemPrompt}${calendarGuidance}${formsGuidance}${tasksGuidance}${githubGuidance}${slidesGuidance}`,
         messages: modelMessages,
         tools: hasCurrentTools ? currentTools : undefined,
         toolChoice: hasCurrentTools ? "auto" : "none",
