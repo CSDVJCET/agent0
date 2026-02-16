@@ -55,7 +55,9 @@ export function PresentationResult({
       const blob = new Blob([htmlContent], { type: "text/html" });
       const url = URL.createObjectURL(blob);
       window.open(url, "_blank");
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      // Longer timeout to ensure the new tab has loaded the content
+      // The browser will also clean up when the page is closed
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
     } finally {
       setTimeout(() => setIsOpening(false), 1000);
     }

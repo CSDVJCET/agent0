@@ -84,6 +84,7 @@ export const createPresentationTool = tool({
       `;
 
       // Generate content slides
+      let imageCounter = 0; // Use incrementing counter for unique images
       for (let i = 0; i < slides.length; i++) {
         const slide = slides[i];
         const transition = slide.transition || "slide";
@@ -94,7 +95,7 @@ export const createPresentationTool = tool({
         if (layout === "full-background") {
           // Full-screen background image with text overlay
           slidesHtml += `
-      <section data-transition="${transition}" data-background-image="https://source.unsplash.com/1600x900/?${keywords}" class="slide-overlay">
+      <section data-transition="${transition}" data-background-image="https://source.unsplash.com/1600x900/?${keywords},${imageCounter++}" class="slide-overlay">
         <div class="text-box fragment fade-in">
           <h2>${slide.title}</h2>
           <p>${slide.content}</p>
@@ -108,11 +109,11 @@ export const createPresentationTool = tool({
         <h2>${slide.title}</h2>
         <div class="two-columns">
           <div>
-            <img src="https://source.unsplash.com/600x400/?${keywords},${i * 2}" class="img-glass fragment fade-up">
+            <img src="https://source.unsplash.com/600x400/?${keywords},${imageCounter++}" class="img-glass fragment fade-up">
             <p>${slide.content.split("\n")[0] || slide.content}</p>
           </div>
           <div>
-            <img src="https://source.unsplash.com/600x400/?${keywords},${i * 2 + 1}" class="img-glass fragment fade-up">
+            <img src="https://source.unsplash.com/600x400/?${keywords},${imageCounter++}" class="img-glass fragment fade-up">
             <p>${slide.content.split("\n")[1] || slide.content}</p>
           </div>
         </div>
@@ -126,10 +127,10 @@ export const createPresentationTool = tool({
         <h2>${slide.title}</h2>
         <div class="img-grid-${gridImages}">
           ${Array.from({ length: gridImages })
-            .map((_, idx) => `
+            .map(() => `
           <div class="fragment fade-up">
-            <img src="https://source.unsplash.com/400x300/?${keywords},${i * 10 + idx}" class="img-elevated">
-            <p class="img-caption">${slide.title} ${idx + 1}</p>
+            <img src="https://source.unsplash.com/400x300/?${keywords},${imageCounter++}" class="img-elevated">
+            <p class="img-caption">${slide.title}</p>
           </div>
             `)
             .join("")}
@@ -142,7 +143,7 @@ export const createPresentationTool = tool({
           slidesHtml += `
       <section data-transition="${transition}">
         <h2>${slide.title}</h2>
-        <img src="https://source.unsplash.com/1200x600/?${keywords}" class="img-rounded-border fragment zoom-in">
+        <img src="https://source.unsplash.com/1200x600/?${keywords},${imageCounter++}" class="img-rounded-border fragment zoom-in">
         <p class="img-caption fragment">${slide.content}</p>
       </section>
           `;
@@ -153,7 +154,7 @@ export const createPresentationTool = tool({
         <h2>${slide.title}</h2>
         ${
           imageCount > 0
-            ? `<img src="https://source.unsplash.com/1000x500/?${keywords}" class="img-elevated fragment fade-up">`
+            ? `<img src="https://source.unsplash.com/1000x500/?${keywords},${imageCounter++}" class="img-elevated fragment fade-up">`
             : ""
         }
         <div class="fragment fade-in">
@@ -173,6 +174,8 @@ export const createPresentationTool = tool({
       `;
 
       // Complete HTML template
+      // Using reveal.js 5.0.4 from CDN - a stable version of the presentation framework
+      // The black theme provides a professional dark background that works well with the custom CSS
       const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
