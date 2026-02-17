@@ -104,7 +104,7 @@ export function SlidesHeadingConfirmation({
           topic: topic.trim(),
           slideCount: cleanedHeadings.length,
           headings: cleanedHeadings,
-          colorScheme: presentationDetails.colorScheme || "tech",
+          colorScheme: presentationDetails.colorScheme || "auto",
         }),
       });
 

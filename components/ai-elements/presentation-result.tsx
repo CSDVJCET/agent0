@@ -24,16 +24,18 @@ export function PresentationResult({
 }: PresentationResultProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [isOpening, setIsOpening] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const createPresentationBlobUrl = () => {
+  const createBlobUrlForDownload = () => {
     const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
     return URL.createObjectURL(blob);
   };
 
   const handleDownload = () => {
     setIsDownloading(true);
+    setActionError(null);
     try {
-      const url = createPresentationBlobUrl();
+      const url = createBlobUrlForDownload();
       const a = document.createElement("a");
       a.href = url;
       // Clean filename: remove special chars, replace with underscores, clean up multiple/trailing underscores
@@ -47,6 +49,8 @@ export function PresentationResult({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+    } catch {
+      setActionError("Unable to download presentation. Please try again.");
     } finally {
       setTimeout(() => setIsDownloading(false), 1000);
     }
@@ -54,24 +58,40 @@ export function PresentationResult({
 
   const handleOpenInNewTab = () => {
     setIsOpening(true);
+    setActionError(null);
     try {
-      const url = createPresentationBlobUrl();
-      const opened = window.open(url, "_blank", "noopener,noreferrer");
-      if (!opened) {
-        URL.revokeObjectURL(url);
-        throw new Error("Popup blocked. Please allow popups for this site to open the presentation.");
+      // Use document.write so external scripts (reveal.js) load and
+      // execute reliably — blob URLs can fail to run animations.
+      const newWindow = window.open("", "_blank");
+      if (!newWindow) {
+        setActionError("Popup blocked — please allow popups for this site, then try again.");
+        return;
       }
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      newWindow.document.open();
+      newWindow.document.write(htmlContent);
+      newWindow.document.close();
+    } catch {
+      setActionError("Unable to open presentation right now. Please try again.");
     } finally {
       setTimeout(() => setIsOpening(false), 1000);
     }
   };
 
   const colorSchemeLabels: Record<string, string> = {
+    auto: "Auto",
     tech: "Tech Blue",
     energy: "Energy Red",
     nature: "Nature Green",
     luxury: "Luxury Gold",
+    ocean: "Ocean Cyan",
+    sunset: "Sunset Warm",
+    corporate: "Corporate",
+    creative: "Creative Purple",
+    medical: "Medical Teal",
+    finance: "Finance Blue",
+    education: "Education Violet",
+    minimal: "Minimal",
+    warm: "Warm Amber",
     custom: "Custom",
   };
 
@@ -173,6 +193,10 @@ export function PresentationResult({
             <p className="text-xs text-muted-foreground pt-2 border-t border-border/50">
               {message}
             </p>
+          )}
+
+          {actionError && (
+            <p className="text-xs text-destructive pt-2 border-t border-border/50">{actionError}</p>
           )}
         </div>
       </div>

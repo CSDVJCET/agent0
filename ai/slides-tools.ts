@@ -3,58 +3,345 @@ import { z } from "zod";
 
 /**
  * Slides/Presentation Tools for Agent0
- * 
- * This tool allows the AI agent to create beautiful reveal.js presentations
- * with enhanced visuals, image frames, and animations.
- * 
- * Users invoke this tool using @slides mentions in their prompts.
+ *
+ * Creates vibrant, topic-aware reveal.js presentations with proper layouts
+ * that prevent text clipping and support animations in both new-tab and
+ * downloaded modes.
  */
 
+// ── Schema ──────────────────────────────────────────────────────────
+
 const slideLayoutSchema = z
-  .enum(["single-column", "two-column", "image-focused", "full-background", "image-grid"])
+  .enum([
+    "text-image-split",
+    "full-image-overlay",
+    "two-column",
+    "text-only",
+    "image-grid",
+  ])
   .optional();
 
-const slideTransitionSchema = z.enum(["slide", "zoom", "convex", "fade"]).optional();
+const slideTransitionSchema = z
+  .enum(["slide", "zoom", "convex", "fade", "none"])
+  .optional();
 
 const presentationSlideSchema = z.object({
-  title: z.string().describe("Title of the slide"),
-  content: z.string().describe("Main content/body text for the slide (can include HTML)"),
+  title: z.string().describe("Slide title (2-8 words)"),
+  content: z
+    .string()
+    .describe("Main content — concise bullets separated by newlines, or a short paragraph"),
   layout: slideLayoutSchema.describe("Layout style for the slide"),
-  imageKeywords: z.array(z.string()).optional().describe("Keywords for searching relevant images (e.g., ['technology', 'innovation'])"),
-  imageCount: z.number().min(0).max(4).optional().describe("Number of images to include (0-4, default 1)"),
+  imageKeywords: z
+    .array(z.string())
+    .optional()
+    .describe("Keywords for relevant images"),
+  imageCount: z
+    .number()
+    .min(0)
+    .max(3)
+    .optional()
+    .describe("Number of images (0-3, default 1)"),
   transition: slideTransitionSchema.describe("Slide transition effect"),
 });
 
-const colorSchemeSchema = z.enum(["tech", "energy", "nature", "luxury", "custom"]);
+const colorSchemeSchema = z.enum([
+  "auto",
+  "tech",
+  "energy",
+  "nature",
+  "luxury",
+  "ocean",
+  "sunset",
+  "corporate",
+  "creative",
+  "medical",
+  "finance",
+  "education",
+  "minimal",
+  "warm",
+  "custom",
+]);
 
 const createPresentationInputSchema = z.object({
   title: z.string().describe("Main title of the presentation"),
-  subtitle: z.string().optional().describe("Optional subtitle for the title slide"),
-  topic: z.string().describe("Main topic/theme of the presentation (used for image search keywords)"),
-  slides: z.array(presentationSlideSchema).min(3).describe("Array of slide objects (minimum 3 slides)"),
-  colorScheme: colorSchemeSchema.optional().describe("Color theme for the presentation"),
+  subtitle: z.string().optional().describe("Optional subtitle"),
+  topic: z
+    .string()
+    .describe("Main topic/theme (used for image keywords and auto-theming)"),
+  slides: z
+    .array(presentationSlideSchema)
+    .min(3)
+    .describe("Array of slide objects (minimum 3)"),
+  colorScheme: colorSchemeSchema
+    .optional()
+    .describe(
+      "Color theme — use 'auto' to match the topic vibe automatically"
+    ),
   customColors: z
     .object({
-      primary: z.string().optional().describe("Primary color hex code"),
-      secondary: z.string().optional().describe("Secondary color hex code"),
-      accent: z.string().optional().describe("Accent color hex code"),
+      primary: z.string().optional(),
+      secondary: z.string().optional(),
+      accent: z.string().optional(),
     })
     .optional()
-    .describe("Custom color scheme (only if colorScheme is 'custom')"),
+    .describe("Custom color overrides (only when colorScheme is 'custom')"),
 });
 
 const headingDraftInputSchema = z.object({
   topic: z.string().describe("Main presentation topic"),
   title: z.string().optional().describe("Proposed presentation title"),
   subtitle: z.string().optional().describe("Optional subtitle"),
-  slideCount: z.number().min(3).max(20).optional().describe("Suggested number of content slides"),
-  headings: z.array(z.string()).optional().describe("Proposed slide headings (without title/thank-you slides)"),
+  slideCount: z
+    .number()
+    .min(3)
+    .max(20)
+    .optional()
+    .describe("Suggested number of content slides"),
+  headings: z
+    .array(z.string())
+    .optional()
+    .describe("Proposed slide headings (without title/thank-you slides)"),
   audience: z.string().optional().describe("Intended audience"),
   objective: z.string().optional().describe("Presentation objective"),
 });
 
 type CreatePresentationInput = z.infer<typeof createPresentationInputSchema>;
 export type PresentationSlide = z.infer<typeof presentationSlideSchema>;
+
+// ── Color palettes ──────────────────────────────────────────────────
+
+interface ColorPalette {
+  primary: string;
+  secondary: string;
+  accent: string;
+  bg: string;
+  text: string;
+  muted: string;
+  cardBg: string;
+  overlayBg: string;
+}
+
+const COLOR_PALETTES: Record<string, ColorPalette> = {
+  tech: {
+    primary: "#60a5fa",
+    secondary: "#a78bfa",
+    accent: "#34d399",
+    bg: "#0f172a",
+    text: "#f1f5f9",
+    muted: "#94a3b8",
+    cardBg: "rgba(30,41,59,0.7)",
+    overlayBg: "rgba(15,23,42,0.82)",
+  },
+  energy: {
+    primary: "#ef4444",
+    secondary: "#f97316",
+    accent: "#fbbf24",
+    bg: "#1c1917",
+    text: "#fef2f2",
+    muted: "#a8a29e",
+    cardBg: "rgba(41,37,36,0.7)",
+    overlayBg: "rgba(28,25,23,0.82)",
+  },
+  nature: {
+    primary: "#22c55e",
+    secondary: "#10b981",
+    accent: "#a3e635",
+    bg: "#052e16",
+    text: "#f0fdf4",
+    muted: "#86efac",
+    cardBg: "rgba(20,83,45,0.7)",
+    overlayBg: "rgba(5,46,22,0.82)",
+  },
+  luxury: {
+    primary: "#d4a853",
+    secondary: "#b8860b",
+    accent: "#f5deb3",
+    bg: "#171717",
+    text: "#fef3c7",
+    muted: "#a3a3a3",
+    cardBg: "rgba(38,38,38,0.7)",
+    overlayBg: "rgba(17,17,17,0.88)",
+  },
+  ocean: {
+    primary: "#22d3ee",
+    secondary: "#0ea5e9",
+    accent: "#67e8f9",
+    bg: "#0c1929",
+    text: "#ecfeff",
+    muted: "#7dd3fc",
+    cardBg: "rgba(22,78,99,0.7)",
+    overlayBg: "rgba(12,25,41,0.82)",
+  },
+  sunset: {
+    primary: "#fb923c",
+    secondary: "#f43f5e",
+    accent: "#fbbf24",
+    bg: "#1c1017",
+    text: "#fff7ed",
+    muted: "#fdba74",
+    cardBg: "rgba(59,19,35,0.7)",
+    overlayBg: "rgba(28,16,23,0.82)",
+  },
+  corporate: {
+    primary: "#3b82f6",
+    secondary: "#1e40af",
+    accent: "#93c5fd",
+    bg: "#0c1220",
+    text: "#e2e8f0",
+    muted: "#94a3b8",
+    cardBg: "rgba(30,41,59,0.7)",
+    overlayBg: "rgba(12,18,32,0.88)",
+  },
+  creative: {
+    primary: "#e879f9",
+    secondary: "#a855f7",
+    accent: "#f0abfc",
+    bg: "#1a0a1e",
+    text: "#fdf4ff",
+    muted: "#d8b4fe",
+    cardBg: "rgba(46,16,101,0.7)",
+    overlayBg: "rgba(26,10,30,0.82)",
+  },
+  medical: {
+    primary: "#14b8a6",
+    secondary: "#06b6d4",
+    accent: "#5eead4",
+    bg: "#0f1729",
+    text: "#f0fdfa",
+    muted: "#99f6e4",
+    cardBg: "rgba(19,78,74,0.7)",
+    overlayBg: "rgba(15,23,41,0.82)",
+  },
+  finance: {
+    primary: "#3b82f6",
+    secondary: "#1d4ed8",
+    accent: "#60a5fa",
+    bg: "#0f172a",
+    text: "#dbeafe",
+    muted: "#93c5fd",
+    cardBg: "rgba(30,58,95,0.7)",
+    overlayBg: "rgba(15,23,42,0.88)",
+  },
+  education: {
+    primary: "#a78bfa",
+    secondary: "#7c3aed",
+    accent: "#c4b5fd",
+    bg: "#1e1b2e",
+    text: "#ede9fe",
+    muted: "#c4b5fd",
+    cardBg: "rgba(46,16,101,0.7)",
+    overlayBg: "rgba(30,27,46,0.82)",
+  },
+  warm: {
+    primary: "#f59e0b",
+    secondary: "#d97706",
+    accent: "#fcd34d",
+    bg: "#1a1509",
+    text: "#fef3c7",
+    muted: "#fbbf24",
+    cardBg: "rgba(66,32,6,0.7)",
+    overlayBg: "rgba(26,21,9,0.82)",
+  },
+  minimal: {
+    primary: "#94a3b8",
+    secondary: "#64748b",
+    accent: "#cbd5e1",
+    bg: "#111111",
+    text: "#f8fafc",
+    muted: "#94a3b8",
+    cardBg: "rgba(30,30,30,0.7)",
+    overlayBg: "rgba(17,17,17,0.88)",
+  },
+};
+
+/** Pick a palette automatically from topic keywords, or use the explicit choice. */
+function inferColorScheme(
+  topic: string,
+  explicitScheme?: string
+): ColorPalette {
+  if (
+    explicitScheme &&
+    explicitScheme !== "auto" &&
+    explicitScheme in COLOR_PALETTES
+  ) {
+    return COLOR_PALETTES[explicitScheme];
+  }
+
+  const t = topic.toLowerCase();
+
+  if (
+    /medic|health|hospital|pharma|doctor|nurse|patient|clinical|biotech|wellness/i.test(
+      t
+    )
+  )
+    return COLOR_PALETTES.medical;
+  if (
+    /financ|bank|invest|stock|market|money|economy|budget|revenue|profit|trading/i.test(
+      t
+    )
+  )
+    return COLOR_PALETTES.finance;
+  if (
+    /school|education|learn|university|student|teach|academic|course|training/i.test(
+      t
+    )
+  )
+    return COLOR_PALETTES.education;
+  if (
+    /food|cook|recipe|restaurant|culinary|nutrition|diet|meal|beverage|cafe/i.test(
+      t
+    )
+  )
+    return COLOR_PALETTES.warm;
+  if (
+    /ocean|sea|marine|water|aqua|surf|beach|coast|maritime/i.test(t)
+  )
+    return COLOR_PALETTES.ocean;
+  if (
+    /nature|eco|green|forest|plant|garden|environment|sustain|climate|organic/i.test(
+      t
+    )
+  )
+    return COLOR_PALETTES.nature;
+  if (
+    /art|design|creative|music|film|paint|photo|fashion|style|brand/i.test(t)
+  )
+    return COLOR_PALETTES.creative;
+  if (
+    /sport|fitness|game|athlete|team|competition|exercise|racing/i.test(t)
+  )
+    return COLOR_PALETTES.energy;
+  if (
+    /luxury|premium|elegant|exclusive|jewel|diamond|gold|wine/i.test(t)
+  )
+    return COLOR_PALETTES.luxury;
+  if (
+    /travel|journey|adventure|explore|destination|tourism|flight|vacation/i.test(
+      t
+    )
+  )
+    return COLOR_PALETTES.sunset;
+  if (
+    /business|corporate|enterprise|management|strategy|consult|startup|company/i.test(
+      t
+    )
+  )
+    return COLOR_PALETTES.corporate;
+  if (
+    /tech|software|ai|machine|data|digital|code|program|computer|cyber|cloud|web|app/i.test(
+      t
+    )
+  )
+    return COLOR_PALETTES.tech;
+  if (
+    /energy|power|electric|solar|renewable|nuclear|fuel|battery/i.test(t)
+  )
+    return COLOR_PALETTES.energy;
+
+  return COLOR_PALETTES.tech;
+}
+
+// ── Image helpers ───────────────────────────────────────────────────
 
 const sanitizeSeed = (value: string) =>
   value
@@ -63,10 +350,20 @@ const sanitizeSeed = (value: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 60) || "slide";
 
-const buildUnsplashUrl = (width: number, height: number, keywords: string, index: number) =>
-  `https://source.unsplash.com/${width}x${height}/?${keywords},${index}`;
+const buildUnsplashUrl = (
+  width: number,
+  height: number,
+  keywords: string,
+  index: number
+) =>
+  `https://source.unsplash.com/${width}x${height}/?${encodeURIComponent(keywords)},${index}`;
 
-const buildFallbackImageUrl = (width: number, height: number, keywords: string, index: number) => {
+const buildFallbackImageUrl = (
+  width: number,
+  height: number,
+  keywords: string,
+  index: number
+) => {
   const seed = sanitizeSeed(`${keywords}-${index}`);
   return `https://picsum.photos/seed/${seed}/${width}/${height}`;
 };
@@ -76,12 +373,14 @@ const imageTag = (
   height: number,
   keywords: string,
   index: number,
-  className: string
+  className = ""
 ) => {
   const src = buildUnsplashUrl(width, height, keywords, index);
   const fallback = buildFallbackImageUrl(width, height, keywords, index);
-  return `<img src="${src}" data-fallback-src="${fallback}" onerror="if(this.dataset.fallbackSrc){this.src=this.dataset.fallbackSrc;this.removeAttribute('data-fallback-src');}" class="${className}">`;
+  return `<img src="${src}" data-fallback-src="${fallback}" onerror="if(this.dataset.fallbackSrc){this.src=this.dataset.fallbackSrc;this.removeAttribute('data-fallback-src');}" class="${className}" alt="">`;
 };
+
+// ── Heading helpers ─────────────────────────────────────────────────
 
 const buildHeuristicHeadings = (topic: string, count: number) => {
   const base = topic.trim();
@@ -91,294 +390,517 @@ const buildHeuristicHeadings = (topic: string, count: number) => {
     `Key Drivers in ${base}`,
     `${base} Use Cases`,
     `Implementation Strategy`,
-    `Challenges and Mitigations`,
+    `Challenges & Solutions`,
     `Measuring Success`,
     `Future of ${base}`,
     `Action Plan`,
     `Q&A`,
   ];
-
-  return Array.from({ length: count }).map((_, index) => templates[index] || `${base} — Slide ${index + 1}`);
+  return Array.from({ length: count }).map(
+    (_, i) => templates[i] || `${base} — Slide ${i + 1}`
+  );
 };
 
-export function buildSlidesFromHeadings(headings: string[], topic: string): PresentationSlide[] {
+/** Build default slide objects from confirmed headings — used by the
+ *  HITL /api/slides/create endpoint. */
+export function buildSlidesFromHeadings(
+  headings: string[],
+  topic: string
+): PresentationSlide[] {
+  const layouts: PresentationSlide["layout"][] = [
+    "text-image-split",
+    "two-column",
+    "text-image-split",
+    "full-image-overlay",
+    "text-only",
+    "text-image-split",
+    "image-grid",
+    "two-column",
+  ];
+
   return headings.map((heading, index) => ({
     title: heading,
     content:
       index === 0
         ? `Overview of ${topic} and why it matters.`
         : index === headings.length - 1
-        ? `Summary and key next steps for ${topic}.`
-        : `Key points about ${heading}.\nPractical examples and insights.`,
-    layout: index % 3 === 0 ? "image-focused" : index % 2 === 0 ? "two-column" : "single-column",
-    imageKeywords: [topic, heading],
-    imageCount: index % 2 === 0 ? 2 : 1,
-    transition: index % 2 === 0 ? "slide" : "convex",
-  } as const));
+          ? `Summary and key next steps for ${topic}.`
+          : `Key points about ${heading}.\nPractical examples and insights.`,
+    layout: layouts[index % layouts.length],
+    imageKeywords: [topic, ...heading.split(" ").slice(0, 2)],
+    imageCount: 1,
+    transition: (["slide", "fade", "convex", "zoom"] as const)[index % 4],
+  }));
 }
+
+// ── Slide HTML renderers ────────────────────────────────────────────
+
+function renderContentSlide(
+  slide: PresentationSlide,
+  index: number,
+  topic: string,
+  imgCounter: { value: number }
+): string {
+  const transition = slide.transition || "slide";
+  const layout = slide.layout || "text-image-split";
+  const keywords = slide.imageKeywords?.join(",") || topic;
+  const contentLines = slide.content
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const bulletHtml =
+    contentLines.length > 1
+      ? `<ul>${contentLines
+          .map(
+            (line, i) =>
+              `<li class="fragment fade-in" data-fragment-index="${i}">${line}</li>`
+          )
+          .join("")}</ul>`
+      : `<p class="fragment fade-in">${slide.content}</p>`;
+
+  // ─── Full-image overlay ───
+  if (layout === "full-image-overlay") {
+    const bgImg = buildUnsplashUrl(1600, 900, keywords, imgCounter.value++);
+    return `
+      <section data-transition="${transition}" data-background-image="${bgImg}" data-background-size="cover" class="overlay-slide">
+        <div class="overlay-box">
+          <h2>${slide.title}</h2>
+          ${bulletHtml}
+        </div>
+      </section>`;
+  }
+
+  // ─── Two-column ───
+  if (layout === "two-column") {
+    return `
+      <section data-transition="${transition}">
+        <h2>${slide.title}</h2>
+        <div class="layout-grid">
+          <div class="grid-cell">
+            ${imageTag(600, 400, keywords, imgCounter.value++, "slide-img fragment fade-up")}
+            <p class="fragment fade-in">${contentLines[0] || slide.content}</p>
+          </div>
+          <div class="grid-cell">
+            ${imageTag(600, 400, keywords, imgCounter.value++, "slide-img fragment fade-up")}
+            <p class="fragment fade-in">${contentLines[1] || contentLines[0] || slide.content}</p>
+          </div>
+        </div>
+      </section>`;
+  }
+
+  // ─── Image grid ───
+  if (layout === "image-grid") {
+    const count = Math.min(slide.imageCount ?? 3, 3);
+    return `
+      <section data-transition="${transition}">
+        <h2>${slide.title}</h2>
+        <div class="layout-images cols-${count}">
+          ${Array.from({ length: count })
+            .map(
+              () =>
+                `<div class="fragment fade-up">${imageTag(400, 300, keywords, imgCounter.value++, "slide-img")}</div>`
+            )
+            .join("")}
+        </div>
+        <div class="fragment fade-in" style="margin-top:12px;">${bulletHtml}</div>
+      </section>`;
+  }
+
+  // ─── Text only ───
+  if (layout === "text-only") {
+    return `
+      <section data-transition="${transition}">
+        <h2>${slide.title}</h2>
+        <div class="text-large">${bulletHtml}</div>
+      </section>`;
+  }
+
+  // ─── Default: text-image-split (alternating left/right) ───
+  const imgHtml = imageTag(
+    700,
+    500,
+    keywords,
+    imgCounter.value++,
+    "slide-img fragment fade-up"
+  );
+
+  // Alternate image side for visual variety
+  if (index % 2 === 0) {
+    return `
+      <section data-transition="${transition}">
+        <h2>${slide.title}</h2>
+        <div class="layout-side">
+          <div class="text-col">${bulletHtml}</div>
+          <div class="img-col">${imgHtml}</div>
+        </div>
+      </section>`;
+  }
+
+  return `
+      <section data-transition="${transition}">
+        <h2>${slide.title}</h2>
+        <div class="layout-side">
+          <div class="img-col">${imgHtml}</div>
+          <div class="text-col">${bulletHtml}</div>
+        </div>
+      </section>`;
+}
+
+/** Build a varied closing slide based on slide count hash. */
+function renderClosingSlide(
+  title: string,
+  topic: string,
+  totalContentSlides: number,
+  imgCounter: { value: number },
+  colors: ColorPalette
+): string {
+  const variant = totalContentSlides % 4;
+  const keywords = topic.split(" ").slice(0, 3).join(",");
+
+  if (variant === 0) {
+    const bgImg = buildUnsplashUrl(
+      1600,
+      900,
+      `${keywords},conclusion`,
+      imgCounter.value++
+    );
+    return `
+      <section data-transition="zoom" data-background-image="${bgImg}" data-background-size="cover" class="overlay-slide centered">
+        <div class="overlay-box" style="text-align:center;">
+          <h2 class="fragment fade-in" style="font-size:36pt;">Thank You</h2>
+          <p class="fragment fade-in" style="font-size:18pt; margin-top:12px;">Questions &amp; Discussion</p>
+          <p class="fragment fade-in caption" style="margin-top:16px;">${title}</p>
+        </div>
+      </section>`;
+  }
+
+  if (variant === 1) {
+    return `
+      <section data-transition="fade" class="centered">
+        <h2 class="fragment fade-in" style="font-size:32pt;">Key Takeaways</h2>
+        <div style="max-width:600px; margin:20px auto; text-align:left;">
+          <div class="accent-card fragment fade-up">What we covered about ${topic}</div>
+          <div class="accent-card fragment fade-up" style="border-color:${colors.secondary};">Why it matters now</div>
+          <div class="accent-card fragment fade-up" style="border-color:${colors.accent};">Where to go from here</div>
+        </div>
+        <p class="fragment fade-in caption" style="margin-top:20px;">Thank you for your attention</p>
+      </section>`;
+  }
+
+  if (variant === 2) {
+    const bgImg = buildUnsplashUrl(
+      1600,
+      900,
+      `${keywords},future`,
+      imgCounter.value++
+    );
+    return `
+      <section data-transition="convex" data-background-image="${bgImg}" data-background-size="cover" class="overlay-slide centered">
+        <div class="overlay-box" style="text-align:center;">
+          <h2 class="fragment fade-in" style="font-size:32pt;">Next Steps</h2>
+          <p class="fragment fade-in" style="font-size:16pt; margin-top:12px;">Ready to put these ideas into action?</p>
+          <div class="fragment zoom-in" style="margin-top:20px; display:inline-block; padding:12px 28px; background:${colors.primary}; color:#fff; border-radius:8px; font-size:16pt; font-weight:600;">Let&apos;s Get Started &rarr;</div>
+        </div>
+      </section>`;
+  }
+
+  // variant 3 — clean minimal
+  return `
+      <section data-transition="fade" class="centered">
+        <h2 style="font-size:40pt; margin-bottom:16px;" class="fragment fade-in">${title}</h2>
+        <div style="width:80px; height:4px; background:${colors.accent}; margin:0 auto 20px; border-radius:2px;" class="fragment fade-in"></div>
+        <p class="fragment fade-in" style="font-size:18pt;">Thank you for your time</p>
+        <p class="fragment fade-in caption" style="margin-top:16px;">Questions? Let&apos;s discuss.</p>
+      </section>`;
+}
+
+// ── Main payload generator ──────────────────────────────────────────
 
 export function generatePresentationPayload({
   title,
   subtitle,
   topic,
   slides,
-  colorScheme = "tech",
+  colorScheme = "auto",
   customColors,
 }: CreatePresentationInput) {
-  const colorSchemes = {
-    tech: { primary: "#667eea", secondary: "#764ba2", accent: "#f093fb" },
-    energy: { primary: "#ff6b6b", secondary: "#feca57", accent: "#ff9ff3" },
-    nature: { primary: "#26de81", secondary: "#20bf6b", accent: "#45b7d1" },
-    luxury: { primary: "#f39c12", secondary: "#2c3e50", accent: "#e74c3c" },
-    custom: customColors || { primary: "#667eea", secondary: "#764ba2", accent: "#f093fb" },
-  };
-
-  const colors = colorSchemes[colorScheme];
-  let slidesHtml = "";
-  const titleImageKeywords = topic.split(" ").slice(0, 3).join(",");
-  const titleImage = buildUnsplashUrl(1600, 900, `${titleImageKeywords},background`, 0);
-
-  slidesHtml += `
-      <section data-transition="zoom" data-background-image="${titleImage}" class="slide-overlay">
-        <h1 class="fragment fade-in">${title}</h1>
-        ${subtitle ? `<p class="fragment fade-in" style="font-size: 1.5em;">${subtitle}</p>` : ""}
-      </section>
-      `;
-
-  let imageCounter = 1;
-  for (let i = 0; i < slides.length; i++) {
-    const slide = slides[i];
-    const transition = slide.transition || "slide";
-    const layout = slide.layout || "single-column";
-    const imageCount = slide.imageCount ?? 1;
-    const keywords = slide.imageKeywords?.join(",") || topic.split(" ").join(",");
-
-    if (layout === "full-background") {
-      slidesHtml += `
-      <section data-transition="${transition}" data-background-image="${buildUnsplashUrl(1600, 900, keywords, imageCounter++)}" class="slide-overlay">
-        <div class="text-box fragment fade-in">
-          <h2>${slide.title}</h2>
-          <p>${slide.content}</p>
-        </div>
-      </section>
-          `;
-    } else if (layout === "two-column") {
-      slidesHtml += `
-      <section data-transition="${transition}">
-        <h2>${slide.title}</h2>
-        <div class="two-columns">
-          <div>
-            ${imageTag(600, 400, keywords, imageCounter++, "img-glass fragment fade-up")}
-            <p>${slide.content.split("\n")[0] || slide.content}</p>
-          </div>
-          <div>
-            ${imageTag(600, 400, keywords, imageCounter++, "img-glass fragment fade-up")}
-            <p>${slide.content.split("\n")[1] || slide.content}</p>
-          </div>
-        </div>
-      </section>
-          `;
-    } else if (layout === "image-grid") {
-      const gridImages = Math.min(imageCount, 3);
-      slidesHtml += `
-      <section data-transition="${transition}">
-        <h2>${slide.title}</h2>
-        <div class="img-grid-${gridImages}">
-          ${Array.from({ length: gridImages })
-            .map(
-              () => `
-          <div class="fragment fade-up">
-            ${imageTag(400, 300, keywords, imageCounter++, "img-elevated")}
-            <p class="img-caption">${slide.title}</p>
-          </div>
-            `
-            )
-            .join("")}
-        </div>
-        <p class="fragment">${slide.content}</p>
-      </section>
-          `;
-    } else if (layout === "image-focused") {
-      slidesHtml += `
-      <section data-transition="${transition}">
-        <h2>${slide.title}</h2>
-        ${imageTag(1200, 600, keywords, imageCounter++, "img-rounded-border fragment zoom-in")}
-        <p class="img-caption fragment">${slide.content}</p>
-      </section>
-          `;
-    } else {
-      slidesHtml += `
-      <section data-transition="${transition}">
-        <h2>${slide.title}</h2>
-        ${imageCount > 0 ? imageTag(1000, 500, keywords, imageCounter++, "img-elevated fragment fade-up") : ""}
-        <div class="fragment fade-in">
-          ${slide.content.replace(/\n/g, "<br>")}
-        </div>
-      </section>
-          `;
-    }
+  // Resolve colors
+  let colors: ColorPalette;
+  if (colorScheme === "custom" && customColors) {
+    colors = {
+      ...COLOR_PALETTES.tech,
+      primary: customColors.primary || COLOR_PALETTES.tech.primary,
+      secondary: customColors.secondary || COLOR_PALETTES.tech.secondary,
+      accent: customColors.accent || COLOR_PALETTES.tech.accent,
+    };
+  } else {
+    colors = inferColorScheme(topic, colorScheme);
   }
 
-  slidesHtml += `
-      <section data-transition="zoom" data-background-image="${buildUnsplashUrl(1600, 900, `${titleImageKeywords},conclusion`, imageCounter++)}" class="slide-overlay">
-        <h2 class="fragment fade-in">Thank You!</h2>
-        <p class="fragment fade-in" style="font-size: 1.3em;">Questions?</p>
-      </section>
-      `;
+  const titleKeywords = topic.split(" ").slice(0, 3).join(",");
+  const titleBgImg = buildUnsplashUrl(
+    1600,
+    900,
+    `${titleKeywords},background,dark`,
+    0
+  );
+  const imgCounter = { value: 1 };
 
-  const htmlContent = `<!DOCTYPE html>
+  // Title slide
+  let slidesHtml = `
+      <section data-transition="zoom" data-background-image="${titleBgImg}" data-background-size="cover" class="overlay-slide centered">
+        <h1 class="fragment fade-in">${title}</h1>
+        ${subtitle ? `<p class="fragment fade-in" style="font-size:20pt; margin-top:8px; color:${colors.muted};">${subtitle}</p>` : ""}
+      </section>`;
+
+  // Content slides
+  for (let i = 0; i < slides.length; i++) {
+    slidesHtml += renderContentSlide(slides[i], i, topic, imgCounter);
+  }
+
+  // Closing slide (varied)
+  slidesHtml += renderClosingSlide(
+    title,
+    topic,
+    slides.length,
+    imgCounter,
+    colors
+  );
+
+  const htmlContent = buildFullHtml(title, slidesHtml, colors);
+
+  return {
+    error: false,
+    title,
+    slideCount: slides.length + 2,
+    htmlContent,
+    colorScheme: colorScheme === "auto" ? "auto" : colorScheme,
+    message: `Created "${title}" with ${slides.length + 2} slides.`,
+  };
+}
+
+// ── Full HTML builder ───────────────────────────────────────────────
+
+function buildFullHtml(
+  title: string,
+  slidesHtml: string,
+  colors: ColorPalette
+): string {
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/dist/reveal.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/dist/theme/black.css">
   <style>
     :root {
-      --primary-color: ${colors.primary};
-      --secondary-color: ${colors.secondary};
-      --accent-color: ${colors.accent};
-      --text-color: #ffffff;
-      --bg-color: #1a1a2e;
+      --r-background-color: ${colors.bg};
+      --primary: ${colors.primary};
+      --secondary: ${colors.secondary};
+      --accent: ${colors.accent};
+      --text: ${colors.text};
+      --muted: ${colors.muted};
+      --card-bg: ${colors.cardBg};
+      --overlay-bg: ${colors.overlayBg};
     }
 
+    .reveal { font-family: "Inter", "Segoe UI", Helvetica, sans-serif; }
+
+    /* ---- SLIDE LAYOUT ---- */
+    .reveal .slides > section,
+    .reveal .slides > section > section {
+      display: flex !important;
+      flex-direction: column;
+      justify-content: flex-start;
+      align-items: stretch;
+      height: 100%;
+      padding: 28px 48px;
+      box-sizing: border-box;
+      text-align: left;
+    }
+
+    .reveal .slides section.centered {
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+    }
+
+    /* ---- TYPOGRAPHY ---- */
     .reveal h1 {
-      font-size: 3.5em;
+      font-size: 42pt;
       font-weight: 800;
-      background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      text-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+      color: var(--primary);
+      margin: 0 0 10px;
+      line-height: 1.1;
+      text-shadow: 0 2px 20px rgba(0,0,0,0.4);
     }
 
     .reveal h2 {
-      font-size: 2.5em;
+      font-size: 26pt;
       font-weight: 700;
-      color: var(--primary-color);
-      margin-bottom: 0.5em;
+      color: var(--primary);
+      margin: 0 0 14px;
+      line-height: 1.15;
+      flex-shrink: 0;
     }
 
     .reveal h3 {
-      font-size: 1.8em;
-      color: var(--secondary-color);
+      font-size: 18pt;
+      font-weight: 600;
+      color: var(--secondary);
+      margin: 0 0 8px;
     }
 
-    .img-elevated {
-      border-radius: 12px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-      transform: translateY(0);
-      transition: transform 0.3s ease;
-      max-width: 100%;
-      height: auto;
-    }
-
-    .img-elevated:hover {
-      transform: translateY(-10px);
-    }
-
-    .img-rounded-border {
-      border-radius: 20px;
-      border: 4px solid var(--primary-color);
-      padding: 8px;
-      background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-      max-width: 100%;
-      height: auto;
-    }
-
-    .img-polaroid {
-      background: white;
-      padding: 16px 16px 60px 16px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-      transform: rotate(-2deg);
-      max-width: 100%;
-      height: auto;
-    }
-
-    .img-glass {
-      background: rgba(255, 255, 255, 0.1);
-      backdrop-filter: blur(10px);
-      border-radius: 16px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      padding: 20px;
-      max-width: 100%;
-      height: auto;
-    }
-
-    .img-neon {
-      border-radius: 12px;
-      box-shadow: 0 0 20px var(--primary-color), 0 0 40px var(--primary-color), 0 0 60px var(--primary-color);
-      max-width: 100%;
-      height: auto;
-    }
-
-    .img-grid-2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 2em;
-      align-items: center;
-    }
-
-    .img-grid-3 {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1.5em;
-    }
-
-    .slide-overlay {
-      background: linear-gradient(135deg, rgba(102, 126, 234, 0.9), rgba(118, 75, 162, 0.9));
-    }
-
-    .text-box {
-      background: rgba(0, 0, 0, 0.6);
-      padding: 2em;
-      border-radius: 12px;
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+    .reveal p,
+    .reveal li {
+      font-size: 15pt;
+      line-height: 1.5;
+      color: var(--text);
     }
 
     .reveal ul {
       list-style: none;
+      padding-left: 1.2em;
+      margin: 0;
+    }
+
+    .reveal ul li {
+      position: relative;
+      padding-left: 0;
+      margin-bottom: 8px;
     }
 
     .reveal ul li::before {
-      content: "→";
-      color: var(--primary-color);
+      content: "\\25B8";
+      color: var(--accent);
+      position: absolute;
+      left: -1em;
       font-weight: bold;
-      display: inline-block;
-      width: 1em;
-      margin-left: -1em;
     }
 
-    .highlight-box {
-      background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-      padding: 1.5em;
-      border-radius: 12px;
-      margin: 1em 0;
+    /* ---- IMAGES ---- */
+    .slide-img {
+      max-height: 40vh;
+      max-width: 100%;
+      width: 100%;
+      object-fit: cover;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
     }
 
-    .two-columns {
+    /* ---- LAYOUTS ---- */
+    .layout-side {
+      display: flex;
+      gap: 24px;
+      flex: 1;
+      min-height: 0;
+      align-items: flex-start;
+    }
+
+    .layout-side .text-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .layout-side .img-col {
+      flex: 0 0 44%;
+    }
+
+    .layout-side .img-col .slide-img {
+      width: 100%;
+      max-height: 52vh;
+    }
+
+    .layout-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 3em;
-      align-items: center;
+      gap: 20px;
+      flex: 1;
+      min-height: 0;
+      align-items: start;
     }
 
-    .img-caption {
-      font-size: 0.7em;
-      color: rgba(255, 255, 255, 0.7);
-      margin-top: 0.5em;
+    .grid-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .grid-cell .slide-img {
+      max-height: 35vh;
+    }
+
+    .layout-images {
+      display: grid;
+      gap: 12px;
+      min-height: 0;
+    }
+
+    .layout-images.cols-2 { grid-template-columns: 1fr 1fr; }
+    .layout-images.cols-3 { grid-template-columns: repeat(3, 1fr); }
+
+    .layout-images .slide-img {
+      max-height: 32vh;
+    }
+
+    /* ---- OVERLAY SLIDES ---- */
+    .overlay-slide { position: relative; }
+
+    .overlay-slide::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--overlay-bg);
+      z-index: 0;
+    }
+
+    .overlay-slide > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .overlay-box {
+      background: rgba(0,0,0,0.45);
+      padding: 24px 32px;
+      border-radius: 14px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1);
+      max-width: 720px;
+    }
+
+    /* ---- TEXT MODIFIERS ---- */
+    .text-large p,
+    .text-large li {
+      font-size: 18pt;
+    }
+
+    .caption {
+      font-size: 11pt;
+      color: var(--muted);
       font-style: italic;
+      margin-top: 4px;
     }
 
-    .reveal .progress {
-      background: rgba(0, 0, 0, 0.2);
-      color: var(--primary-color);
+    .accent-card {
+      background: var(--card-bg);
+      border-left: 4px solid var(--accent);
+      padding: 14px 18px;
+      border-radius: 0 8px 8px 0;
+      margin: 10px 0;
+      font-size: 15pt;
+      color: var(--text);
     }
 
-    .reveal .controls {
-      color: var(--primary-color);
-    }
+    /* ---- CONTROLS ---- */
+    .reveal .progress { color: var(--primary); }
+    .reveal .controls { color: var(--primary); }
+    .reveal .slide-number { color: var(--muted); font-size: 10pt; }
   </style>
 </head>
 <body>
@@ -390,52 +912,60 @@ export function generatePresentationPayload({
 
   <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/dist/reveal.js"></script>
   <script>
-    if (typeof Reveal !== "undefined") {
-      Reveal.initialize({
-        hash: true,
-        transition: "slide",
-        transitionSpeed: "default",
-        backgroundTransition: "fade",
-        controls: true,
-        progress: true,
-        center: true,
-        slideNumber: true,
-        autoAnimateDuration: 0.5,
-      });
-    } else {
-      console.warn("Reveal.js failed to load.");
-    }
+    // Use 'load' event to guarantee reveal.js + all assets are ready
+    window.addEventListener('load', function() {
+      if (typeof Reveal !== 'undefined') {
+        Reveal.initialize({
+          hash: true,
+          transition: 'slide',
+          transitionSpeed: 'default',
+          backgroundTransition: 'fade',
+          controls: true,
+          progress: true,
+          center: false,
+          slideNumber: true,
+          autoAnimateDuration: 0.7,
+          fragments: true,
+        });
+      }
+    });
   </script>
 </body>
 </html>`;
-
-  return {
-    error: false,
-    title,
-    slideCount: slides.length + 2,
-    htmlContent,
-    colorScheme,
-    message: `Successfully created presentation "${title}" with ${slides.length + 2} slides. The presentation includes rich visuals, image frames, and smooth animations. Open the HTML file in a browser to view.`,
-  };
 }
+
+// ── Tool definitions ────────────────────────────────────────────────
 
 export const schedulePresentationHeadingsTool = tool({
   description:
     "Draft presentation heading overview first (HITL). Return proposed title, slide count, and editable headings for user confirmation before generating HTML.",
   inputSchema: headingDraftInputSchema,
-  execute: async ({ topic, title, subtitle, slideCount, headings, audience, objective }) => {
+  execute: async ({
+    topic,
+    title,
+    subtitle,
+    slideCount,
+    headings,
+    audience,
+    objective,
+  }) => {
     const normalizedCount = Math.max(
       3,
-      Math.min(20, slideCount ?? headings?.length ?? (topic.length > 80 ? 8 : 6))
+      Math.min(
+        20,
+        slideCount ?? headings?.length ?? (topic.length > 80 ? 8 : 6)
+      )
     );
 
-    const normalizedHeadings = (headings?.filter(Boolean) ?? buildHeuristicHeadings(topic, normalizedCount)).slice(
-      0,
-      normalizedCount
-    );
+    const normalizedHeadings = (
+      headings?.filter(Boolean) ??
+      buildHeuristicHeadings(topic, normalizedCount)
+    ).slice(0, normalizedCount);
 
     while (normalizedHeadings.length < normalizedCount) {
-      normalizedHeadings.push(`${topic} — Slide ${normalizedHeadings.length + 1}`);
+      normalizedHeadings.push(
+        `${topic} — Slide ${normalizedHeadings.length + 1}`
+      );
     }
 
     return {
@@ -446,7 +976,7 @@ export const schedulePresentationHeadingsTool = tool({
         subtitle: subtitle || "",
         slideCount: normalizedCount,
         headings: normalizedHeadings,
-        colorScheme: "tech" as const,
+        colorScheme: "auto" as const,
       },
       reasoning: `Prepared a ${normalizedCount}-slide structure${audience ? ` for ${audience}` : ""}${
         objective ? ` focused on ${objective}` : ""
@@ -456,31 +986,27 @@ export const schedulePresentationHeadingsTool = tool({
 });
 
 export const createPresentationTool = tool({
-  description: `Create a beautiful, visual-rich HTML presentation using reveal.js. 
-  
-  IMPORTANT INSTRUCTIONS FOR CREATING PRESENTATIONS:
-  
-  1. ALWAYS include relevant images on every slide (minimum 1 per slide, ideally 2-3 for content slides)
-  2. Use Unsplash API for images: https://source.unsplash.com/1600x900/?keyword1,keyword2
-  3. Apply CSS image frame classes: img-elevated, img-rounded-border, img-polaroid, img-glass, img-neon
-  4. Add fragment animations to text and images: class="fragment fade-in", "fragment zoom-in", etc.
-  5. Use data-transition attributes on sections: zoom, slide, convex, fade
-  6. Create a title slide with hero image background
-  7. Include section dividers with full-screen background images
-  8. Use two-column layouts when comparing/contrasting concepts
-  9. Apply consistent color scheme using CSS variables
-  10. Add image captions for context
-  
-  Example slide with image:
-  <section data-transition="slide">
-    <h2>Innovation in Action</h2>
-    <img src="https://source.unsplash.com/1200x600/?innovation,technology" class="img-elevated fragment fade-up">
-    <p class="img-caption">Leading the way in technological advancement</p>
-  </section>
-  
-  The presentation should be visually stunning, engaging, and professionally designed.`,
+  description: `Create a vibrant, topic-aware HTML presentation using reveal.js.
+
+  IMPORTANT:
+  1. Include relevant images on every content slide (1-2 per slide)
+  2. Use Unsplash for images: https://source.unsplash.com/1600x900/?keyword1,keyword2
+  3. Use fragment animations on text and images for progressive reveal
+  4. Use data-transition on sections: slide, zoom, convex, fade
+  5. Content must be concise — short headings (2-8 words), 3-5 bullet points max per slide
+  6. Text is placed BESIDE images, never below where it can clip
+  7. Color scheme is auto-detected from topic — the presentation matches the topic vibe
+  8. Closing slide should vary — not always just "Thank You"
+  9. DO NOT output slide outlines or summaries in chat text — the UI card handles display`,
   inputSchema: createPresentationInputSchema,
-  execute: async ({ title, subtitle, topic, slides, colorScheme = "tech", customColors }) => {
+  execute: async ({
+    title,
+    subtitle,
+    topic,
+    slides,
+    colorScheme = "auto",
+    customColors,
+  }) => {
     try {
       return generatePresentationPayload({
         title,
@@ -493,15 +1019,13 @@ export const createPresentationTool = tool({
     } catch (err) {
       return {
         error: true,
-        message: err instanceof Error ? err.message : "Failed to create presentation",
+        message:
+          err instanceof Error ? err.message : "Failed to create presentation",
       };
     }
   },
 });
 
-/**
- * Export all slides tools
- */
 export const slidesTools = {
   schedulePresentationHeadings: schedulePresentationHeadingsTool,
   createPresentation: createPresentationTool,

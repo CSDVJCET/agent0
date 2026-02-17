@@ -86,32 +86,62 @@ function getDisplayTextContent(
     return rawTextContent;
   }
 
-  const hasPresentationTool = toolInvocations.some((part) => {
-    if (!part || typeof part !== "object" || !("type" in part) || typeof part.type !== "string") {
-      return false;
-    }
+  // Check for ANY slides tool (heading plan OR final creation)
+  const SLIDES_TOOL_NAMES = ["createPresentation", "schedulePresentationHeadings"];
 
-    if (part.type === "tool-createPresentation") {
-      return true;
+  const extractToolName = (part: any): string | null => {
+    if (!part || typeof part !== "object") return null;
+    if (typeof part.type === "string" && part.type.startsWith("tool-")) {
+      return part.type.slice(5);
     }
-
-    if ("toolName" in part && typeof part.toolName === "string") {
-      return part.toolName === "createPresentation";
+    if (typeof part.toolName === "string") return part.toolName;
+    if (part.toolInvocation && typeof part.toolInvocation.toolName === "string") {
+      return part.toolInvocation.toolName;
     }
+    return null;
+  };
 
-    return false;
+  const hasSlidesTool = toolInvocations.some((part) => {
+    const name = extractToolName(part);
+    return name !== null && SLIDES_TOOL_NAMES.includes(name);
   });
 
-  if (!hasPresentationTool) {
+  if (!hasSlidesTool) {
     return rawTextContent;
   }
 
-  const withoutHtmlDocument = rawTextContent
-    .replace(/<!DOCTYPE html[\s\S]*?<\/html>/gi, "")
-    .replace(/<html[\s\S]*?<\/html>/gi, "")
-    .trim();
+  // Check if the tool has produced a result (not just pending)
+  const hasSlidesResult = toolInvocations.some((part: any) => {
+    const name = extractToolName(part);
+    if (!name || !SLIDES_TOOL_NAMES.includes(name)) return false;
 
-  return withoutHtmlDocument;
+    const state = part.state || part.toolInvocation?.state || "";
+    const hasResult =
+      state === "result" ||
+      state === "output-available" ||
+      part.result !== undefined ||
+      part.output !== undefined ||
+      part.toolInvocation?.result !== undefined;
+    return hasResult;
+  });
+
+  if (!hasSlidesResult) {
+    return rawTextContent;
+  }
+
+  const normalizedText = rawTextContent.trim();
+  const isClarificationPrompt =
+    normalizedText.length > 0 &&
+    (/[?]\s*$/.test(normalizedText) ||
+      /^(can|could|would|will|do|does|did|is|are|should|which|what|when|where|who|how)\b/i.test(
+        normalizedText
+      ));
+
+  if (isClarificationPrompt) {
+    return normalizedText;
+  }
+
+  return "";
 }
 
 type ChatStatus = UseChatHelpers<MyUIMessage>["status"];
@@ -177,7 +207,7 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
             const reasoning = getMessageReasoning(message);
             const toolInvocations = getToolInvocations(message);
             const rawTextContent = getMessageTextContent(message);
-            const textContent = getDisplayTextContent(message, rawTextContent, message.parts);
+            const textContent = getDisplayTextContent(message, rawTextContent, toolInvocations);
             const sources = getMessageSources(message);
             const isLastMessage = lastMessage?.id === message.id;
             const hasAssistantContent =

@@ -8,7 +8,7 @@ const createSlidesSchema = z.object({
   topic: z.string().min(1),
   slideCount: z.number().min(3).max(20),
   headings: z.array(z.string().min(1)).min(3),
-  colorScheme: z.enum(["tech", "energy", "nature", "luxury", "custom"]).optional(),
+  colorScheme: z.enum(["auto", "tech", "energy", "nature", "luxury", "ocean", "sunset", "corporate", "creative", "medical", "finance", "education", "minimal", "warm", "custom"]).optional(),
   customColors: z
     .object({
       primary: z.string().optional(),

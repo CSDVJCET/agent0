@@ -563,7 +563,7 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
     : "";
 
   const slidesGuidance = mentionedTools.some(t => ["slides", "presentation", "ppt"].includes(t.toLowerCase()))
-    ? ` ${SLIDES_PROMPT}\n\nSlides workflow is mandatory: first call schedulePresentationHeadings to produce a pending confirmation heading plan (no HTML output). Wait for user confirmation in UI. Only then call createPresentation with finalized headings and content. Never output raw HTML directly as assistant text.`
+    ? ` ${SLIDES_PROMPT}\n\nSlides workflow is mandatory: first call schedulePresentationHeadings to produce a pending confirmation heading plan (no HTML output). Wait for user confirmation in UI. Only then call createPresentation with finalized headings and content. Never output raw HTML directly as assistant text. When createPresentation succeeds and the presentation card/tool UI is available, do not output slide outlines, summaries, or duplicate narrative text in chat. Only send assistant text if you must ask a direct clarification question due to missing required inputs.`
     : "";
 
   // PDF guidance removed — PDF operations are handled client-side
