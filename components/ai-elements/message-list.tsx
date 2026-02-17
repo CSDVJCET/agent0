@@ -152,9 +152,10 @@ export type MessageListProps = {
   status: ChatStatus;
   onRegenerate: () => void;
   error?: Error | undefined;
+  model?: string;
 };
 
-export function MessageList({ messages, isLoading, status, onRegenerate, error }: MessageListProps) {
+export function MessageList({ messages, isLoading, status, onRegenerate, error, model }: MessageListProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -795,6 +796,7 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
                                 toolCallId={toolInvocation.toolCallId}
                                 presentationDetails={result.presentationDetails}
                                 reasoning={result.reasoning}
+                                model={model}
                               />
                             );
                           }

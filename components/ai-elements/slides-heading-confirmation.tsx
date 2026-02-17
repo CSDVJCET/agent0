@@ -46,12 +46,14 @@ interface SlidesHeadingConfirmationProps {
   toolCallId: string;
   presentationDetails: PresentationHeadingDetails;
   reasoning?: string;
+  model?: string;
 }
 
 export function SlidesHeadingConfirmation({
   toolCallId,
   presentationDetails,
   reasoning,
+  model,
 }: SlidesHeadingConfirmationProps) {
   const [title, setTitle] = useState(presentationDetails.title || "");
   const [subtitle, setSubtitle] = useState(presentationDetails.subtitle || "");
@@ -105,6 +107,7 @@ export function SlidesHeadingConfirmation({
           slideCount: cleanedHeadings.length,
           headings: cleanedHeadings,
           colorScheme: presentationDetails.colorScheme || "auto",
+          model: model || "gemini-2.0-flash-exp",
         }),
       });
 

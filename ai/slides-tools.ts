@@ -9,6 +9,53 @@ import { z } from "zod";
  * downloaded modes.
  */
 
+// ── Unsplash API ────────────────────────────────────────────────────
+
+/**
+ * Search Unsplash for relevant images using the API.
+ * Returns an array of image URLs (one per query).
+ */
+export async function searchUnsplashImages(
+  queries: string[],
+  fallbackTopic: string
+): Promise<(string | null)[]> {
+  const accessKey = process.env.UNSPLASH_ACCESS_KEY;
+  if (!accessKey) {
+    console.warn("UNSPLASH_ACCESS_KEY not set, falling back to picsum");
+    return queries.map(() => null);
+  }
+
+  const results = await Promise.all(
+    queries.map(async (query, idx) => {
+      try {
+        const searchQuery = encodeURIComponent(query);
+        const res = await fetch(
+          `https://api.unsplash.com/search/photos?query=${searchQuery}&per_page=3&orientation=landscape`,
+          {
+            headers: { Authorization: `Client-ID ${accessKey}` },
+          }
+        );
+        if (!res.ok) {
+          console.warn(`Unsplash search failed for "${query}":`, res.status);
+          return null;
+        }
+        const data = await res.json();
+        if (data.results && data.results.length > 0) {
+          // Pick a varied result based on index to avoid same image
+          const photo = data.results[idx % data.results.length];
+          return photo.urls?.regular || photo.urls?.small || null;
+        }
+        return null;
+      } catch (err) {
+        console.warn(`Unsplash fetch error for "${query}":`, err);
+        return null;
+      }
+    })
+  );
+
+  return results;
+}
+
 // ── Schema ──────────────────────────────────────────────────────────
 
 const slideLayoutSchema = z
@@ -42,6 +89,7 @@ const presentationSlideSchema = z.object({
     .optional()
     .describe("Number of images (0-3, default 1)"),
   transition: slideTransitionSchema.describe("Slide transition effect"),
+  unsplashImageUrl: z.string().optional().describe("Real Unsplash image URL fetched by API"),
 });
 
 const colorSchemeSchema = z.enum([
@@ -85,6 +133,23 @@ const createPresentationInputSchema = z.object({
     })
     .optional()
     .describe("Custom color overrides (only when colorScheme is 'custom')"),
+  agentColors: z
+    .object({
+      primary: z.string(),
+      secondary: z.string(),
+      accent: z.string(),
+      bg: z.string(),
+      text: z.string(),
+      muted: z.string(),
+      cardBg: z.string(),
+      overlayBg: z.string(),
+    })
+    .optional()
+    .describe("Full color palette from AI agent (overrides all other color settings)"),
+  unsplashImages: z
+    .array(z.string().nullable())
+    .optional()
+    .describe("Array of real Unsplash image URLs (one per slide)"),
 });
 
 const headingDraftInputSchema = z.object({
@@ -350,14 +415,6 @@ const sanitizeSeed = (value: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 60) || "slide";
 
-const buildUnsplashUrl = (
-  width: number,
-  height: number,
-  keywords: string,
-  index: number
-) =>
-  `https://source.unsplash.com/${width}x${height}/?${encodeURIComponent(keywords)},${index}`;
-
 const buildFallbackImageUrl = (
   width: number,
   height: number,
@@ -368,16 +425,21 @@ const buildFallbackImageUrl = (
   return `https://picsum.photos/seed/${seed}/${width}/${height}`;
 };
 
+/** Build an image tag, preferring real Unsplash URLs when available. */
 const imageTag = (
   width: number,
   height: number,
   keywords: string,
   index: number,
-  className = ""
+  className = "",
+  realImageUrl?: string
 ) => {
-  const src = buildUnsplashUrl(width, height, keywords, index);
+  const src = realImageUrl || buildFallbackImageUrl(width, height, keywords, index);
   const fallback = buildFallbackImageUrl(width, height, keywords, index);
-  return `<img src="${src}" data-fallback-src="${fallback}" onerror="if(this.dataset.fallbackSrc){this.src=this.dataset.fallbackSrc;this.removeAttribute('data-fallback-src');}" class="${className}" alt="">`;
+  if (realImageUrl) {
+    return `<img src="${src}" class="${className}" alt="" loading="lazy">`;
+  }
+  return `<img src="${src}" data-fallback-src="${fallback}" onerror="if(this.dataset.fallbackSrc){this.src=this.dataset.fallbackSrc;this.removeAttribute('data-fallback-src');}" class="${className}" alt="" loading="lazy">`;
 };
 
 // ── Heading helpers ─────────────────────────────────────────────────
@@ -439,11 +501,14 @@ function renderContentSlide(
   slide: PresentationSlide,
   index: number,
   topic: string,
-  imgCounter: { value: number }
+  imgCounter: { value: number },
+  unsplashImages?: (string | null)[]
 ): string {
   const transition = slide.transition || "slide";
   const layout = slide.layout || "text-image-split";
   const keywords = slide.imageKeywords?.join(",") || topic;
+  // Use per-slide Unsplash URL if available, or the array-based one
+  const realImgUrl = slide.unsplashImageUrl || unsplashImages?.[index] || undefined;
   const contentLines = slide.content
     .split("\n")
     .map((l) => l.trim())
@@ -461,7 +526,7 @@ function renderContentSlide(
 
   // ─── Full-image overlay ───
   if (layout === "full-image-overlay") {
-    const bgImg = buildUnsplashUrl(1600, 900, keywords, imgCounter.value++);
+    const bgImg = realImgUrl || buildFallbackImageUrl(1600, 900, keywords, imgCounter.value++);
     return `
       <section data-transition="${transition}" data-background-image="${bgImg}" data-background-size="cover" class="overlay-slide">
         <div class="overlay-box">
@@ -478,7 +543,7 @@ function renderContentSlide(
         <h2>${slide.title}</h2>
         <div class="layout-grid">
           <div class="grid-cell">
-            ${imageTag(600, 400, keywords, imgCounter.value++, "slide-img fragment fade-up")}
+            ${imageTag(600, 400, keywords, imgCounter.value++, "slide-img fragment fade-up", realImgUrl)}
             <p class="fragment fade-in">${contentLines[0] || slide.content}</p>
           </div>
           <div class="grid-cell">
@@ -498,8 +563,8 @@ function renderContentSlide(
         <div class="layout-images cols-${count}">
           ${Array.from({ length: count })
             .map(
-              () =>
-                `<div class="fragment fade-up">${imageTag(400, 300, keywords, imgCounter.value++, "slide-img")}</div>`
+              (_, gi) =>
+                `<div class="fragment fade-up">${imageTag(400, 300, keywords, imgCounter.value++, "slide-img", gi === 0 ? realImgUrl : undefined)}</div>`
             )
             .join("")}
         </div>
@@ -522,7 +587,8 @@ function renderContentSlide(
     500,
     keywords,
     imgCounter.value++,
-    "slide-img fragment fade-up"
+    "slide-img fragment fade-up",
+    realImgUrl
   );
 
   // Alternate image side for visual variety
@@ -559,10 +625,10 @@ function renderClosingSlide(
   const keywords = topic.split(" ").slice(0, 3).join(",");
 
   if (variant === 0) {
-    const bgImg = buildUnsplashUrl(
+    const bgImg = buildFallbackImageUrl(
       1600,
       900,
-      `${keywords},conclusion`,
+      `${keywords}-conclusion`,
       imgCounter.value++
     );
     return `
@@ -589,10 +655,10 @@ function renderClosingSlide(
   }
 
   if (variant === 2) {
-    const bgImg = buildUnsplashUrl(
+    const bgImg = buildFallbackImageUrl(
       1600,
       900,
-      `${keywords},future`,
+      `${keywords}-future`,
       imgCounter.value++
     );
     return `
@@ -624,10 +690,14 @@ export function generatePresentationPayload({
   slides,
   colorScheme = "auto",
   customColors,
+  agentColors,
+  unsplashImages,
 }: CreatePresentationInput) {
-  // Resolve colors
+  // Resolve colors — prefer agent-generated colors, then custom, then auto
   let colors: ColorPalette;
-  if (colorScheme === "custom" && customColors) {
+  if (agentColors) {
+    colors = agentColors;
+  } else if (colorScheme === "custom" && customColors) {
     colors = {
       ...COLOR_PALETTES.tech,
       primary: customColors.primary || COLOR_PALETTES.tech.primary,
@@ -639,12 +709,8 @@ export function generatePresentationPayload({
   }
 
   const titleKeywords = topic.split(" ").slice(0, 3).join(",");
-  const titleBgImg = buildUnsplashUrl(
-    1600,
-    900,
-    `${titleKeywords},background,dark`,
-    0
-  );
+  // Use first unsplash image as title background if available
+  const titleBgImg = unsplashImages?.[0] || buildFallbackImageUrl(1600, 900, `${titleKeywords}-background`, 0);
   const imgCounter = { value: 1 };
 
   // Title slide
@@ -656,7 +722,7 @@ export function generatePresentationPayload({
 
   // Content slides
   for (let i = 0; i < slides.length; i++) {
-    slidesHtml += renderContentSlide(slides[i], i, topic, imgCounter);
+    slidesHtml += renderContentSlide(slides[i], i, topic, imgCounter, unsplashImages);
   }
 
   // Closing slide (varied)

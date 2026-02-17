@@ -436,6 +436,7 @@ export function ChatUI() {
             onRegenerate={handleRegenerate}
             status={status}
             error={error}
+            model={selectedModel.id}
           />
         </div>
 
