@@ -506,6 +506,7 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
       // Slides/Presentation tools
       if (lowerToolName === "slides" || lowerToolName === "presentation" || lowerToolName === "ppt") {
         if (isToolInstalled("slides")) {
+          tools.schedulePresentationHeadings = slidesTools.schedulePresentationHeadings;
           tools.createPresentation = slidesTools.createPresentation;
         } else {
           console.warn("Slides tool mentioned but not installed");
@@ -562,7 +563,7 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
     : "";
 
   const slidesGuidance = mentionedTools.some(t => ["slides", "presentation", "ppt"].includes(t.toLowerCase()))
-    ? ` ${SLIDES_PROMPT}\n\nWhen creating presentations, you MUST follow the guidelines above. Include relevant images on every slide, apply CSS image frame classes, add fragment animations, and create visually stunning slides.`
+    ? ` ${SLIDES_PROMPT}\n\nSlides workflow is mandatory: first call schedulePresentationHeadings to produce a pending confirmation heading plan (no HTML output). Wait for user confirmation in UI. Only then call createPresentation with finalized headings and content. Never output raw HTML directly as assistant text.`
     : "";
 
   // PDF guidance removed — PDF operations are handled client-side

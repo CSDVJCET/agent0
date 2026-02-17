@@ -51,6 +51,8 @@ export function getToolTitle(toolName: string): string {
     scheduleIssueCreation: "Schedule Issue",
     schedulePRCreation: "Schedule PR",
     scheduleMerge: "Schedule Merge",
+    schedulePresentationHeadings: "Plan Slides",
+    createPresentation: "Create Presentation",
   };
   return titles[toolName] || toolName;
 }

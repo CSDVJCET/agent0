@@ -4,7 +4,6 @@ import { motion } from "motion/react";
 import { PresentationIcon, DownloadIcon, ExternalLinkIcon, EyeIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { cn } from "@/lib/utils";
 
 interface PresentationResultProps {
   title: string;
@@ -26,11 +25,15 @@ export function PresentationResult({
   const [isDownloading, setIsDownloading] = useState(false);
   const [isOpening, setIsOpening] = useState(false);
 
+  const createPresentationBlobUrl = () => {
+    const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
+    return URL.createObjectURL(blob);
+  };
+
   const handleDownload = () => {
     setIsDownloading(true);
     try {
-      const blob = new Blob([htmlContent], { type: "text/html" });
-      const url = URL.createObjectURL(blob);
+      const url = createPresentationBlobUrl();
       const a = document.createElement("a");
       a.href = url;
       // Clean filename: remove special chars, replace with underscores, clean up multiple/trailing underscores
@@ -52,12 +55,13 @@ export function PresentationResult({
   const handleOpenInNewTab = () => {
     setIsOpening(true);
     try {
-      const blob = new Blob([htmlContent], { type: "text/html" });
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank");
-      // Longer timeout to ensure the new tab has loaded the content
-      // The browser will also clean up when the page is closed
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      const url = createPresentationBlobUrl();
+      const opened = window.open(url, "_blank", "noopener,noreferrer");
+      if (!opened) {
+        URL.revokeObjectURL(url);
+        throw new Error("Popup blocked. Please allow popups for this site to open the presentation.");
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
     } finally {
       setTimeout(() => setIsOpening(false), 1000);
     }

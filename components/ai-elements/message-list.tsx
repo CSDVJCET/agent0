@@ -55,6 +55,7 @@ import { TaskUpdateConfirmation } from "@/components/ai-elements/task-update-con
 import { TaskCompleteDisplay } from "@/components/ai-elements/task-complete-display";
 import { PdfResult, PdfLoading } from "@/components/ai-elements/pdf-result";
 import { PresentationResult, PresentationLoading } from "@/components/ai-elements/presentation-result";
+import { SlidesHeadingConfirmation } from "@/components/ai-elements/slides-heading-confirmation";
 import {
   CopyIcon,
   RefreshCwIcon,
@@ -75,6 +76,43 @@ import {
 import type { MyUIMessage, PdfOperationResult } from "@/types/chat";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Weather, WeatherLoading } from "@/components/weather";
+
+function getDisplayTextContent(
+  message: MyUIMessage,
+  rawTextContent: string,
+  toolInvocations: MyUIMessage["parts"]
+): string {
+  if (message.role !== "assistant") {
+    return rawTextContent;
+  }
+
+  const hasPresentationTool = toolInvocations.some((part) => {
+    if (!part || typeof part !== "object" || !("type" in part) || typeof part.type !== "string") {
+      return false;
+    }
+
+    if (part.type === "tool-createPresentation") {
+      return true;
+    }
+
+    if ("toolName" in part && typeof part.toolName === "string") {
+      return part.toolName === "createPresentation";
+    }
+
+    return false;
+  });
+
+  if (!hasPresentationTool) {
+    return rawTextContent;
+  }
+
+  const withoutHtmlDocument = rawTextContent
+    .replace(/<!DOCTYPE html[\s\S]*?<\/html>/gi, "")
+    .replace(/<html[\s\S]*?<\/html>/gi, "")
+    .trim();
+
+  return withoutHtmlDocument;
+}
 
 type ChatStatus = UseChatHelpers<MyUIMessage>["status"];
 
@@ -136,9 +174,10 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
         <ConversationContent className="max-w-3xl mx-auto w-full py-10 px-4 lg:px-0 gap-8">
         <AnimatePresence initial={false}>
           {deduplicatedMessages.map((message,messageIndex) => {
-            const textContent = getMessageTextContent(message);
             const reasoning = getMessageReasoning(message);
             const toolInvocations = getToolInvocations(message);
+            const rawTextContent = getMessageTextContent(message);
+            const textContent = getDisplayTextContent(message, rawTextContent, message.parts);
             const sources = getMessageSources(message);
             const isLastMessage = lastMessage?.id === message.id;
             const hasAssistantContent =
@@ -714,6 +753,21 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
                               </motion.div>
                             </div>
                           );
+                        }
+
+                        // Special rendering for Presentation tool - wrapped in Tool UI
+                        if (toolInvocation.toolName === "schedulePresentationHeadings" && isCompleted) {
+                          const result = toolInvocation.result;
+                          if (result?.status === "pending_confirmation") {
+                            return (
+                              <SlidesHeadingConfirmation
+                                key={toolInvocation.toolCallId}
+                                toolCallId={toolInvocation.toolCallId}
+                                presentationDetails={result.presentationDetails}
+                                reasoning={result.reasoning}
+                              />
+                            );
+                          }
                         }
 
                         // Special rendering for Presentation tool - wrapped in Tool UI
