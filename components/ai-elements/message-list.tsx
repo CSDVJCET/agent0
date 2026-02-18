@@ -154,9 +154,10 @@ export type MessageListProps = {
   error?: Error | undefined;
   containerRef?: React.RefObject<HTMLDivElement | null>;
   onRefHydrated?: () => void;
+  model?: string;
 };
 
-export function MessageList({ messages, isLoading, status, onRegenerate, error, containerRef, onRefHydrated }: MessageListProps) {
+export function MessageList({ messages, isLoading, status, onRegenerate, error, containerRef, onRefHydrated, model }: MessageListProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const internalScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = containerRef || internalScrollContainerRef;
