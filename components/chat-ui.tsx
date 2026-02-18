@@ -612,7 +612,7 @@ export function ChatUI() {
                       error={error}
                       containerRef={modalScrollRef}
                       onRefHydrated={() => setIsModalRefHydrated(true)}
-                      model={selectedModel}
+                      model={selectedModel.id}
                     />
                   </div>
                 </motion.div>
