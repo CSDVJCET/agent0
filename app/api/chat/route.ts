@@ -1,4 +1,4 @@
-import { google, GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
+import { google } from "@ai-sdk/google";
 import { cohere } from "@ai-sdk/cohere";
 import { createOpenAI } from "@ai-sdk/openai";
 import { streamText, convertToModelMessages, stepCountIs } from "ai";
@@ -77,21 +77,22 @@ function sanitizeToolParts(messages: MyUIMessage[]): MyUIMessage[] {
         return msg;
       }
 
-      const sanitizedParts = msg.parts.filter((part: any) => {
+      const sanitizedParts = msg.parts.filter((part: MyUIMessage["parts"][number]) => {
         if (!part || typeof part.type !== "string") {
           return false;
         }
 
         // Handle tool-invocation structure
         if (part.type === "tool-invocation") {
+          const p = part as any;
           const toolName =
-            part.toolName || part.toolInvocation?.toolName || part.tool?.name;
+            p.toolName || p.toolInvocation?.toolName || p.tool?.name;
           if (typeof toolName !== "string" || toolName.trim().length === 0) {
             return false;
           }
           // Ensure state exists
-          if (!part.state) {
-            part.state = part.result || part.output ? "result" : "call";
+          if (!p.state) {
+            p.state = p.result || p.output ? "result" : "call";
           }
           return true;
         }
@@ -103,14 +104,15 @@ function sanitizeToolParts(messages: MyUIMessage[]): MyUIMessage[] {
             return false;
           }
           // Ensure these have proper structure
-          if (!part.toolName) {
-            part.toolName = toolName;
+          const p = part as any;
+          if (!p.toolName) {
+            p.toolName = toolName;
           }
-          if (!part.state) {
-            part.state = part.result || part.output ? "result" : "call";
+          if (!p.state) {
+            p.state = p.result || p.output ? "result" : "call";
           }
-          if (!part.toolCallId) {
-            part.toolCallId = `generated-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          if (!p.toolCallId) {
+            p.toolCallId = `generated-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
           }
           return true;
         }
@@ -412,7 +414,7 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
   }
 
   // Build tools object based on mentioned tools and enabled features
-  let tools: Record<string, any> = {};
+  const tools: Record<string, any> = {};
   const hasCustomTools = mentionedTools.length > 0;
 
   // Add @mentioned custom tools (like weather)
@@ -535,8 +537,6 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
     }
   }
 
-  const hasTools = Object.keys(tools).length > 0;
-
   // Build guidance strings outside the retry loop to avoid redeclaration
   const calendarGuidance = mentionedTools.some(t => t.toLowerCase() === "calendar")
     ? " When the user asks about calendar events or scheduling, use the calendar tools to fetch, create, update, or delete events. For scheduling, use scheduleCalendarEvent to present options to the user first."
@@ -572,7 +572,7 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
   const maxRetries = 3;
   let currentModel = model;
   const attemptedModels = new Set<string>([currentModel]);
-  let lastError: any = null;
+  let lastError: unknown = null;
   const retryMetadata: ModelRetryMetadata = {
     originalModel: model,
     attemptedModels: [currentModel],
@@ -676,7 +676,7 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
           return undefined;
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       lastError = error;
       console.error(`Attempt ${attempt + 1} failed with model ${currentModel}:`, error);
 

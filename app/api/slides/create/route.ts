@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
     const modelId = parsed.model || "gemini-2.0-flash-exp";
     
     // Determine the model instance based on provider
-    let modelInstance: any;
+    let modelInstance;
     if (modelId.startsWith("groq:")) {
       const model = modelId.replace("groq:", "");
       modelInstance = groq(model);
@@ -179,7 +179,7 @@ ALWAYS keep backgrounds dark (low brightness) so text remains readable.`,
 
     // Fetch real Unsplash images for each slide
     const imageQueries = generated.slides.map((s) => s.imageSearchQuery);
-    const imageResults = await searchUnsplashImages(imageQueries, parsed.topic);
+    const imageResults = await searchUnsplashImages(imageQueries);
 
     // Build slides with real content and real images
     const slides: PresentationSlide[] = generated.slides.map((s, i) => ({

@@ -190,13 +190,13 @@ export function SlidesHeadingConfirmation({
               <Label htmlFor={`slides-title-${toolCallId}`} className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Presentation Title
               </Label>
-              <Input id={`slides-title-${toolCallId}`} value={title} onChange={(e) => setTitle(e.target.value)} disabled={status === "creating"} />
+              <Input id={`slides-title-${toolCallId}`} value={title} onChange={(e) => setTitle(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label htmlFor={`slides-topic-${toolCallId}`} className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Topic
               </Label>
-              <Input id={`slides-topic-${toolCallId}`} value={topic} onChange={(e) => setTopic(e.target.value)} disabled={status === "creating"} />
+              <Input id={`slides-topic-${toolCallId}`} value={topic} onChange={(e) => setTopic(e.target.value)} />
             </div>
           </div>
 
@@ -204,13 +204,13 @@ export function SlidesHeadingConfirmation({
             <Label htmlFor={`slides-subtitle-${toolCallId}`} className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Subtitle (optional)
             </Label>
-            <Input id={`slides-subtitle-${toolCallId}`} value={subtitle} onChange={(e) => setSubtitle(e.target.value)} disabled={status === "creating"} />
+            <Input id={`slides-subtitle-${toolCallId}`} value={subtitle} onChange={(e) => setSubtitle(e.target.value)} />
           </div>
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Slide Headings ({normalizedSlideCount})</Label>
-              <Button variant="outline" size="sm" onClick={handleAddSlide} disabled={status === "creating"} className="gap-1">
+              <Button variant="outline" size="sm" onClick={handleAddSlide} className="gap-1">
                 <PlusIcon className="w-3.5 h-3.5" />
                 Add Slide
               </Button>
@@ -220,12 +220,12 @@ export function SlidesHeadingConfirmation({
               {headings.map((heading, index) => (
                 <div key={`${toolCallId}-heading-${index}`} className="flex items-center gap-2">
                   <span className="w-7 text-xs text-muted-foreground text-right">{index + 1}.</span>
-                  <Input value={heading} onChange={(e) => handleHeadingChange(index, e.target.value)} disabled={status === "creating"} />
+                  <Input value={heading} onChange={(e) => handleHeadingChange(index, e.target.value)} />
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => handleRemoveSlide(index)}
-                    disabled={status === "creating" || headings.length <= 3}
+                    disabled={headings.length <= 3}
                   >
                     <TrashIcon className="w-4 h-4" />
                   </Button>
@@ -237,22 +237,13 @@ export function SlidesHeadingConfirmation({
           {status === "error" && errorMessage && <p className="text-sm text-destructive">{errorMessage}</p>}
 
           <div className="flex gap-3 pt-1">
-            <Button variant="outline" onClick={handleReject} disabled={status === "creating"} className="flex-1 gap-2">
+            <Button variant="outline" onClick={handleReject} className="flex-1 gap-2">
               <XIcon className="w-4 h-4" />
               Cancel
             </Button>
-            <Button onClick={handleConfirm} disabled={!isValid || status === "creating"} className="flex-1 gap-2">
-              {status === "creating" ? (
-                <>
-                  <Loader2Icon className="w-4 h-4 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <CheckIcon className="w-4 h-4" />
-                  Confirm & Generate
-                </>
-              )}
+            <Button onClick={handleConfirm} disabled={!isValid} className="flex-1 gap-2">
+              <CheckIcon className="w-4 h-4" />
+              Confirm & Generate
             </Button>
           </div>
         </div>

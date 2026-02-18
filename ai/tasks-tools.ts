@@ -76,16 +76,6 @@ function formatTaskDueDate(dateString: string, time?: string): string {
 }
 
 /**
- * Check if a time was explicitly mentioned in a date string
- */
-function hasExplicitTime(dateString: string | undefined): boolean {
-  if (!dateString) return false;
-  // Check for time patterns like "4 pm", "16:00", "4:30pm", etc.
-  return /\d{1,2}:\d{2}|(\d{1,2}\s*(am|pm|AM|PM))/i.test(dateString) ||
-         /T\d{2}:\d{2}/.test(dateString);
-}
-
-/**
  * Parse due date - Google Tasks stores full datetime in RFC 3339 format
  */
 function parseDueDateWithTime(isoString: string | undefined, notes: string | undefined): string | undefined {
@@ -207,7 +197,20 @@ async function tasksRequest<T>(
 /**
  * Parse Google Tasks task to simplified format
  */
-function parseTask(task: any) {
+interface GoogleTask {
+  id: string;
+  title?: string;
+  notes?: string;
+  status?: string;
+  due?: string;
+  completed?: string;
+  parent?: string;
+  position?: string;
+  updated?: string;
+  selfLink?: string;
+}
+
+function parseTask(task: GoogleTask) {
   const cleanNotes = task.notes?.replace(/\[PRIORITY:\s*\w+\]\s*/gi, '').replace(/\[TIME:\s*\d{2}:\d{2}\]\s*/gi, '').trim() || undefined;
   
   return {
@@ -226,10 +229,17 @@ function parseTask(task: any) {
   };
 }
 
+interface GoogleTaskList {
+  id: string;
+  title: string;
+  updated: string;
+  selfLink: string;
+}
+
 /**
  * Parse task list to simplified format
  */
-function parseTaskList(taskList: any) {
+function parseTaskList(taskList: GoogleTaskList) {
   return {
     id: taskList.id,
     title: taskList.title,
@@ -261,7 +271,7 @@ export const getTaskListsTool = tool({
         maxResults: String(maxResults || 100),
       });
 
-      const result = await tasksRequest<{ items: any[] }>(
+      const result = await tasksRequest<{ items: GoogleTaskList[] }>(
         accessToken,
         `/users/@me/lists?${params.toString()}`
       );

@@ -16,8 +16,7 @@ import { z } from "zod";
  * Returns an array of image URLs (one per query).
  */
 export async function searchUnsplashImages(
-  queries: string[],
-  fallbackTopic: string
+  queries: string[]
 ): Promise<(string | null)[]> {
   const accessKey = process.env.UNSPLASH_ACCESS_KEY;
   if (!accessKey) {

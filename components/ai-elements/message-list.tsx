@@ -53,7 +53,7 @@ import { TaskSchedulingConfirmation } from "@/components/ai-elements/task-schedu
 import { TaskDeleteConfirmation } from "@/components/ai-elements/task-delete-confirmation";
 import { TaskUpdateConfirmation } from "@/components/ai-elements/task-update-confirmation";
 import { TaskCompleteDisplay } from "@/components/ai-elements/task-complete-display";
-import { PdfResult, PdfLoading } from "@/components/ai-elements/pdf-result";
+import { PdfResult } from "@/components/ai-elements/pdf-result";
 import { PresentationResult, PresentationLoading } from "@/components/ai-elements/presentation-result";
 import { SlidesHeadingConfirmation } from "@/components/ai-elements/slides-heading-confirmation";
 import {
@@ -89,14 +89,14 @@ function getDisplayTextContent(
   // Check for ANY slides tool (heading plan OR final creation)
   const SLIDES_TOOL_NAMES = ["createPresentation", "schedulePresentationHeadings"];
 
-  const extractToolName = (part: any): string | null => {
+  const extractToolName = (part: MyUIMessage["parts"][number]): string | null => {
     if (!part || typeof part !== "object") return null;
-    if (typeof part.type === "string" && part.type.startsWith("tool-")) {
-      return part.type.slice(5);
+    if ("type" in part && typeof part.type === "string" && part.type.startsWith("tool-")) {
+      return (part.type as string).slice(5);
     }
-    if (typeof part.toolName === "string") return part.toolName;
-    if (part.toolInvocation && typeof part.toolInvocation.toolName === "string") {
-      return part.toolInvocation.toolName;
+    if ("toolName" in part && typeof part.toolName === "string") return part.toolName;
+    if ("toolInvocation" in part && part.toolInvocation && typeof (part.toolInvocation as any).toolName === "string") {
+      return (part.toolInvocation as any).toolName;
     }
     return null;
   };
@@ -111,17 +111,17 @@ function getDisplayTextContent(
   }
 
   // Check if the tool has produced a result (not just pending)
-  const hasSlidesResult = toolInvocations.some((part: any) => {
+  const hasSlidesResult = toolInvocations.some((part) => {
     const name = extractToolName(part);
     if (!name || !SLIDES_TOOL_NAMES.includes(name)) return false;
 
-    const state = part.state || part.toolInvocation?.state || "";
+    const t = (part as any).toolInvocation || part;
+    const state = (t as any).state || "";
     const hasResult =
       state === "result" ||
       state === "output-available" ||
-      part.result !== undefined ||
-      part.output !== undefined ||
-      part.toolInvocation?.result !== undefined;
+      (t as any).result !== undefined ||
+      (t as any).output !== undefined;
     return hasResult;
   });
 
@@ -158,7 +158,6 @@ export type MessageListProps = {
 export function MessageList({ messages, isLoading, status, onRegenerate, error, model }: MessageListProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const [mounted, setMounted] = useState(false);
   
   // Deduplicate messages to prevent React key collisions
   // This can happen during streaming updates or localStorage restoration
@@ -184,7 +183,6 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error, 
         || wrapperRef.current.firstElementChild as HTMLDivElement;
       if (scrollEl) {
         (scrollContainerRef as React.MutableRefObject<HTMLDivElement | null>).current = scrollEl;
-        setMounted(true);
       }
     }
   }, []);
@@ -194,12 +192,10 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error, 
       {/* Scroll Progress Indicator */}
       <div className="pointer-events-none absolute left-0 top-0 z-50 w-full">
         <div className="absolute left-0 top-0 h-1 w-full bg-muted/30" />
-        {mounted && (
-          <ScrollProgress
-            containerRef={scrollContainerRef}
-            className="absolute top-0 bg-primary"
-          />
-        )}
+        <ScrollProgress
+          containerRef={scrollContainerRef}
+          className="absolute top-0 bg-primary"
+        />
       </div>
       <Conversation className="h-full">
         <ConversationContent className="max-w-3xl mx-auto w-full py-10 px-4 lg:px-0 gap-8">
@@ -243,8 +239,8 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error, 
                     {message.role === "user" && message.parts && (
                       <div className="flex flex-wrap gap-2 mb-2">
                         {message.parts
-                          .filter((part: any) => part.type === "file")
-                          .map((part: any, i: number) => (
+                          .filter((part: MyUIMessage["parts"][number]) => "type" in part && part.type === "file")
+                          .map((part: MyUIMessage["parts"][number], i: number) => (
                             <div
                               key={i}
                               className="flex items-center gap-1.5 px-2 py-1 bg-background/20 rounded text-xs"
