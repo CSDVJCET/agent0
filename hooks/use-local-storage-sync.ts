@@ -128,7 +128,27 @@ export function useLocalStorageSync({
   useEffect(() => {
     if (isLoaded) {
       try {
-        const serialized = JSON.stringify(dedupedMessages);
+        // Strip large base64 data from messages before saving to localStorage
+        const messagesForStorage = dedupedMessages.map((msg) => {
+          if (msg.parts && Array.isArray(msg.parts)) {
+            const cleanedParts = msg.parts.map((part: any) => {
+              // Strip large base64 data URLs (>50KB) to save localStorage space
+              if (part.type === "file" && part.url && typeof part.url === "string") {
+                if (part.url.startsWith("data:") && part.url.length > 50000) {
+                  return { 
+                    type: "text", 
+                    text: `[${part.mediaType || "File"} attachment - ${part.name || "file"}]` 
+                  };
+                }
+              }
+              return part;
+            });
+            return { ...msg, parts: cleanedParts };
+          }
+          return msg;
+        });
+        
+        const serialized = JSON.stringify(messagesForStorage);
         localStorage.setItem(STORAGE_KEYS.MESSAGES, serialized);
       } catch (e) {
         if (e instanceof DOMException && e.name === "QuotaExceededError") {

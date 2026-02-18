@@ -58,7 +58,15 @@ export function ModelSelectorControl({
           <ChevronDownIcon className="size-3 text-muted-foreground" />
         </Button>
       </ModelSelectorTrigger>
-      <ModelSelectorContent>
+      <ModelSelectorContent 
+        side="bottom" 
+        align="center" 
+        sideOffset={12}
+        avoidCollisions={true}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+        }}
+      >
         <ModelSelectorInput placeholder="Search models..." />
         <ModelSelectorList>
           <ModelSelectorEmpty>No model found.</ModelSelectorEmpty>

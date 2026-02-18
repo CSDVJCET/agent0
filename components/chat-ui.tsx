@@ -1,24 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import type { MyUIMessage, PdfOperationResult } from "@/types/chat";
+import { StripLargeDataChatTransport } from "@/lib/chat-transport";
 
 // Components
 import { ChatHeader } from "@/components/chat-header";
 import { PromptInputArea } from "@/components/prompt-input-area";
 import { MessageList } from "@/components/ai-elements/message-list";
 import { AttachmentsPreview } from "@/components/ai-elements/attachments-preview";
-import { FeatureBadgesRow, FeatureBadge } from "@/components/ai-elements/feature-badges-row";
-import { ChatEmptyState } from "@/components/ai-elements/chat-empty-state";
 import { SuggestionsGrid } from "@/components/ai-elements/chat-suggestions-grid";
-import { TableOfContents } from "@/components/table-of-contents";
 import { IntegrationsModal } from "@/components/integrations-modal";
 import { IntegrationPanel } from "@/components/integration-panel";
 import { FileDropZone } from "@/components/file-drop-zone";
+import { ScrollProgress } from "@/components/ui/scroll-progress";
 
 // Hooks and Constants
 import { useChatState } from "@/hooks/use-chat-state";
@@ -29,6 +27,8 @@ import { useIntegrationHandlers } from "@/hooks/use-integration-handlers";
 import { MODELS, DEFAULT_SUGGESTIONS, STORAGE_KEYS } from "@/lib/chat-constants";
 
 export function ChatUI() {
+  const [isChatModalOpen, setIsChatModalOpen] = useState(false);
+
   // State management
   const state = useChatState();
   const {
@@ -58,7 +58,7 @@ export function ChatUI() {
     setMessages,
   } = useChat<MyUIMessage>({
     id: "gemini-chat",
-    transport: new DefaultChatTransport({
+    transport: new StripLargeDataChatTransport({
       api: "/api/chat",
     }),
     experimental_throttle: 50, // Throttle UI updates for better performance
@@ -113,6 +113,16 @@ export function ChatUI() {
 
   const isLoading = status === "streaming" || status === "submitted";
 
+  const modalScrollRef = useRef<HTMLDivElement>(null);
+  const [isModalRefHydrated, setIsModalRefHydrated] = useState(false);
+
+  // Reset hydration state when modal closes
+  useEffect(() => {
+    if (!isChatModalOpen) {
+      setIsModalRefHydrated(false);
+    }
+  }, [isChatModalOpen]);
+
   // One-time cleanup: remove any legacy PDF tool parts from message history
   // These were created by the old implementation and break the AI SDK's message processing
   useEffect(() => {
@@ -159,6 +169,7 @@ export function ChatUI() {
     setMessages([]);
     setAttachments([]);
     setInputValue("");
+    setIsChatModalOpen(false);
     localStorage.removeItem(STORAGE_KEYS.MESSAGES);
     // Clear the file input
     if (fileInputRef.current) {
@@ -166,9 +177,22 @@ export function ChatUI() {
     }
   }, [setMessages]);
 
+  // Handle Escape key to close modal
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isChatModalOpen) {
+        setIsChatModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [isChatModalOpen]);
+
   // Simplified handleSubmit using AI SDK's new API
   const handleSubmit = async (value: { text: string; files: any[] }) => {
     if (!value.text.trim() && attachments.length === 0) return;
+
+    setIsChatModalOpen(true);
 
     // --- PDF: handle entirely client-side (zero AI tokens) ---
     const isPdfOnly = mentionedTools.length > 0 && mentionedTools.every(t => t.toLowerCase() === "pdf");
@@ -371,6 +395,7 @@ export function ChatUI() {
 
   // Handle regenerate/reload
   const handleRegenerate = useCallback(() => {
+    setIsChatModalOpen(true);
     regenerate({
       body: {
         model: selectedModel.id,
@@ -392,27 +417,13 @@ export function ChatUI() {
   if (!isLoaded) return null;
 
   const isStarted = dedupedMessages.length > 0;
-  const hasCustomTools = mentionedTools.length > 0;
-  
-  const featureBadges: FeatureBadge[] = [
-    { label: "Google Search", enabled: enableSearch && !hasCustomTools, color: "blue" },
-    ...(selectedModel.supportsThinking
-      ? [{ label: "Thinking", enabled: enableThinking, color: "amber" as const }]
-      : []),
-    { label: "URL Context", enabled: !hasCustomTools, color: "green" },
-    { label: "Code Execution", enabled: !hasCustomTools, color: "purple" },
-    ...(hasCustomTools
-      ? mentionedTools.map((tool) => ({
-          label: `@${tool}`,
-          enabled: true,
-          color: "cyan" as const,
-        }))
-      : []),
-  ];
 
   return (
     <FileDropZone onFilesDropped={handleFilesDropped}>
-      <div className="flex h-screen w-full flex-col bg-background text-foreground bg-grid">
+      <div 
+        className="flex h-screen w-full flex-col text-foreground bg-cover bg-center bg-no-repeat selection:bg-[#8ca7bc]/30"
+        style={{ backgroundImage: 'url("/Dashboard.png")' }}
+      >
         {/* Header */}
         <ChatHeader
           models={MODELS}
@@ -425,74 +436,178 @@ export function ChatUI() {
         />
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-hidden relative flex flex-col">
-        <TableOfContents messages={dedupedMessages} />
-        
-        {/* Conversation Area */}
-        <div className={cn("flex-1 overflow-hidden relative", !isStarted && "hidden")}>
-          <MessageList 
-            messages={dedupedMessages} 
-            isLoading={isLoading} 
-            onRegenerate={handleRegenerate}
-            status={status}
-            error={error}
-            model={selectedModel.id}
-          />
-        </div>
-
-        {/* Input Area Container */}
-        <motion.div
-          className={cn(
-            "w-full px-4",
-            isStarted
-              ? "border-t bg-background/80 backdrop-blur-sm pb-6 pt-4"
-              : "flex-1 flex flex-col items-center justify-center pb-20"
-          )}
-          layout
-          transition={{ duration: 0.5, ease: "easeInOut" }}
-        >
-          <div className="max-w-3xl mx-auto w-full space-y-8">
-            {/* Empty State */}
-            {!isStarted && <ChatEmptyState />}
-
-            {/* Attachments Preview */}
-            <AttachmentsPreview attachments={attachments} onRemove={removeAttachment} />
-
-            {/* Prompt Input */}
-            <motion.div layout className="w-full">
-              <PromptInputArea
-                value={inputValue}
-                onChange={setInputValue}
-                onSubmit={handleSubmit}
-                isLoading={isLoading}
-                enableSearch={enableSearch}
-                onToggleSearch={() => setEnableSearch(!enableSearch)}
-                enableThinking={enableThinking}
-                thinkingSupported={selectedModel.supportsThinking}
-                onToggleThinking={() => {
-                  if (!selectedModel.supportsThinking) return;
-                  setEnableThinking((prev) => !prev);
-                }}
-                onFilesSelected={handleFileSelect}
-                mentionedTools={mentionedTools}
-                onToolMentionsChange={setMentionedTools}
-                addedIntegrations={addedIntegrations}
-              />
-            </motion.div>
-
-            {/* Feature Indicators - only show when chat hasn't started */}
-            {!isStarted && <FeatureBadgesRow badges={featureBadges} />}
-
-            {/* Suggestions Grid - only show when chat hasn't started */}
-            {!isStarted && (
+      <div className="flex-1 overflow-hidden relative">
+        {/* Empty State / Suggestions (when no messages) */}
+        {!isStarted && !isChatModalOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col items-center justify-center h-full px-4"
+          >
+            <div className="max-w-3xl w-full space-y-6 pb-32">
+              <div className="text-center space-y-3">
+                <h2 className="text-4xl font-bold text-foreground">What can I help you with?</h2>
+                <p className="text-lg text-foreground/60">Ask me anything or try one of these suggestions</p>
+              </div>
               <SuggestionsGrid
                 suggestions={DEFAULT_SUGGESTIONS}
                 onSuggestionClick={handleSuggestionClick}
               />
-            )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Input Area Container */}
+        <div className={cn(
+          "absolute inset-x-0 bottom-8 px-4 transition-all duration-300",
+          isChatModalOpen ? "z-60" : "z-20"
+        )}>
+          <div className="max-w-4xl mx-auto w-full flex flex-col items-center gap-3">
+            <PromptInputArea
+              value={inputValue}
+              onChange={setInputValue}
+              onSubmit={handleSubmit}
+              isLoading={isLoading}
+              enableSearch={enableSearch}
+              onToggleSearch={() => setEnableSearch(!enableSearch)}
+              enableThinking={enableThinking}
+              thinkingSupported={selectedModel.supportsThinking}
+              onToggleThinking={() => {
+                if (!selectedModel.supportsThinking) return;
+                setEnableThinking((prev) => !prev);
+              }}
+              onFilesSelected={handleFileSelect}
+              attachments={attachments}
+              onRemoveAttachment={removeAttachment}
+              mentionedTools={mentionedTools}
+              onToolMentionsChange={setMentionedTools}
+              addedIntegrations={addedIntegrations}
+              onUpArrow={() => setIsChatModalOpen(true)}
+            />
           </div>
-        </motion.div>
+        </div>
       </div>
+
+      {/* Liquid Glass Modal with Smooth Animation */}
+      <AnimatePresence>
+        {isChatModalOpen && (
+          <>
+            {/* Backdrop for clicking outside to close (Transparent, NO BLUR) */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsChatModalOpen(false)}
+              className="fixed inset-0 z-40" 
+            />
+
+            {/* Modal Container with Liquid Glass Effect */}
+            <motion.div
+              initial={{
+                opacity: 0,
+                scale: 0.92,
+                y: 40,
+              }}
+              animate={{
+                opacity: 1,
+                scale: 1,
+                y: 0,
+                top: attachments.length > 0 ? "40%" : "46%", // Shift up when attachments present
+              }}
+              exit={{
+                opacity: 0,
+                scale: 0.92,
+                y: 40,
+              }}
+              transition={{
+                duration: 0.5,
+                ease: [0.16, 1, 0.3, 1],
+              }}
+              className="fixed left-1/2 -translate-x-1/2 -translate-y-1/2 w-[85vw] max-w-6xl h-[75vh] z-50 overflow-hidden rounded-3xl no-horizontal-scroll"
+              style={{
+                background: "linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.1) 100%)",
+                backdropFilter: "blur(60px) saturate(180%)",
+                border: "1px solid rgba(255,255,255,0.3)",
+                boxShadow: "0 25px 80px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(255,255,255,0.1)",
+              }}
+            >
+              {/* Glass Shine Effect */}
+              <motion.div
+                initial={{ x: "-100%" }}
+                animate={{ x: "200%" }}
+                transition={{
+                  duration: 2,
+                  ease: [0.4, 0, 0.2, 1],
+                  delay: 0.2,
+                }}
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)",
+                  width: "40%",
+                }}
+              />
+
+              {/* Modal Content */}
+              <div className="relative h-full flex flex-col no-horizontal-scroll">
+                {/* Scroll Progress at the very top border */}
+                <div className="absolute top-0 left-0 w-full z-50 pointer-events-none">
+                   {isModalRefHydrated && (
+                     <ScrollProgress
+                        containerRef={modalScrollRef}
+                        className="h-1 bg-primary"
+                     />
+                   )}
+                </div>
+
+                {/* Close Button */}
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.3, duration: 0.3 }}
+                  onClick={() => setIsChatModalOpen(false)}
+                  className="absolute right-6 top-6 z-10 flex items-center justify-center size-12 rounded-full bg-black/10 backdrop-blur-xl border border-black/10 hover:bg-black/20 transition-all duration-200 group"
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <svg
+                    className="size-6 text-foreground/80 group-hover:text-foreground"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </motion.button>
+
+                {/* Messages Area with Custom Scrollbar */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2, duration: 0.4 }}
+                  className="flex-1 overflow-hidden px-8 pt-8 no-horizontal-scroll"
+                >
+                  <div className="h-full overflow-y-auto custom-scrollbar no-horizontal-scroll">
+                    <MessageList
+                      messages={dedupedMessages}
+                      isLoading={isLoading}
+                      onRegenerate={handleRegenerate}
+                      status={status}
+                      error={error}
+                      containerRef={modalScrollRef}
+                      onRefHydrated={() => setIsModalRefHydrated(true)}
+                    />
+                  </div>
+                </motion.div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       <IntegrationsModal
         isOpen={isIntegrationsModalOpen}

@@ -1,36 +1,43 @@
 "use client";
 
 import { useRef, useEffect, useState } from "react";
-import {
-  PromptInput,
-  PromptInputTextarea,
-  PromptInputSubmit,
-  PromptInputButton,
-} from "@/components/ai-elements/prompt-input";
-import { BrainIcon, CalendarIcon, CloudSunIcon, FileTextIcon, PaperclipIcon, SearchIcon, NetworkIcon, FileStackIcon } from "lucide-react";
+import { 
+  PaperclipIcon, 
+  ArrowUpIcon, 
+  CalendarIcon, 
+  FileTextIcon, 
+  NetworkIcon, 
+  FileStackIcon, 
+  CloudSunIcon 
+} from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
-import { ButtonGroup, ButtonGroupSeparator } from "@/components/ui/button-group";
-import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
-
-import { SpeechInput } from "@/components/ai-elements/speech-input";
-import { fetchInstalledTools, parseToolMentions, type InstalledTool } from "@/lib/tool-utils";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { SpeechInput } from "@/components/ai-elements/speech-input";
+import { fetchInstalledTools, type InstalledTool } from "@/lib/tool-utils";
+
+// Start of Selection
+import { AttachmentsPreview, type FileAttachment } from "@/components/ai-elements/attachments-preview";
 
 export type PromptInputAreaProps = {
   value: string;
   onChange: (value: string) => void;
   onSubmit: (data: { text: string; files: any[] }) => void;
   isLoading: boolean;
-  enableSearch: boolean;
-  onToggleSearch: () => void;
-  enableThinking: boolean;
-  onToggleThinking: () => void;
+  enableSearch?: boolean; // Kept for interface compatibility but unused in UI
+  onToggleSearch?: () => void; // Kept for interface compatibility
+  enableThinking?: boolean; // Kept for interface compatibility
+  onToggleThinking?: () => void; // Kept for interface compatibility
   thinkingSupported?: boolean;
   onFilesSelected: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  attachments: FileAttachment[];
+  onRemoveAttachment: (index: number) => void;
   mentionedTools?: string[];
   onToolMentionsChange?: (tools: string[]) => void;
   addedIntegrations?: string[];
-  onRefreshTools?: () => void; // New prop for triggering tool refresh
+  onRefreshTools?: () => void;
+  onUpArrow?: () => void; // New prop for reopening modal
 };
 
 export function PromptInputArea({
@@ -38,16 +45,13 @@ export function PromptInputArea({
   onChange,
   onSubmit,
   isLoading,
-  enableSearch,
-  onToggleSearch,
-  enableThinking,
-  onToggleThinking,
-  thinkingSupported = true,
   onFilesSelected,
+  attachments = [],
+  onRemoveAttachment = () => {},
   mentionedTools = [],
   onToolMentionsChange,
   addedIntegrations = [],
-  onRefreshTools,
+  onUpArrow,
 }: PromptInputAreaProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -55,12 +59,25 @@ export function PromptInputArea({
   const [showToolSuggestions, setShowToolSuggestions] = useState(false);
   const [toolQuery, setToolQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [isFocused, setIsFocused] = useState(false);
 
-  // Load available tools on mount and when integrations change
+  // Tool colors map
+  const TOOL_COLORS: Record<string, string> = {
+    calendar: "bg-orange-500/20 text-orange-600",
+    weather: "bg-sky-500/20 text-sky-600",
+    forms: "bg-purple-500/20 text-purple-600",
+    survey: "bg-purple-500/20 text-purple-600",
+    mermaid: "bg-pink-500/20 text-pink-600",
+    pdf: "bg-red-500/20 text-red-600",
+    gmail: "bg-blue-500/20 text-blue-600",
+    tasks: "bg-indigo-500/20 text-indigo-600",
+    default: "bg-neutral-500/20 text-neutral-800", // Default to black-ish/dark neutral as requested
+  };
+
+  // Load available tools
   useEffect(() => {
     fetchInstalledTools()
       .then((tools) => {
-        // Filter tools to only show installed ones based on addedIntegrations
         const installedTools = tools.filter(tool => 
           addedIntegrations.includes(tool.id)
         );
@@ -69,13 +86,42 @@ export function PromptInputArea({
       .catch((err) => console.error("Failed to load tools:", err));
   }, [addedIntegrations]);
 
-  // Parse tool mentions whenever value changes
-  // useEffect(() => {
-  //   const mentions = parseToolMentions(value);
-  //   if (JSON.stringify(mentions) !== JSON.stringify(mentionedTools)) {
-  //     onToolMentionsChange?.(mentions);
-  //   }
-  // }, [value, mentionedTools, onToolMentionsChange]);
+  // Handle auto-resize
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'; // Reset height
+      const scrollHeight = textareaRef.current.scrollHeight;
+      const maxHeight = 200; // Max height in px
+      textareaRef.current.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
+    }
+    // Sync scroll initially and on resize
+    if (renderRef.current && textareaRef.current) {
+        renderRef.current.scrollTop = textareaRef.current.scrollTop;
+    }
+  }, [value]);
+
+  const renderRef = useRef<HTMLDivElement>(null);
+
+  const handleScroll = () => {
+    if (textareaRef.current && renderRef.current) {
+        renderRef.current.scrollTop = textareaRef.current.scrollTop;
+    }
+  };
+
+  // Handle global "/" focus
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // If pressing "/" and not already in an input/textarea
+      if (e.key === "/" && 
+          document.activeElement?.tagName !== "INPUT" && 
+          document.activeElement?.tagName !== "TEXTAREA") {
+        e.preventDefault();
+        textareaRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, []);
 
   // Detect @ typing for tool suggestions
   useEffect(() => {
@@ -108,17 +154,22 @@ export function PromptInputArea({
       const nextSpace = afterAt.indexOf(" ");
       const afterMention = nextSpace >= 0 ? afterAt.slice(nextSpace) : "";
       
-      // Remove the @mention from text and add to mentionedTools
-      const newValue = `${beforeAt}${afterMention}`;
+      // Preserve the position and location: Keep it in the text, formatted as @toolname
+      const newValue = `${beforeAt}@${toolName} ${afterMention}`;
+      const nextCursorPos = `${beforeAt}@${toolName} `.length;
       onChange(newValue);
       
-      // Add tool to mentionedTools if not already present
       if (!mentionedTools.includes(toolName)) {
         onToolMentionsChange?.([...mentionedTools, toolName]);
       }
       
       setShowToolSuggestions(false);
-      textareaRef.current?.focus();
+
+      requestAnimationFrame(() => {
+        if (!textareaRef.current) return;
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(nextCursorPos, nextCursorPos);
+      });
     }
   };
 
@@ -129,28 +180,118 @@ export function PromptInputArea({
       tool.id.toLowerCase().includes(toolQuery)
   );
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey && document.activeElement !== textareaRef.current) {
+  const handleSubmit = () => {
+    if (!value.trim() && attachments.length === 0) return;
+    onSubmit({ text: value, files: [] });
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Tool suggestions navigation
+    if (showToolSuggestions && filteredTools.length > 0) {
+      if (e.key === "ArrowDown") {
         e.preventDefault();
-        textareaRef.current?.focus();
+        setSelectedIndex((prev) => (prev + 1) % filteredTools.length);
+        return;
       }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedIndex((prev) => (prev - 1 + filteredTools.length) % filteredTools.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        handleToolSelect(filteredTools[selectedIndex].name);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setShowToolSuggestions(false);
+        return;
+      }
+    }
+
+    // Up arrow to reopen modal when input is empty and cursor at start
+    if (e.key === "ArrowUp" && textareaRef.current) {
+      const { selectionStart } = textareaRef.current;
+      if (selectionStart === 0 && value.trim() === "") {
+        e.preventDefault();
+        onUpArrow?.();
+        return;
+      }
+    }
+
+    // Submit on Enter (without Shift)
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+      return;
+    }
+
+    // Handle Backspace to remove entire @tool
+    if (e.key === "Backspace" && textareaRef.current) {
+      const { selectionStart, selectionEnd } = textareaRef.current;
+      if (selectionStart === selectionEnd && selectionStart > 0) {
+        const textBeforeCursor = value.slice(0, selectionStart);
+        // Regex matches @ followed by word chars, then an optional space
+        const match = textBeforeCursor.match(/@[\w-]+\s?$/);
+        
+        if (match) {
+          e.preventDefault();
+          const matchRange = match[0];
+          const toolName = matchRange.trim().slice(1);
+          
+          const newSelectionPos = selectionStart - matchRange.length;
+          const newValue = value.slice(0, newSelectionPos) + value.slice(selectionStart);
+          
+          onChange(newValue);
+
+          // Update mentionedTools if the deleted tool is no longer in the text
+          const isStillMentioned = newValue.split(/\s+/).some(word => word === `@${toolName}`);
+          if (!isStillMentioned && mentionedTools.includes(toolName)) {
+            onToolMentionsChange?.(mentionedTools.filter(t => t !== toolName));
+          }
+
+          // Sync cursor position after state update
+          setTimeout(() => {
+            if (textareaRef.current) {
+              textareaRef.current.setSelectionRange(newSelectionPos, newSelectionPos);
+            }
+          }, 0);
+          return;
+        }
+      }
+    }
+  };
 
   return (
-    <div className="relative w-full">
-      {/* Tool mention badges removed from top */}
+    <div className="relative w-full max-w-4xl mx-auto px-4 space-y-3">
+      {/* File Attachments Preview */}
+      <AnimatePresence mode="popLayout">
+        {attachments.length > 0 && (
+          <motion.div
+            layout
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+            className="w-full"
+          >
+           <AttachmentsPreview attachments={attachments} onRemove={onRemoveAttachment} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <PromptInput
-        onSubmit={onSubmit}
-        className="bg-transparent border-none shadow-none"
-        inputGroupClassName="!bg-transparent !border-none !shadow-none !ring-0 !ring-offset-0 !overflow-visible p-0"
+      {/* Main Input Container - Liquid Glass Style */}
+      <motion.div
+        layout
+        transition={{ type: "spring", bounce: 0, duration: 0.25 }}
+        className={cn(
+          "relative flex items-end gap-2 p-2 rounded-4xl", 
+          "bg-white/10 backdrop-blur-3xl border border-white/40 shadow-[4px_9px_4.5px_0_rgba(0,0,0,0.25)]",
+          isFocused ? "shadow-[4px_9px_12px_0_rgba(0,0,0,0.3)] bg-white/20" : "hover:bg-white/15"
+        )}
       >
-        <ButtonGroup className="w-full bg-background border border-input rounded-3xl shadow-sm items-end transition-all duration-200 ease-in-out">
-          {/* File Attachment */}
+        <div className="flex items-center gap-1.5 pb-1 pl-1">
           <input
             type="file"
             ref={fileInputRef}
@@ -159,204 +300,199 @@ export function PromptInputArea({
             multiple
             className="hidden"
           />
-          <PromptInputButton
-            tooltip="Attach file (images, PDF, text)"
-            onClick={() => fileInputRef.current?.click()}
-            className="rounded-l-3xl rounded-r-none border-none shadow-none h-10 w-10 p-0 flex items-center justify-center shrink-0"
-          >
-            <PaperclipIcon className="size-4" />
-          </PromptInputButton>
-
-          <ButtonGroupSeparator className="h-6 mb-2 self-end!" />
-
-          {/* Google Search Toggle */}
-          <PromptInputButton
-            tooltip={
-              mentionedTools.length > 0
-                ? "Built-in tools disabled when using @tools"
-                : enableSearch
-                  ? "Disable Google Search"
-                  : "Enable Google Search"
-            }
-            onClick={onToggleSearch}
-            disabled={mentionedTools.length > 0}
-            className={cn(
-              "rounded-none border-none shadow-none h-10 w-10 p-0 flex items-center justify-center shrink-0",
-              enableSearch && mentionedTools.length === 0 && "bg-primary/10 text-primary",
-              mentionedTools.length > 0 && "opacity-50 cursor-not-allowed"
-            )}
-          >
-            <SearchIcon className="size-4" />
-          </PromptInputButton>
-
-          <ButtonGroupSeparator className="h-6 mb-2 self-end!" />
-
-          {/* Thinking Toggle */}
-          <PromptInputButton
-            tooltip={
-              !thinkingSupported
-                ? "Thinking is not supported by this model"
-                : enableThinking
-                  ? "Disable Thinking"
-                  : "Enable Thinking"
-            }
-            onClick={onToggleThinking}
-            disabled={!thinkingSupported}
-            className={cn(
-              "rounded-none border-none shadow-none h-10 w-10 p-0 flex items-center justify-center shrink-0",
-              enableThinking && thinkingSupported && "bg-primary/10 text-primary"
-            )}
-          >
-            <BrainIcon className="size-4" />
-          </PromptInputButton>
-
-          <ButtonGroupSeparator className="h-6 mb-2 self-end!" />
-
-          <SpeechInput
-            className="rounded-none border-none shadow-none h-10 w-10 p-0 flex items-center justify-center shrink-0"
-            onTranscriptionChange={(transcript) => {
+            <motion.button
+              whileHover={{ backgroundColor: "rgba(140, 167, 188, 0.4)" }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => fileInputRef.current?.click()}
+              className="group flex items-center justify-center size-[52px] rounded-full bg-black/10 backdrop-blur-xl text-white transition-all duration-300 border border-black/10 shadow-[0_4px_10px_0_rgba(0,0,0,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)]"
+              title="Attach files"
+            >
+              <PaperclipIcon className="size-6" />
+            </motion.button>
+            
+            <SpeechInput
+              className="flex items-center justify-center size-[52px] rounded-full bg-black/10 backdrop-blur-xl text-white border border-black/10 shadow-[0_4px_10px_0_rgba(0,0,0,0.1),inset_0_1px_0_0_rgba(255,255,255,0.5)] [&_svg]:size-6"
+              onTranscriptionChange={(transcript) => {
               const currentValue = textareaRef.current?.value ?? value;
               const trimmedTranscript = transcript.trim();
-              if (!trimmedTranscript) {
-                return;
-              }
+              if (!trimmedTranscript) return;
               const needsSpace = currentValue.length > 0 && !currentValue.endsWith(" ");
               const nextValue = `${currentValue}${needsSpace ? " " : ""}${trimmedTranscript}`;
               onChange(nextValue);
               textareaRef.current?.focus();
             }}
           />
-
-          {/* Tool Pills inside input */}
-          {mentionedTools.length > 0 && (
-            <div className="flex items-center gap-1 pl-2 py-2.5 select-none">
-              {mentionedTools.map((tool) => {
-                const toolLower = tool.toLowerCase();
-                const ToolIcon = toolLower === "calendar" 
-                  ? CalendarIcon 
-                  : toolLower === "forms" || toolLower === "survey"
-                  ? FileTextIcon
-                  : toolLower === "mermaid"
-                  ? NetworkIcon
-                  : toolLower === "pdf"
-                  ? FileStackIcon
-                  : CloudSunIcon;
-                return (
-                  <Badge 
-                    key={tool} 
-                    variant="secondary" 
-                    className="text-xs h-6 px-2 gap-1 cursor-default whitespace-nowrap"
-                  >
-                    <ToolIcon className="size-3" />
-                    @{tool}
-                  </Badge>
-                );
-              })}
-            </div>
-          )}
-
-          <PromptInputTextarea
-            ref={textareaRef}
-            autoFocus
-            className="min-h-10 max-h-[200px] py-2.5 px-3 text-base sm:text-sm resize-none border-none shadow-none focus-visible:ring-0 transition-all duration-200"
-            placeholder={mentionedTools.length > 0 ? "Send a message..." : "Send a message... (type @ to mention tools)"}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            onKeyDown={(e) => {
-              // If tool suggestions are open, handle navigation and selection
-              if (showToolSuggestions && filteredTools.length > 0) {
-                if (e.key === "ArrowDown") {
-                  e.preventDefault();
-                  setSelectedIndex((prev) => (prev + 1) % filteredTools.length);
-                  return;
-                }
-                if (e.key === "ArrowUp") {
-                  e.preventDefault();
-                  setSelectedIndex((prev) => (prev - 1 + filteredTools.length) % filteredTools.length);
-                  return;
-                }
-                if (e.key === "Enter" || e.key === "Tab") {
-                  e.preventDefault();
-                  handleToolSelect(filteredTools[selectedIndex].name);
-                  return;
-                }
-                if (e.key === "Escape") {
-                  e.preventDefault();
-                  setShowToolSuggestions(false);
-                  return;
-                }
-              }
-
-              // Handle Backspace to remove tools
-              if (e.key === "Backspace" && value === "" && mentionedTools.length > 0) {
-                e.preventDefault();
-                const newTools = [...mentionedTools];
-                newTools.pop();
-                onToolMentionsChange?.(newTools);
-                return;
-              }
-              // Otherwise, Enter submits the message
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                onSubmit({ text: value, files: [] });
-              }
-            }}
-          />
-
-          <PromptInputSubmit
-            className="rounded-r-3xl rounded-l-none border-none shadow-none h-10 w-10 p-0 flex items-center justify-center shrink-0"
-            status={isLoading ? "streaming" : "ready"}
-          />
-        </ButtonGroup>
-      </PromptInput>
-
-      {/* Tool suggestions dropdown */}
-      {showToolSuggestions && filteredTools.length > 0 && (
-        <div className="absolute bottom-full left-0 mb-2 w-full max-w-md z-50">
-          <div className="rounded-lg border border-border bg-popover shadow-lg">
-            <div className="p-2">
-              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                Available Tools
-              </div>
-              <div className="space-y-1 max-h-[280px] overflow-y-auto custom-scrollbar">
-                {filteredTools.map((tool, index) => {
-                  const toolLower = tool.id.toLowerCase();
-                  const ToolIcon = toolLower === "calendar" 
-                    ? CalendarIcon 
-                    : toolLower === "forms" || toolLower === "survey"
-                    ? FileTextIcon
-                    : toolLower === "mermaid"
-                    ? NetworkIcon
-                    : toolLower === "pdf"
-                    ? FileStackIcon
-                    : CloudSunIcon;
-                  return (
-                  <button
-                    key={tool.id}
-                    onClick={() => handleToolSelect(tool.name)}
-                    onMouseEnter={() => setSelectedIndex(index)}
-                    className={cn(
-                      "w-full flex items-start gap-2 px-2 py-2 rounded-md text-left transition-colors",
-                      "hover:bg-accent hover:text-accent-foreground",
-                      "focus:bg-accent focus:text-accent-foreground focus:outline-none",
-                      index === selectedIndex && "bg-accent text-accent-foreground"
-                    )}
-                  >
-                    <ToolIcon className="h-4 w-4 mt-0.5 shrink-0" />
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-medium text-sm">@{tool.name}</span>
-                      <span className="text-xs text-muted-foreground line-clamp-1">
-                        {tool.description}
-                      </span>
-                    </div>
-                  </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
         </div>
-      )}
+
+
+        {/* Text Input Area */}
+        <div className="flex-1 min-w-0 relative flex flex-col justify-center py-3">
+            <div className="relative w-full overflow-hidden grid place-items-start">
+                {/* Visual Renderer (Behind) */}
+                <div 
+                    ref={renderRef}
+                    aria-hidden="true"
+                    className="absolute top-0 left-0 w-full h-full text-[20px] px-3 py-1 font-medium whitespace-pre-wrap wrap-break-word pointer-events-none custom-scrollbar font-sans"
+                    style={{ 
+                        lineHeight: "1.5",
+                        color: "var(--foreground)", // Dark text color for visibility
+                        fontFamily: "inherit",
+                        scrollbarWidth: "none",
+                        msOverflowStyle: "none"
+                    }}
+                >
+                    {/* Render with default text color, but highlight pills */}
+                    {value.split(/(@[\w-]+)/g).map((part, index) => {
+                        if (part.startsWith("@")) {
+                             const toolName = part.substring(1).toLowerCase();
+                             // Find color key that matches part of the tool name or use default
+                             const colorKey = Object.keys(TOOL_COLORS).find(k => toolName.includes(k)) || "default";
+                             const colorClass = TOOL_COLORS[colorKey];
+                         
+                             return (
+                                <span 
+                                    key={index} 
+                                    className={cn(
+                                  "inline rounded-[0.35rem] font-semibold box-decoration-clone",
+                                        colorClass
+                                    )}
+                                >
+                                    {part}
+                                </span>
+                             );
+                        }
+                        return <span key={index}>{part}</span>;
+                    })}
+                     {/* Add a trailing space if value ends with newline to prevent jump */}
+                     {value.endsWith("\n") && <br />}
+                </div>
+
+                {/* Actual Input (Foreground) */}
+                <textarea
+                    ref={textareaRef}
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onScroll={handleScroll}
+                    onFocus={() => setIsFocused(true)}
+                    onBlur={() => setIsFocused(false)}
+                    placeholder={mentionedTools.length > 0 ? "Send a message..." : "What would you like to ask me?"}
+                    className="relative w-full bg-transparent border-none resize-none focus:ring-0 focus:outline-none text-[20px] px-3 py-1 max-h-[200px] overflow-y-auto placeholder:text-foreground/50 text-foreground font-medium font-sans"
+                    style={{ 
+                        minHeight: "34px", 
+                        lineHeight: "1.5",
+                        msOverflowStyle: "none", 
+                        scrollbarWidth: "none", 
+                        transition: "height 0.15s ease-out",
+                        color: "transparent", 
+                        caretColor: "var(--foreground)", // Visible cursor
+                        fontFamily: "inherit", 
+                    }}
+                    rows={1}
+                />
+            </div>
+
+            {/* Hide Webkit scrollbar via global style or specific class if Tailwind supports it. Using style tag for scoped override */}
+            <style jsx>{`
+                textarea::-webkit-scrollbar, div.custom-scrollbar::-webkit-scrollbar {
+                    display: none;
+                }
+            `}</style>
+        </div>
+
+        {/* Right Action (Send) */}
+        <div className="pb-1 pr-1">
+            <motion.button
+                whileHover={{ scale: 1.05, backgroundColor: "rgba(37, 99, 235, 0.9)" }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleSubmit}
+                disabled={isLoading || (!value.trim() && attachments.length === 0)}
+                className={cn(
+                    "flex items-center justify-center size-[52px] rounded-full transition-all duration-500",
+                    isLoading 
+                        ? "bg-slate-400/50 cursor-not-allowed" 
+                        : value.trim() || attachments.length > 0
+                            ? "bg-blue-600 text-white shadow-[0_8px_32px_0_rgba(37,99,235,0.3),inset_0_1px_0_0_rgba(255,255,255,0.2)] border border-blue-500/50 hover:bg-blue-700"
+                            : "bg-blue-600/20 text-blue-600/40 border border-blue-600/20"
+                )}
+            >
+                <ArrowUpIcon className="size-6" />
+            </motion.button>
+        </div>
+
+
+        {/* Tool suggestions dropdown */}
+        <AnimatePresence>
+            {showToolSuggestions && filteredTools.length > 0 && (
+            <motion.div
+                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                transition={{ type: "spring", bounce: 0, duration: 0.25 }}
+                className="absolute bottom-full left-0 mb-4 w-full z-50 px-4"
+            >
+                <div 
+                    className="bg-white/30 backdrop-blur-3xl border border-black/10 shadow-[4px_9px_4.5px_0_rgba(0,0,0,0.25)] rounded-4xl overflow-hidden p-2"
+                >
+                <div className="px-3 py-2 text-xs font-semibold text-foreground/70 uppercase tracking-wider">
+                    Available Tools
+                </div>
+                <div 
+                    className="max-h-[400px] overflow-y-auto space-y-1"
+                    style={{ 
+                        scrollbarWidth: "none", 
+                        msOverflowStyle: "none" 
+                    }}
+                >
+                    {/* Hide Webkit scrollbar locally */}
+                     <style jsx>{`
+                        div::-webkit-scrollbar {
+                            display: none;
+                        }
+                    `}</style>
+                    {filteredTools.map((tool, index) => {
+                    const toolLower = tool.id.toLowerCase();
+                    const ToolIcon = toolLower === "calendar" 
+                        ? CalendarIcon 
+                        : toolLower === "forms" || toolLower === "survey"
+                        ? FileTextIcon
+                        : toolLower === "mermaid"
+                        ? NetworkIcon
+                        : toolLower === "pdf"
+                        ? FileStackIcon
+                        : CloudSunIcon;
+                    
+                    return (
+                        <button
+                        key={tool.id}
+                        onClick={() => handleToolSelect(tool.name)}
+                        onMouseEnter={() => setSelectedIndex(index)}
+                        className={cn(
+                            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all duration-200",
+                            index === selectedIndex 
+                            ? "bg-black/10 text-foreground" 
+                            : "hover:bg-black/5 text-foreground/90"
+                        )}
+                        >
+                        <div className={cn(
+                            "flex items-center justify-center size-8 rounded-lg",
+                            index === selectedIndex ? "bg-black/10" : "bg-black/5"
+                        )}>
+                            <ToolIcon className="size-4 text-foreground" />
+                        </div>
+                        <div className="flex flex-col flex-1 min-w-0">
+                            <span className="font-medium text-sm text-foreground">@{tool.name}</span>
+                            <span className="text-xs text-foreground/50 line-clamp-1">{tool.description}</span>
+                        </div>
+                        </button>
+                    );
+                    })}
+                </div>
+                </div>
+            </motion.div>
+            )}
+        </AnimatePresence>
+      </motion.div>
     </div>
   );
 }

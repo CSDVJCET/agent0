@@ -1,7 +1,8 @@
 "use client";
 
-import { motion } from "motion/react";
-import { FileIcon, FileTextIcon, FileImageIcon, XIcon } from "lucide-react";
+import { useRef, useEffect, useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { FileIcon, FileTextIcon, FileImageIcon, XIcon, MusicIcon } from "lucide-react";
 import {
   HoverCard,
   HoverCardContent,
@@ -28,14 +29,30 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// Helper to get consistent icons
 function getFileIcon(type: string) {
   if (type.startsWith("image/")) {
-    return <FileImageIcon className="size-4 text-muted-foreground" />;
+    return <FileImageIcon className="size-4 text-white" />;
   }
-  if (type === "application/pdf" || type.startsWith("text/")) {
-    return <FileTextIcon className="size-4 text-muted-foreground" />;
+  if (type.startsWith("audio/")) {
+    return <MusicIcon className="size-4 text-white" />;
   }
-  return <FileIcon className="size-4 text-muted-foreground" />;
+  if (type === "application/pdf") {
+    // Distinct icon for PDF
+    return <FileTextIcon className="size-4 text-white" />;
+  }
+  if (type.startsWith("text/")) {
+    return <FileTextIcon className="size-4 text-white" />;
+  }
+  return <FileIcon className="size-4 text-white" />;
+}
+
+function getFileTypeFriendlyName(type: string): string {
+  if (type.startsWith("image/")) return "Image";
+  if (type.startsWith("audio/")) return "Audio";
+  if (type === "application/pdf") return "Document";
+  if (type.startsWith("text/")) return "Text File";
+  return "File";
 }
 
 function getFileTypeLabel(mimeType: string): string {
@@ -50,6 +67,25 @@ function getFileTypeLabel(mimeType: string): string {
   return subtype.toUpperCase();
 }
 
+export function AttachmentsPreview({ attachments, onRemove }: AttachmentsPreviewProps) {
+  if (attachments.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <AnimatePresence mode="popLayout">
+            {attachments.map((att, i) => (
+            <AttachmentItem
+                key={att.url || `${att.name}-${i}`} 
+                attachment={att}
+                index={i}
+                onRemove={onRemove}
+            />
+            ))}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 function AttachmentItem({ 
   attachment, 
   index, 
@@ -59,109 +95,130 @@ function AttachmentItem({
   index: number; 
   onRemove: (index: number) => void;
 }) {
+  const [imageError, setImageError] = useState(false);
+  const label = getFileTypeFriendlyName(attachment.type);
   const isImage = attachment.type.startsWith("image/");
-  
-  const content = (
-    <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg text-sm cursor-default group">
-      {isImage ? (
-        <div className="size-4 rounded overflow-hidden flex-shrink-0">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img 
-            src={attachment.url} 
-            alt={attachment.name}
-            className="size-full object-cover"
-          />
-        </div>
-      ) : (
-        getFileIcon(attachment.type)
-      )}
-      <span className="truncate max-w-[150px]">{attachment.name}</span>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onRemove(index);
-        }}
-        className="hover:bg-background rounded p-0.5 opacity-60 group-hover:opacity-100 transition-opacity"
-      >
-        <XIcon className="size-3" />
-      </button>
-    </div>
-  );
+  const isPdf = attachment.type === "application/pdf";
+  const isText = !isPdf && (attachment.type.startsWith("text/") || 
+                 attachment.type === "application/json" || 
+                 attachment.type === "application/javascript" ||
+                 attachment.type.includes("markdown") ||
+                 attachment.type.includes("xml") ||
+                 attachment.name.endsWith(".ts") ||
+                 attachment.name.endsWith(".tsx") ||
+                 attachment.name.endsWith(".js") ||
+                 attachment.name.endsWith(".css") ||
+                 attachment.name.endsWith(".html") ||
+                 attachment.name.endsWith(".md"));
 
-  // Only show hover preview for images
-  if (isImage) {
-    return (
-      <HoverCard openDelay={200} closeDelay={100}>
-        <HoverCardTrigger asChild>
-          {content}
-        </HoverCardTrigger>
-        <HoverCardContent 
-          side="top" 
-          align="center"
-          className="w-auto p-2"
-        >
-          <div className="flex flex-col gap-2">
-            <div className="max-w-[300px] max-h-[200px] overflow-hidden rounded-lg">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img 
-                src={attachment.url} 
-                alt={attachment.name}
-                className="w-full h-full object-contain"
-              />
-            </div>
-            <div className="text-xs text-muted-foreground text-center">
-              <span className="font-medium">{attachment.name}</span>
-              <span className="mx-1">•</span>
-              <span>{formatFileSize(attachment.size)}</span>
-            </div>
-          </div>
-        </HoverCardContent>
-      </HoverCard>
-    );
-  }
+  // Helper to get text preview
+  const getTextPreview = () => {
+    try {
+      if (!attachment.url.startsWith("data:")) return null;
+      const base64 = attachment.url.split(",")[1];
+      if (!base64) return null;
+      const decoded = atob(base64);
+      return decoded.slice(0, 150) + (decoded.length > 150 ? "..." : "");
+    } catch (e) {
+      return null;
+    }
+  };
 
-  // For non-image files, show a simpler hover card with file info
+  const textPreview = getTextPreview();
+
   return (
     <HoverCard openDelay={200} closeDelay={100}>
       <HoverCardTrigger asChild>
-        {content}
+        <motion.div 
+            layout
+            initial={{ opacity: 0, scale: 0.8, x: -10 }}
+            animate={{ opacity: 1, scale: 1, x: 0 }}
+            exit={{ opacity: 0, scale: 0.8, x: -10 }}
+            transition={{ 
+                layout: { type: "spring", stiffness: 300, damping: 30 },
+                opacity: { duration: 0.2 },
+                scale: { duration: 0.2 }
+            }}
+            className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-[0.67313rem] cursor-default group backdrop-blur-md shadow-sm hover:shadow-md h-[38px]"
+            style={{
+                backgroundColor: "rgba(80, 160, 221, 0.72)",
+                border: "1.346px dashed #FDEFE4"
+            }}
+        >
+          <div className="flex-shrink-0">
+            {getFileIcon(attachment.type)}
+          </div>
+          <span className="font-semibold text-sm text-white max-w-[120px] truncate">{label}</span>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove(index);
+            }}
+            className="hover:bg-white/20 rounded-full p-0.5 opacity-60 group-hover:opacity-100 transition-opacity text-white"
+          >
+            <XIcon className="size-3" />
+          </button>
+        </motion.div>
       </HoverCardTrigger>
       <HoverCardContent 
         side="top" 
         align="center"
-        className="w-auto p-3"
+        sideOffset={10}
+        className="w-72 p-0 bg-white/80 backdrop-blur-xl border border-white/40 shadow-2xl rounded-2xl overflow-hidden"
       >
-        <div className="flex items-center gap-3">
-          {getFileIcon(attachment.type)}
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">{attachment.name}</span>
-            <span className="text-xs text-muted-foreground">
-              {formatFileSize(attachment.size)} • {getFileTypeLabel(attachment.type)}
-            </span>
+          {/* Top Preview Section */}
+          <div className="w-full h-40 bg-slate-50/50 flex items-center justify-center overflow-hidden relative">
+             {isImage && !imageError ? (
+                 <img 
+                     src={attachment.url} 
+                     alt={attachment.name} 
+                     className="w-full h-full object-cover" 
+                     onError={() => setImageError(true)}
+                 />
+             ) : isText && textPreview ? (
+                 <div className="w-full h-full p-3 text-[10px] font-mono text-slate-600 break-all whitespace-pre-wrap leading-relaxed overflow-hidden relative bg-white/50">
+                     {textPreview}
+                     <div className="absolute inset-0 bg-gradient-to-t from-white/90 via-transparent to-transparent" />
+                 </div>
+             ) : isPdf ? (
+                <div className="flex flex-col items-center gap-2 opacity-80">
+                    <FileTextIcon className="size-12 text-rose-500/80" />
+                    <span className="text-xs font-medium text-rose-500/80">PDF Document</span>
+                </div>
+             ) : (
+                <div className="flex flex-col items-center gap-2 opacity-30">
+                    <div className="size-12 flex items-center justify-center">
+                        {isText ? (
+                             <FileTextIcon className="size-full" />
+                        ) : isImage ? (
+                             <FileImageIcon className="size-full" />
+                        ) : (
+                             <FileIcon className="size-full" />
+                        )}
+                    </div>
+                    <span className="text-xs font-medium">Preview unavailable</span>
+                </div>
+             )}
           </div>
-        </div>
+
+          {/* Bottom Info Section */}
+          <div className="p-3 bg-white/40 border-t border-white/20">
+             <div className="flex items-start gap-3">
+                <div className="p-2 bg-white/60 rounded-xl shadow-sm">
+                    {getFileIcon(attachment.type)}
+                </div>
+                <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-semibold text-slate-800 truncate leading-tight block w-full">
+                        {attachment.name}
+                    </span>
+                    <span className="text-xs text-slate-500 font-medium mt-0.5">
+                        {formatFileSize(attachment.size)} • {getFileTypeLabel(attachment.type)}
+                    </span>
+                </div>
+             </div>
+          </div>
       </HoverCardContent>
     </HoverCard>
   );
 }
 
-export function AttachmentsPreview({ attachments, onRemove }: AttachmentsPreviewProps) {
-  if (attachments.length === 0) return null;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, height: 0 }}
-      animate={{ opacity: 1, height: "auto" }}
-      className="flex flex-wrap gap-2"
-    >
-      {attachments.map((att, i) => (
-        <AttachmentItem
-          key={i}
-          attachment={att}
-          index={i}
-          onRemove={onRemove}
-        />
-      ))}
-    </motion.div>
-  );
-}

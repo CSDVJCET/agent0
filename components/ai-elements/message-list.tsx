@@ -152,12 +152,15 @@ export type MessageListProps = {
   status: ChatStatus;
   onRegenerate: () => void;
   error?: Error | undefined;
-  model?: string;
+  containerRef?: React.RefObject<HTMLDivElement | null>;
+  onRefHydrated?: () => void;
 };
 
-export function MessageList({ messages, isLoading, status, onRegenerate, error, model }: MessageListProps) {
+export function MessageList({ messages, isLoading, status, onRegenerate, error, containerRef, onRefHydrated }: MessageListProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const [scrollContainer, setScrollContainer] = useState<HTMLDivElement | null>(null);
+  const internalScrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = containerRef || internalScrollContainerRef;
+  const [mounted, setMounted] = useState(false);
   
   // Deduplicate messages to prevent React key collisions
   // This can happen during streaming updates or localStorage restoration
@@ -182,23 +185,19 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error, 
       const scrollEl = wrapperRef.current.querySelector('[style*="overflow"]') as HTMLDivElement 
         || wrapperRef.current.firstElementChild as HTMLDivElement;
       if (scrollEl) {
-        setScrollContainer(scrollEl);
+        if (containerRef) {
+          (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = scrollEl;
+          onRefHydrated?.();
+        } else {
+          (internalScrollContainerRef as React.MutableRefObject<HTMLDivElement | null>).current = scrollEl;
+        }
+        setMounted(true);
       }
     }
-  }, []);
+  }, [containerRef, onRefHydrated]);
 
   return (
     <div ref={wrapperRef} className="relative h-full">
-      {/* Scroll Progress Indicator */}
-      {scrollContainer && (
-        <div className="pointer-events-none absolute left-0 top-0 z-50 w-full">
-          <div className="absolute left-0 top-0 h-1 w-full bg-muted/30" />
-          <ScrollProgress
-            containerRef={{ current: scrollContainer }}
-            className="absolute top-0 bg-primary"
-          />
-        </div>
-      )}
       <Conversation className="h-full">
         <ConversationContent className="max-w-3xl mx-auto w-full py-10 px-4 lg:px-0 gap-8">
         <AnimatePresence initial={false}>
@@ -235,7 +234,7 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error, 
                     className={cn(
                       message.role === "user"
                         ? "bg-primary text-primary-foreground shadow-sm"
-                        : ""
+                        : "text-foreground/75"
                     )}
                   >
                     {message.role === "user" && message.parts && (
@@ -924,12 +923,12 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
 
                     {message.role === "assistant" ? (
                       hasAssistantContent ? (
-                        <MessageResponse>{textContent}</MessageResponse>
+                        <MessageResponse className="text-foreground/75">{textContent}</MessageResponse>
                       ) : shouldShowThinkingPlaceholder ? (
                         <ThinkingIndicator />
                       ) : null
                     ) : (
-                      <div className="whitespace-pre-wrap">{textContent}</div>
+                      <div className="whitespace-pre-wrap text-lg leading-relaxed text-foreground/75">{textContent}</div>
                     )}
                   </MessageContent>
                   {message.role === "assistant" && (
@@ -938,17 +937,17 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
                         tooltip="Copy"
                         onClick={() => navigator.clipboard.writeText(textContent)}
                       >
-                        <CopyIcon className="size-3.5" />
+                        <CopyIcon className="size-3.5 text-foreground/75" />
                       </MessageAction>
                       <MessageAction tooltip="Regenerate" onClick={() => onRegenerate()}>
-                        <RefreshCwIcon className="size-3.5" />
+                        <RefreshCwIcon className="size-3.5 text-foreground/75" />
                       </MessageAction>
                       <div className="flex-1" />
                       <MessageAction tooltip="Good response">
-                        <ThumbsUpIcon className="size-3.5" />
+                        <ThumbsUpIcon className="size-3.5 text-foreground/75" />
                       </MessageAction>
                       <MessageAction tooltip="Bad response">
-                        <ThumbsDownIcon className="size-3.5" />
+                        <ThumbsDownIcon className="size-3.5 text-foreground/75" />
                       </MessageAction>
                     </MessageActions>
                   )}
@@ -964,7 +963,7 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
             >
               <Message from="assistant">
                 <MessageContent className="w-fit">
-                  <Shimmer className="text-sm font-medium text-muted-foreground">
+                  <Shimmer className="text-lg font-medium text-foreground/60">
                     {"Sending..."}
                   </Shimmer>
                 </MessageContent>
@@ -980,11 +979,11 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
             >
               <AlertCircleIcon className="size-5 text-destructive shrink-0 mt-0.5" />
               <div className="flex-1 space-y-2">
-                <p className="text-sm text-destructive font-medium">Something went wrong</p>
-                <p className="text-sm text-muted-foreground">{error.message || "An error occurred while generating the response."}</p>
+                <p className="text-base text-foreground font-medium">Something went wrong</p>
+                <p className="text-base text-foreground/80">{error.message || "An error occurred while generating the response."}</p>
                 <button
                   onClick={() => onRegenerate()}
-                  className="text-sm text-primary hover:underline"
+                  className="text-base text-primary hover:underline"
                 >
                   Try again
                 </button>
@@ -1002,7 +1001,7 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
 const ThinkingIndicator = () => (
   <motion.span
     aria-live="polite"
-    className="text-sm font-medium text-muted-foreground"
+    className="text-lg font-medium text-foreground/60"
     animate={{ opacity: [0.5, 1, 0.5] }}
     transition={{ duration: 1.2, repeat: Number.POSITIVE_INFINITY }}
   >
