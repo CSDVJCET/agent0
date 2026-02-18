@@ -85,6 +85,26 @@ const INTEGRATION_DETAILS: Record<string, { name: string; description: string; f
       { name: "createSequenceDiagram", description: "Create sequence diagrams for interactions" },
       { name: "createGanttChart", description: "Create Gantt charts for project timelines" }
     ]
+  },
+  slides: {
+    name: "Slides",
+    description: "Create beautiful reveal.js presentations with images, animations, and professional styling.",
+    functions: [
+      { name: "schedulePresentationHeadings", description: "Draft editable slide heading overview before generation" },
+      { name: "createPresentation", description: "Generate HTML presentation with rich visuals and animations" }
+    ]
+  },
+  github: {
+    name: "GitHub",
+    description: "Manage repositories, issues, branches, and pull requests on GitHub.",
+    functions: [
+      { name: "createIssue", description: "Create a new issue with title, body, and labels" },
+      { name: "createBranch", description: "Create a branch from a base ref" },
+      { name: "createPullRequest", description: "Open a new pull request" },
+      { name: "mergePullRequest", description: "Merge a PR (merge / squash / rebase)" },
+      { name: "commentOnPR", description: "Add a comment to a pull request" },
+      { name: "listPullRequests", description: "List PRs with state filtering" }
+    ]
   }
 };
 

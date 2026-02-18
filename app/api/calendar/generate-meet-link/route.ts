@@ -13,7 +13,7 @@ const DEFAULT_USER_ID = "default-user";
  * 
  * The Meet link can be used immediately even before creating the actual event.
  */
-export async function POST(req: NextRequest) {
+export async function POST(_req: NextRequest) {
   try {
     const accessToken = await getValidAccessToken(DEFAULT_USER_ID);
     

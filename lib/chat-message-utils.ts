@@ -38,6 +38,21 @@ export function getToolTitle(toolName: string): string {
     createDraft: "Create Draft",
     sendMessage: "Send Email",
     getMessageContent: "Get Message",
+    // GitHub tools
+    createIssue: "Create Issue",
+    createBranch: "Create Branch",
+    createPullRequest: "Create PR",
+    mergePullRequest: "Merge PR",
+    commentOnPR: "Comment on PR",
+    listPullRequests: "List PRs",
+    listRepositories: "List Repos",
+    getRepository: "Get Repo",
+    listBranches: "List Branches",
+    scheduleIssueCreation: "Schedule Issue",
+    schedulePRCreation: "Schedule PR",
+    scheduleMerge: "Schedule Merge",
+    schedulePresentationHeadings: "Plan Slides",
+    createPresentation: "Create Presentation",
   };
   return titles[toolName] || toolName;
 }

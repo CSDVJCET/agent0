@@ -65,6 +65,14 @@ function getToolMetadata(id: string) {
       icon: "file-stack",
     };
   }
+  if (id === "slides") {
+    return {
+      name: "Slides",
+      description: "Create beautiful reveal.js presentations with images, animations, and professional styling",
+      category: "productivity",
+      icon: "presentation",
+    };
+  }
   return {
     name: id,
     description: "Custom tool",

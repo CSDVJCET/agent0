@@ -36,6 +36,13 @@ import {
 import { CalendarDraft } from "@/components/ai-elements/calendar-draft";
 import { CalendarEvent } from "@/components/ai-elements/calendar-event";
 import { EventSchedulingConfirmation } from "@/components/ai-elements/event-scheduling-confirmation";
+import { GitHubIssueConfirmation } from "@/components/ai-elements/github-issue-confirmation";
+import { GitHubPRConfirmation } from "@/components/ai-elements/github-pr-confirmation";
+import { GitHubMergeConfirmation } from "@/components/ai-elements/github-merge-confirmation";
+import { GitHubBranchResult } from "@/components/ai-elements/github-branch-result";
+import { GitHubPRList } from "@/components/ai-elements/github-pr-list";
+import { GitHubRepoList } from "@/components/ai-elements/github-repo-list";
+import { GitHubCommentResult } from "@/components/ai-elements/github-comment-result";
 import { EmailDraftConfirmation } from "@/components/ai-elements/email-draft-confirmation";
 import { FormCreationConfirmation } from "@/components/ai-elements/form-creation-confirmation";
 import { FormResponsesList } from "@/components/ai-elements/form-responses-list";
@@ -46,7 +53,9 @@ import { TaskSchedulingConfirmation } from "@/components/ai-elements/task-schedu
 import { TaskDeleteConfirmation } from "@/components/ai-elements/task-delete-confirmation";
 import { TaskUpdateConfirmation } from "@/components/ai-elements/task-update-confirmation";
 import { TaskCompleteDisplay } from "@/components/ai-elements/task-complete-display";
-import { PdfResult, PdfLoading } from "@/components/ai-elements/pdf-result";
+import { PdfResult } from "@/components/ai-elements/pdf-result";
+import { PresentationResult, PresentationLoading } from "@/components/ai-elements/presentation-result";
+import { SlidesHeadingConfirmation } from "@/components/ai-elements/slides-heading-confirmation";
 import {
   CopyIcon,
   RefreshCwIcon,
@@ -67,6 +76,73 @@ import {
 import type { MyUIMessage, PdfOperationResult } from "@/types/chat";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Weather, WeatherLoading } from "@/components/weather";
+
+function getDisplayTextContent(
+  message: MyUIMessage,
+  rawTextContent: string,
+  toolInvocations: MyUIMessage["parts"]
+): string {
+  if (message.role !== "assistant") {
+    return rawTextContent;
+  }
+
+  // Check for ANY slides tool (heading plan OR final creation)
+  const SLIDES_TOOL_NAMES = ["createPresentation", "schedulePresentationHeadings"];
+
+  const extractToolName = (part: MyUIMessage["parts"][number]): string | null => {
+    if (!part || typeof part !== "object") return null;
+    if ("type" in part && typeof part.type === "string" && part.type.startsWith("tool-")) {
+      return (part.type as string).slice(5);
+    }
+    if ("toolName" in part && typeof part.toolName === "string") return part.toolName;
+    if ("toolInvocation" in part && part.toolInvocation && typeof (part.toolInvocation as any).toolName === "string") {
+      return (part.toolInvocation as any).toolName;
+    }
+    return null;
+  };
+
+  const hasSlidesTool = toolInvocations.some((part) => {
+    const name = extractToolName(part);
+    return name !== null && SLIDES_TOOL_NAMES.includes(name);
+  });
+
+  if (!hasSlidesTool) {
+    return rawTextContent;
+  }
+
+  // Check if the tool has produced a result (not just pending)
+  const hasSlidesResult = toolInvocations.some((part) => {
+    const name = extractToolName(part);
+    if (!name || !SLIDES_TOOL_NAMES.includes(name)) return false;
+
+    const t = (part as any).toolInvocation || part;
+    const state = (t as any).state || "";
+    const hasResult =
+      state === "result" ||
+      state === "output-available" ||
+      (t as any).result !== undefined ||
+      (t as any).output !== undefined;
+    return hasResult;
+  });
+
+  if (!hasSlidesResult) {
+    return rawTextContent;
+  }
+
+  const normalizedText = rawTextContent.trim();
+  const isClarificationPrompt =
+    normalizedText.length > 0 &&
+    (/[?]\s*$/.test(normalizedText) ||
+      /^(can|could|would|will|do|does|did|is|are|should|which|what|when|where|who|how)\b/i.test(
+        normalizedText
+      ));
+
+  if (isClarificationPrompt) {
+    return normalizedText;
+  }
+
+  return "";
+}
 
 type ChatStatus = UseChatHelpers<MyUIMessage>["status"];
 
@@ -126,9 +202,10 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error, 
         <ConversationContent className="max-w-3xl mx-auto w-full py-10 px-4 lg:px-0 gap-8">
         <AnimatePresence initial={false}>
           {deduplicatedMessages.map((message,messageIndex) => {
-            const textContent = getMessageTextContent(message);
             const reasoning = getMessageReasoning(message);
             const toolInvocations = getToolInvocations(message);
+            const rawTextContent = getMessageTextContent(message);
+            const textContent = getDisplayTextContent(message, rawTextContent, toolInvocations);
             const sources = getMessageSources(message);
             const isLastMessage = lastMessage?.id === message.id;
             const hasAssistantContent =
@@ -163,8 +240,8 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error, 
                     {message.role === "user" && message.parts && (
                       <div className="flex flex-wrap gap-2 mb-2">
                         {message.parts
-                          .filter((part: any) => part.type === "file")
-                          .map((part: any, i: number) => (
+                          .filter((part: MyUIMessage["parts"][number]) => "type" in part && part.type === "file")
+                          .map((part: MyUIMessage["parts"][number], i: number) => (
                             <div
                               key={i}
                               className="flex items-center gap-1.5 px-2 py-1 bg-background/20 rounded text-xs"
@@ -304,12 +381,192 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
                           }
                         }
 
+                        // Schedule GitHub Issue Creation (with human-in-the-loop confirmation)
+                        if (toolInvocation.toolName === "scheduleIssueCreation" && isCompleted) {
+                          const result = toolInvocation.result;
+                          if (result.status === "pending_confirmation") {
+                            return (
+                              <GitHubIssueConfirmation
+                                key={toolInvocation.toolCallId}
+                                toolCallId={toolInvocation.toolCallId}
+                                issueDetails={result.issueDetails}
+                                reasoning={result.reasoning}
+                                availableRepos={result.availableRepos}
+                              />
+                            );
+                          }
+                        }
+
+                        // Schedule GitHub PR Creation (with human-in-the-loop confirmation)
+                        if (toolInvocation.toolName === "schedulePRCreation" && isCompleted) {
+                          const result = toolInvocation.result;
+                          if (result.status === "pending_confirmation") {
+                            return (
+                              <GitHubPRConfirmation
+                                key={toolInvocation.toolCallId}
+                                toolCallId={toolInvocation.toolCallId}
+                                prDetails={result.prDetails}
+                                reasoning={result.reasoning}
+                                availableRepos={result.availableRepos}
+                                availableBranches={result.availableBranches}
+                              />
+                            );
+                          }
+                        }
+
+                        // Schedule GitHub Merge (with human-in-the-loop confirmation)
+                        if (toolInvocation.toolName === "scheduleMerge" && isCompleted) {
+                          const result = toolInvocation.result;
+                          if (result.status === "pending_confirmation") {
+                            return (
+                              <GitHubMergeConfirmation
+                                key={toolInvocation.toolCallId}
+                                toolCallId={toolInvocation.toolCallId}
+                                mergeDetails={result.mergeDetails}
+                                reasoning={result.reasoning}
+                              />
+                            );
+                          }
+                        }
+
+                        // GitHub Branch Creation Result
+                        if (toolInvocation.toolName === "createBranch" && isCompleted) {
+                          if (!hasError && toolInvocation.result?.success) {
+                            return (
+                              <GitHubBranchResult
+                                key={toolInvocation.toolCallId}
+                                branch={toolInvocation.result.branch}
+                                baseBranch={toolInvocation.result.baseBranch}
+                                sha={toolInvocation.result.sha}
+                                owner={toolInvocation.result.owner}
+                                repo={toolInvocation.result.repo}
+                                message={toolInvocation.result.message}
+                              />
+                            );
+                          }
+                        }
+
+                        // GitHub List Pull Requests Result
+                        if (toolInvocation.toolName === "listPullRequests" && isCompleted) {
+                          if (!hasError && toolInvocation.result?.success) {
+                            return (
+                              <GitHubPRList
+                                key={toolInvocation.toolCallId}
+                                pullRequests={toolInvocation.result.pullRequests}
+                                count={toolInvocation.result.count}
+                                owner={toolInvocation.result.owner}
+                                repo={toolInvocation.result.repo}
+                                message={toolInvocation.result.message}
+                              />
+                            );
+                          }
+                        }
+
+                        // GitHub List Repositories Result
+                        if (toolInvocation.toolName === "listRepositories" && isCompleted) {
+                          if (!hasError && toolInvocation.result?.success) {
+                            return (
+                              <GitHubRepoList
+                                key={toolInvocation.toolCallId}
+                                repositories={toolInvocation.result.repositories}
+                                count={toolInvocation.result.count}
+                                message={toolInvocation.result.message}
+                              />
+                            );
+                          }
+                        }
+
+                        // GitHub Comment Result
+                        if (toolInvocation.toolName === "commentOnPR" && isCompleted) {
+                          if (!hasError && toolInvocation.result?.success) {
+                            return (
+                              <GitHubCommentResult
+                                key={toolInvocation.toolCallId}
+                                issueNumber={toolInvocation.args?.issueNumber}
+                                url={toolInvocation.result.url}
+                                owner={toolInvocation.result.owner}
+                                repo={toolInvocation.result.repo}
+                                message={toolInvocation.result.message}
+                              />
+                            );
+                          }
+                        }
+
+                        // GitHub Issue Creation (direct) — show success Gen UI
+                        if (toolInvocation.toolName === "createIssue" && isCompleted) {
+                          if (!hasError && toolInvocation.result?.success) {
+                            return (
+                              <GitHubIssueConfirmation
+                                key={toolInvocation.toolCallId}
+                                toolCallId={toolInvocation.toolCallId}
+                                issueDetails={{
+                                  owner: toolInvocation.result.owner,
+                                  repo: toolInvocation.result.repo,
+                                  title: toolInvocation.result.title,
+                                }}
+                                reasoning="Issue created directly"
+                              />
+                            );
+                          }
+                        }
+
+                        // GitHub PR Creation (direct) — show success Gen UI
+                        if (toolInvocation.toolName === "createPullRequest" && isCompleted) {
+                          if (!hasError && toolInvocation.result?.success) {
+                            return (
+                              <GitHubPRConfirmation
+                                key={toolInvocation.toolCallId}
+                                toolCallId={toolInvocation.toolCallId}
+                                prDetails={{
+                                  owner: toolInvocation.result.owner,
+                                  repo: toolInvocation.result.repo,
+                                  title: toolInvocation.result.title,
+                                  head: toolInvocation.args?.head || "",
+                                  base: toolInvocation.args?.base || "main",
+                                }}
+                                reasoning="PR created directly"
+                              />
+                            );
+                          }
+                        }
+
+                        // GitHub Merge (direct) — show success Gen UI
+                        if (toolInvocation.toolName === "mergePullRequest" && isCompleted) {
+                          if (!hasError && toolInvocation.result?.success) {
+                            return null; // Handled by scheduleMerge
+                          }
+                        }
+
                         // Confirm Send Email (shows success after sending)
                         if (toolInvocation.toolName === "confirmSendEmail" && isCompleted) {
                           if (!hasError && toolInvocation.result?.status === "sent") {
                             // Show a success message - the UI already shows it in EmailDraftConfirmation
                             // We can render a simple success indicator here if needed
                             return null; // The component handles the success state
+                          }
+                        }
+
+                        // Create Survey Form (with human-in-the-loop confirmation)
+                        if (toolInvocation.toolName === "createSurveyForm" && isCompleted) {
+                          const result = toolInvocation.result;
+                          if (result.status === "pending_confirmation") {
+                            return (
+                              <FormCreationConfirmation
+                                key={toolInvocation.toolCallId}
+                                toolCallId={toolInvocation.toolCallId}
+                                formData={result.formData}
+                                reasoning={result.reasoning}
+                              />
+                            );
+                          }
+                        }
+
+                        // Confirm Create Form (shows success after creation)
+                        if (toolInvocation.toolName === "confirmCreateForm" && isCompleted) {
+                          if (!hasError && toolInvocation.result?.status === "created") {
+                            // The form was created successfully
+                            // Could render a success card here if desired
+                            return null; // FormCreationConfirmation handles the success state
                           }
                         }
 
@@ -525,6 +782,61 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
                             </div>
                           );
                         }
+
+                        // Special rendering for Presentation tool - wrapped in Tool UI
+                        if (toolInvocation.toolName === "schedulePresentationHeadings" && isCompleted) {
+                          const result = toolInvocation.result;
+                          if (result?.status === "pending_confirmation") {
+                            return (
+                              <SlidesHeadingConfirmation
+                                key={toolInvocation.toolCallId}
+                                toolCallId={toolInvocation.toolCallId}
+                                presentationDetails={result.presentationDetails}
+                                reasoning={result.reasoning}
+                                model={model}
+                              />
+                            );
+                          }
+                        }
+
+                        // Special rendering for Presentation tool - wrapped in Tool UI
+                        if (toolInvocation.toolName === "createPresentation") {
+                          return (
+                            <div key={toolInvocation.toolCallId} className="flex flex-col gap-2 w-full">
+                              <Tool defaultOpen={false}>
+                                <ToolHeader
+                                  title="Create Presentation"
+                                  type={"tool-createPresentation" as any}
+                                  state={
+                                    hasError
+                                      ? "output-error"
+                                      : isCompleted
+                                      ? "output-available"
+                                      : "input-available"
+                                  }
+                                />
+                                <ToolContent>
+                                  <ToolInput input={toolInvocation.args} />
+                                </ToolContent>
+                              </Tool>
+                              
+                              {/* Presentation UI rendered outside the Tool component */}
+                              <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.2 }}
+                                className="w-full"
+                              >
+                                {isCompleted ? (
+                                  <PresentationResult {...toolInvocation.result} />
+                                ) : (
+                                  <PresentationLoading title={toolInvocation.args?.title} />
+                                )}
+                              </motion.div>
+                            </div>
+                          );
+                        }
+
                         // Default tool rendering
                         return (
                           <Tool key={toolInvocation.toolCallId} defaultOpen={false}>
