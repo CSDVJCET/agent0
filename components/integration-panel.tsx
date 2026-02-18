@@ -86,6 +86,14 @@ const INTEGRATION_DETAILS: Record<string, { name: string; description: string; f
       { name: "createGanttChart", description: "Create Gantt charts for project timelines" }
     ]
   },
+  slides: {
+    name: "Slides",
+    description: "Create beautiful reveal.js presentations with images, animations, and professional styling.",
+    functions: [
+      { name: "schedulePresentationHeadings", description: "Draft editable slide heading overview before generation" },
+      { name: "createPresentation", description: "Generate HTML presentation with rich visuals and animations" }
+    ]
+  },
   github: {
     name: "GitHub",
     description: "Manage repositories, issues, branches, and pull requests on GitHub.",

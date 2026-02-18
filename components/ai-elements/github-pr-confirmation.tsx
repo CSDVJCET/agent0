@@ -59,6 +59,71 @@ interface GitHubPRConfirmationProps {
   availableBranches?: string[];
 }
 
+interface BranchDropdownProps {
+  field: "head" | "base";
+  value: string;
+  label: string;
+  required?: boolean;
+  availableBranches: string[];
+  isOpen: boolean;
+  setOpen: (open: boolean) => void;
+  onSelect: (field: "head" | "base", branch: string) => void;
+  onChange: (field: string, value: string) => void;
+  disabled: boolean;
+}
+
+const BranchDropdown = ({
+  field,
+  value,
+  label,
+  required,
+  availableBranches,
+  isOpen,
+  setOpen,
+  onSelect,
+  onChange,
+  disabled
+}: BranchDropdownProps) => {
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+        <GitBranchIcon className="w-3 h-3" />
+        {label} {required && <span className="text-destructive">*</span>}
+      </Label>
+      {availableBranches.length > 0 ? (
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setOpen(!isOpen)}
+            className="flex w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2.5 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={disabled}
+          >
+            <span className={value ? "text-foreground font-mono text-xs" : "text-muted-foreground"}>{value || `Select ${label.toLowerCase()}...`}</span>
+            <ChevronsUpDownIcon className="h-4 w-4 text-muted-foreground" />
+          </button>
+          {isOpen && (
+            <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-popover shadow-lg max-h-48 overflow-y-auto">
+              {availableBranches.map((branch) => (
+                <button
+                  key={branch}
+                  type="button"
+                  onClick={() => onSelect(field, branch)}
+                  className="flex w-full items-center px-3 py-2 text-xs hover:bg-accent hover:text-accent-foreground transition-colors font-mono"
+                >
+                  <span>{branch}</span>
+                  {value === branch && <CheckIcon className="ml-auto h-4 w-4 text-primary" />}
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </div>
+      ) : (
+        <Input value={value} onChange={(e) => onChange(field, e.target.value)} placeholder={`${label.toLowerCase()}`} className="h-10 font-mono text-xs" disabled={disabled} />
+      )}
+    </div>
+  );
+};
+
 export function GitHubPRConfirmation({
   toolCallId,
   prDetails,
@@ -138,8 +203,8 @@ export function GitHubPRConfirmation({
   if (status === "created" && createdPR) {
     return (
       <motion.div initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="w-full max-w-lg my-4 not-prose">
-        <div className="rounded-xl border border-green-500/20 bg-gradient-to-br from-green-500/5 via-green-500/3 to-transparent backdrop-blur-sm shadow-lg overflow-hidden">
-          <div className="border-b border-green-500/10 bg-gradient-to-br from-green-500/5 to-transparent p-4">
+        <div className="rounded-xl border border-green-500/20 bg-linear-to-br from-green-500/5 via-green-500/3 to-transparent backdrop-blur-sm shadow-lg overflow-hidden">
+          <div className="border-b border-green-500/10 bg-linear-to-br from-green-500/5 to-transparent p-4">
             <div className="flex items-center gap-3">
               <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 200 }} className="p-2 rounded-lg bg-green-500/10 text-green-600 ring-1 ring-green-500/20">
                 <CheckIcon className="w-5 h-5" />
@@ -168,7 +233,7 @@ export function GitHubPRConfirmation({
   if (status === "rejected") {
     return (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-lg my-4 not-prose">
-        <div className="rounded-xl border border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-transparent p-4">
+        <div className="rounded-xl border border-amber-500/20 bg-linear-to-br from-amber-500/5 to-transparent p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600"><XIcon className="w-5 h-5" /></div>
             <div>
@@ -184,7 +249,7 @@ export function GitHubPRConfirmation({
   if (status === "error") {
     return (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-lg my-4 not-prose">
-        <div className="rounded-xl border border-red-500/20 bg-gradient-to-br from-red-500/5 to-transparent p-4">
+        <div className="rounded-xl border border-red-500/20 bg-linear-to-br from-red-500/5 to-transparent p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-red-500/10 text-red-600"><XIcon className="w-5 h-5" /></div>
             <div className="flex-1">
@@ -200,50 +265,6 @@ export function GitHubPRConfirmation({
     );
   }
 
-  const BranchDropdown = ({ field, value, label, required }: { field: "head" | "base"; value: string; label: string; required?: boolean }) => {
-    const isOpen = field === "head" ? showHeadDropdown : showBaseDropdown;
-    const setOpen = field === "head" ? setShowHeadDropdown : setShowBaseDropdown;
-
-    return (
-      <div className="space-y-2">
-        <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-          <GitBranchIcon className="w-3 h-3" />
-          {label} {required && <span className="text-destructive">*</span>}
-        </Label>
-        {availableBranches.length > 0 ? (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setOpen(!isOpen)}
-              className="flex w-full items-center justify-between rounded-lg border border-input bg-background px-3 py-2.5 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={status === "creating"}
-            >
-              <span className={value ? "text-foreground font-mono text-xs" : "text-muted-foreground"}>{value || `Select ${label.toLowerCase()}...`}</span>
-              <ChevronsUpDownIcon className="h-4 w-4 text-muted-foreground" />
-            </button>
-            {isOpen && (
-              <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-popover shadow-lg max-h-48 overflow-y-auto">
-                {availableBranches.map((branch) => (
-                  <button
-                    key={branch}
-                    type="button"
-                    onClick={() => handleBranchSelect(field, branch)}
-                    className="flex w-full items-center px-3 py-2 text-xs hover:bg-accent hover:text-accent-foreground transition-colors font-mono"
-                  >
-                    <span>{branch}</span>
-                    {value === branch && <CheckIcon className="ml-auto h-4 w-4 text-primary" />}
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </div>
-        ) : (
-          <Input value={value} onChange={(e) => handleChange(field, e.target.value)} placeholder={`${label.toLowerCase()}`} className="h-10 font-mono text-xs" disabled={status === "creating"} />
-        )}
-      </div>
-    );
-  };
-
   return (
     <div className="w-full max-w-lg my-4 not-prose">
       <ChainOfThought defaultOpen={false} className="mb-4">
@@ -258,7 +279,7 @@ export function GitHubPRConfirmation({
       </ChainOfThought>
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm shadow-lg overflow-hidden">
-        <div className="border-b border-border/50 bg-gradient-to-br from-primary/5 via-primary/3 to-transparent p-4">
+        <div className="border-b border-border/50 bg-linear-to-br from-primary/5 via-primary/3 to-transparent p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20"><GitPullRequestIcon className="w-5 h-5" /></div>
             <div className="flex-1">
@@ -307,8 +328,30 @@ export function GitHubPRConfirmation({
 
           {/* Branch selectors */}
           <div className="grid grid-cols-2 gap-3">
-            <BranchDropdown field="head" value={formData.head} label="Head Branch" required />
-            <BranchDropdown field="base" value={formData.base} label="Base Branch" required />
+            <BranchDropdown
+              field="head"
+              value={formData.head}
+              label="Head Branch"
+              required
+              availableBranches={availableBranches}
+              isOpen={showHeadDropdown}
+              setOpen={setShowHeadDropdown}
+              onSelect={handleBranchSelect}
+              onChange={handleChange}
+              disabled={status === "creating"}
+            />
+            <BranchDropdown
+              field="base"
+              value={formData.base}
+              label="Base Branch"
+              required
+              availableBranches={availableBranches}
+              isOpen={showBaseDropdown}
+              setOpen={setShowBaseDropdown}
+              onSelect={handleBranchSelect}
+              onChange={handleChange}
+              disabled={status === "creating"}
+            />
           </div>
 
           {/* Branch direction indicator */}

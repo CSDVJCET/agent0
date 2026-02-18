@@ -53,7 +53,9 @@ import { TaskSchedulingConfirmation } from "@/components/ai-elements/task-schedu
 import { TaskDeleteConfirmation } from "@/components/ai-elements/task-delete-confirmation";
 import { TaskUpdateConfirmation } from "@/components/ai-elements/task-update-confirmation";
 import { TaskCompleteDisplay } from "@/components/ai-elements/task-complete-display";
-import { PdfResult, PdfLoading } from "@/components/ai-elements/pdf-result";
+import { PdfResult } from "@/components/ai-elements/pdf-result";
+import { PresentationResult, PresentationLoading } from "@/components/ai-elements/presentation-result";
+import { SlidesHeadingConfirmation } from "@/components/ai-elements/slides-heading-confirmation";
 import {
   CopyIcon,
   RefreshCwIcon,
@@ -75,6 +77,73 @@ import type { MyUIMessage, PdfOperationResult } from "@/types/chat";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Weather, WeatherLoading } from "@/components/weather";
 
+function getDisplayTextContent(
+  message: MyUIMessage,
+  rawTextContent: string,
+  toolInvocations: MyUIMessage["parts"]
+): string {
+  if (message.role !== "assistant") {
+    return rawTextContent;
+  }
+
+  // Check for ANY slides tool (heading plan OR final creation)
+  const SLIDES_TOOL_NAMES = ["createPresentation", "schedulePresentationHeadings"];
+
+  const extractToolName = (part: MyUIMessage["parts"][number]): string | null => {
+    if (!part || typeof part !== "object") return null;
+    if ("type" in part && typeof part.type === "string" && part.type.startsWith("tool-")) {
+      return (part.type as string).slice(5);
+    }
+    if ("toolName" in part && typeof part.toolName === "string") return part.toolName;
+    if ("toolInvocation" in part && part.toolInvocation && typeof (part.toolInvocation as any).toolName === "string") {
+      return (part.toolInvocation as any).toolName;
+    }
+    return null;
+  };
+
+  const hasSlidesTool = toolInvocations.some((part) => {
+    const name = extractToolName(part);
+    return name !== null && SLIDES_TOOL_NAMES.includes(name);
+  });
+
+  if (!hasSlidesTool) {
+    return rawTextContent;
+  }
+
+  // Check if the tool has produced a result (not just pending)
+  const hasSlidesResult = toolInvocations.some((part) => {
+    const name = extractToolName(part);
+    if (!name || !SLIDES_TOOL_NAMES.includes(name)) return false;
+
+    const t = (part as any).toolInvocation || part;
+    const state = (t as any).state || "";
+    const hasResult =
+      state === "result" ||
+      state === "output-available" ||
+      (t as any).result !== undefined ||
+      (t as any).output !== undefined;
+    return hasResult;
+  });
+
+  if (!hasSlidesResult) {
+    return rawTextContent;
+  }
+
+  const normalizedText = rawTextContent.trim();
+  const isClarificationPrompt =
+    normalizedText.length > 0 &&
+    (/[?]\s*$/.test(normalizedText) ||
+      /^(can|could|would|will|do|does|did|is|are|should|which|what|when|where|who|how)\b/i.test(
+        normalizedText
+      ));
+
+  if (isClarificationPrompt) {
+    return normalizedText;
+  }
+
+  return "";
+}
+
 type ChatStatus = UseChatHelpers<MyUIMessage>["status"];
 
 export type MessageListProps = {
@@ -83,12 +152,12 @@ export type MessageListProps = {
   status: ChatStatus;
   onRegenerate: () => void;
   error?: Error | undefined;
+  model?: string;
 };
 
-export function MessageList({ messages, isLoading, status, onRegenerate, error }: MessageListProps) {
+export function MessageList({ messages, isLoading, status, onRegenerate, error, model }: MessageListProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const [scrollContainer, setScrollContainer] = useState<HTMLDivElement | null>(null);
   
   // Deduplicate messages to prevent React key collisions
   // This can happen during streaming updates or localStorage restoration
@@ -113,8 +182,7 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
       const scrollEl = wrapperRef.current.querySelector('[style*="overflow"]') as HTMLDivElement 
         || wrapperRef.current.firstElementChild as HTMLDivElement;
       if (scrollEl) {
-        (scrollContainerRef as React.MutableRefObject<HTMLDivElement | null>).current = scrollEl;
-        setMounted(true);
+        setScrollContainer(scrollEl);
       }
     }
   }, []);
@@ -122,22 +190,23 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
   return (
     <div ref={wrapperRef} className="relative h-full">
       {/* Scroll Progress Indicator */}
-      <div className="pointer-events-none absolute left-0 top-0 z-50 w-full">
-        <div className="absolute left-0 top-0 h-1 w-full bg-muted/30" />
-        {mounted && (
+      {scrollContainer && (
+        <div className="pointer-events-none absolute left-0 top-0 z-50 w-full">
+          <div className="absolute left-0 top-0 h-1 w-full bg-muted/30" />
           <ScrollProgress
-            containerRef={scrollContainerRef}
+            containerRef={{ current: scrollContainer }}
             className="absolute top-0 bg-primary"
           />
-        )}
-      </div>
+        </div>
+      )}
       <Conversation className="h-full">
         <ConversationContent className="max-w-3xl mx-auto w-full py-10 px-4 lg:px-0 gap-8">
         <AnimatePresence initial={false}>
           {deduplicatedMessages.map((message,messageIndex) => {
-            const textContent = getMessageTextContent(message);
             const reasoning = getMessageReasoning(message);
             const toolInvocations = getToolInvocations(message);
+            const rawTextContent = getMessageTextContent(message);
+            const textContent = getDisplayTextContent(message, rawTextContent, toolInvocations);
             const sources = getMessageSources(message);
             const isLastMessage = lastMessage?.id === message.id;
             const hasAssistantContent =
@@ -172,8 +241,8 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error }
                     {message.role === "user" && message.parts && (
                       <div className="flex flex-wrap gap-2 mb-2">
                         {message.parts
-                          .filter((part: any) => part.type === "file")
-                          .map((part: any, i: number) => (
+                          .filter((part: MyUIMessage["parts"][number]) => "type" in part && part.type === "file")
+                          .map((part: MyUIMessage["parts"][number], i: number) => (
                             <div
                               key={i}
                               className="flex items-center gap-1.5 px-2 py-1 bg-background/20 rounded text-xs"
@@ -714,6 +783,61 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
                             </div>
                           );
                         }
+
+                        // Special rendering for Presentation tool - wrapped in Tool UI
+                        if (toolInvocation.toolName === "schedulePresentationHeadings" && isCompleted) {
+                          const result = toolInvocation.result;
+                          if (result?.status === "pending_confirmation") {
+                            return (
+                              <SlidesHeadingConfirmation
+                                key={toolInvocation.toolCallId}
+                                toolCallId={toolInvocation.toolCallId}
+                                presentationDetails={result.presentationDetails}
+                                reasoning={result.reasoning}
+                                model={model}
+                              />
+                            );
+                          }
+                        }
+
+                        // Special rendering for Presentation tool - wrapped in Tool UI
+                        if (toolInvocation.toolName === "createPresentation") {
+                          return (
+                            <div key={toolInvocation.toolCallId} className="flex flex-col gap-2 w-full">
+                              <Tool defaultOpen={false}>
+                                <ToolHeader
+                                  title="Create Presentation"
+                                  type={"tool-createPresentation" as any}
+                                  state={
+                                    hasError
+                                      ? "output-error"
+                                      : isCompleted
+                                      ? "output-available"
+                                      : "input-available"
+                                  }
+                                />
+                                <ToolContent>
+                                  <ToolInput input={toolInvocation.args} />
+                                </ToolContent>
+                              </Tool>
+                              
+                              {/* Presentation UI rendered outside the Tool component */}
+                              <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.2 }}
+                                className="w-full"
+                              >
+                                {isCompleted ? (
+                                  <PresentationResult {...toolInvocation.result} />
+                                ) : (
+                                  <PresentationLoading title={toolInvocation.args?.title} />
+                                )}
+                              </motion.div>
+                            </div>
+                          );
+                        }
+
                         // Default tool rendering
                         return (
                           <Tool key={toolInvocation.toolCallId} defaultOpen={false}>

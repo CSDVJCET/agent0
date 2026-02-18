@@ -1,4 +1,4 @@
-import { google, GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
+import { google } from "@ai-sdk/google";
 import { cohere } from "@ai-sdk/cohere";
 import { createOpenAI } from "@ai-sdk/openai";
 import { streamText, convertToModelMessages, stepCountIs } from "ai";
@@ -10,9 +10,11 @@ import { formsTools } from "@/ai/forms-tools";
 import { gmailTools } from "@/ai/gmail-tools";
 import { tasksTools } from "@/ai/tasks-tools";
 import { githubTools } from "@/ai/github-tools";
+import { slidesTools } from "@/ai/slides-tools";
 // PDF tools removed — handled entirely client-side to avoid tool part serialization issues
 import { GMAIL_AGENT_PROMPT } from "@/ai/prompts/gmail";
 import { GITHUB_AGENT_PROMPT } from "@/ai/prompts/github";
+import { SLIDES_PROMPT } from "@/ai/prompts/slides";
 import { isToolInstalled } from "@/lib/installed-tools";
 import { getNextFallbackModel, isRateLimitError, type ModelRetryMetadata } from "@/lib/model-fallback";
 
@@ -75,21 +77,22 @@ function sanitizeToolParts(messages: MyUIMessage[]): MyUIMessage[] {
         return msg;
       }
 
-      const sanitizedParts = msg.parts.filter((part: any) => {
+      const sanitizedParts = msg.parts.filter((part: MyUIMessage["parts"][number]) => {
         if (!part || typeof part.type !== "string") {
           return false;
         }
 
         // Handle tool-invocation structure
         if (part.type === "tool-invocation") {
+          const p = part as any;
           const toolName =
-            part.toolName || part.toolInvocation?.toolName || part.tool?.name;
+            p.toolName || p.toolInvocation?.toolName || p.tool?.name;
           if (typeof toolName !== "string" || toolName.trim().length === 0) {
             return false;
           }
           // Ensure state exists
-          if (!part.state) {
-            part.state = part.result || part.output ? "result" : "call";
+          if (!p.state) {
+            p.state = p.result || p.output ? "result" : "call";
           }
           return true;
         }
@@ -101,14 +104,15 @@ function sanitizeToolParts(messages: MyUIMessage[]): MyUIMessage[] {
             return false;
           }
           // Ensure these have proper structure
-          if (!part.toolName) {
-            part.toolName = toolName;
+          const p = part as any;
+          if (!p.toolName) {
+            p.toolName = toolName;
           }
-          if (!part.state) {
-            part.state = part.result || part.output ? "result" : "call";
+          if (!p.state) {
+            p.state = p.result || p.output ? "result" : "call";
           }
-          if (!part.toolCallId) {
-            part.toolCallId = `generated-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          if (!p.toolCallId) {
+            p.toolCallId = `generated-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
           }
           return true;
         }
@@ -410,7 +414,7 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
   }
 
   // Build tools object based on mentioned tools and enabled features
-  let tools: Record<string, any> = {};
+  const tools: Record<string, any> = {};
   const hasCustomTools = mentionedTools.length > 0;
 
   // Add @mentioned custom tools (like weather)
@@ -501,6 +505,15 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
           console.warn("GitHub tool mentioned but not installed");
         }
       }
+      // Slides/Presentation tools
+      if (lowerToolName === "slides" || lowerToolName === "presentation" || lowerToolName === "ppt") {
+        if (isToolInstalled("slides")) {
+          tools.schedulePresentationHeadings = slidesTools.schedulePresentationHeadings;
+          tools.createPresentation = slidesTools.createPresentation;
+        } else {
+          console.warn("Slides tool mentioned but not installed");
+        }
+      }
       // PDF tools — handled entirely client-side (no LLM involvement)
       // The @pdf mention is intercepted in chat-ui.tsx before reaching this route
       // Add more tool mappings here as needed
@@ -523,8 +536,6 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
       tools.code_execution = google.tools.codeExecution({});
     }
   }
-
-  const hasTools = Object.keys(tools).length > 0;
 
   // Build guidance strings outside the retry loop to avoid redeclaration
   const calendarGuidance = mentionedTools.some(t => t.toLowerCase() === "calendar")
@@ -551,13 +562,17 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
       "8) When user says 'PR from X to Y', that means head=X, base=Y — validate both branches exist first."
     : "";
 
+  const slidesGuidance = mentionedTools.some(t => ["slides", "presentation", "ppt"].includes(t.toLowerCase()))
+    ? ` ${SLIDES_PROMPT}\n\nSlides workflow is mandatory: first call schedulePresentationHeadings to produce a pending confirmation heading plan (no HTML output). Generate SPECIFIC, DESCRIPTIVE headings that reflect real content about the topic — not generic headings like "Current Landscape" or "Key Drivers". For example, for "Ferrari vs Benz" use headings like "Ferrari's Racing Heritage: 75+ Years of F1 Dominance", "Mercedes-Benz: Engineering Luxury Since 1886", etc. Wait for user confirmation in UI. The backend AI agent automatically generates real factual content, picks topic-matching colors, and fetches relevant Unsplash images — you do NOT need to call createPresentation. Never output raw HTML directly as assistant text. When the presentation card/tool UI is available, do not output slide outlines, summaries, or duplicate narrative text in chat. Only send assistant text if you must ask a direct clarification question due to missing required inputs.`
+    : "";
+
   // PDF guidance removed — PDF operations are handled client-side
 
   // Retry logic with automatic model fallback on rate limiting
   const maxRetries = 3;
   let currentModel = model;
   const attemptedModels = new Set<string>([currentModel]);
-  let lastError: any = null;
+  let lastError: unknown = null;
   const retryMetadata: ModelRetryMetadata = {
     originalModel: model,
     attemptedModels: [currentModel],
@@ -612,7 +627,7 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
 
       const result = streamText({
         model: modelInstance,
-        system: `${systemPrompt}${calendarGuidance}${formsGuidance}${tasksGuidance}${githubGuidance}`,
+        system: `${systemPrompt}${calendarGuidance}${formsGuidance}${tasksGuidance}${githubGuidance}${slidesGuidance}`,
         messages: modelMessages,
         tools: hasCurrentTools ? currentTools : undefined,
         toolChoice: hasCurrentTools ? "auto" : "none",
@@ -661,7 +676,7 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
           return undefined;
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       lastError = error;
       console.error(`Attempt ${attempt + 1} failed with model ${currentModel}:`, error);
 
