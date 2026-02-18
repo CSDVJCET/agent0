@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { UserButton, SignedIn, SignedOut, SignInButton } from "@clerk/nextjs";
 import { TreePine, Blocks } from "lucide-react";
 import { ModelSelectorControl, Model } from "@/components/ai-elements/model-selector-control";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export type ChatHeaderProps = {
   models: Model[];
@@ -25,23 +26,30 @@ export function ChatHeader({
   onOpenIntegrations,
 }: ChatHeaderProps) {
   return (
-    <header className="flex h-14 items-center justify-between border-b px-4 lg:px-8 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
-      <div 
-        className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity" 
-        onClick={onNewChat}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            onNewChat?.();
-          }
-        }}
-      >
-        <div className="flex items-center justify-center size-8 rounded-lg bg-primary/10 text-primary">
-          <TreePine className="size-4" />
-        </div>
-        <span className="font-semibold text-sm">Agent0</span>
-      </div>
+    <header className="flex h-14 items-center justify-between border-b px-4 lg:px-8 bg-background/80 backdrop-blur-sm sticky top-0 z-50">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div 
+            className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity" 
+            onClick={onNewChat}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                onNewChat?.();
+              }
+            }}
+          >
+            <div className="flex items-center justify-center size-8 rounded-lg bg-primary/10 text-primary">
+              <TreePine className="size-4" />
+            </div>
+            <span className="font-semibold text-sm">Agent0</span>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" align="start" sideOffset={10}>
+          New Chat
+        </TooltipContent>
+      </Tooltip>
 
       <ModelSelectorControl
         models={models}

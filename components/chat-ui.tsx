@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import type { MyUIMessage, PdfOperationResult } from "@/types/chat";
 import { StripLargeDataChatTransport } from "@/lib/chat-transport";
+import { TreePine } from "lucide-react";
 
 // Components
 import { ChatHeader } from "@/components/chat-header";
@@ -169,13 +170,16 @@ export function ChatUI() {
     setMessages([]);
     setAttachments([]);
     setInputValue("");
+    setMentionedTools([]);
+    setEnableSearch(true);
+    setEnableThinking(true);
     setIsChatModalOpen(false);
     localStorage.removeItem(STORAGE_KEYS.MESSAGES);
     // Clear the file input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-  }, [setMessages]);
+  }, [setMessages, setAttachments, setInputValue, setMentionedTools, setEnableSearch, setEnableThinking, setIsChatModalOpen, fileInputRef]);
 
   // Handle Escape key to close modal
   useEffect(() => {
@@ -445,7 +449,15 @@ export function ChatUI() {
             className="flex flex-col items-center justify-center h-full px-4"
           >
             <div className="max-w-3xl w-full space-y-6 pb-32">
-              <div className="text-center space-y-3">
+              <div className="flex flex-col items-center text-center space-y-3">
+                <motion.div 
+                  className="flex items-center justify-center size-16 rounded-2xl bg-primary/10 text-primary mb-4 cursor-pointer hover:bg-primary/20 transition-colors"
+                  onClick={handleNewChat}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <TreePine className="size-8" />
+                </motion.div>
                 <h2 className="text-4xl font-bold text-foreground">What can I help you with?</h2>
                 <p className="text-lg text-foreground/60">Ask me anything or try one of these suggestions</p>
               </div>
@@ -600,6 +612,7 @@ export function ChatUI() {
                       error={error}
                       containerRef={modalScrollRef}
                       onRefHydrated={() => setIsModalRefHydrated(true)}
+                      model={selectedModel}
                     />
                   </div>
                 </motion.div>
