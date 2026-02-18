@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PresentationResult } from "@/components/ai-elements/presentation-result";
+import { PresentationResult, PresentationLoading } from "@/components/ai-elements/presentation-result";
 import {
   ChainOfThought,
   ChainOfThoughtContent,
@@ -131,6 +131,10 @@ export function SlidesHeadingConfirmation({
     topic.trim().length > 0 &&
     headings.length >= 3 &&
     headings.every((heading) => heading.trim().length > 0);
+
+  if (status === "creating") {
+    return <PresentationLoading title={`Generating presentation for "${title || topic}"`} />;
+  }
 
   if (status === "created" && createdResult) {
     return <PresentationResult {...createdResult} />;

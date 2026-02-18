@@ -28,7 +28,8 @@ export async function searchUnsplashImages(
   const results = await Promise.all(
     queries.map(async (query, idx) => {
       try {
-        const searchQuery = encodeURIComponent(query);
+        const trimmedQuery = query;
+        const searchQuery = encodeURIComponent(trimmedQuery);
         const res = await fetch(
           `https://api.unsplash.com/search/photos?query=${searchQuery}&per_page=3&orientation=landscape`,
           {
@@ -90,6 +91,7 @@ const presentationSlideSchema = z.object({
     .describe("Number of images (0-3, default 1)"),
   transition: slideTransitionSchema.describe("Slide transition effect"),
   unsplashImageUrl: z.string().optional().describe("Real Unsplash image URL fetched by API"),
+  useFragments: z.boolean().optional().describe("Whether bullets animate in one-by-one (true) or all at once (false)"),
 });
 
 const colorSchemeSchema = z.enum([
@@ -150,6 +152,16 @@ const createPresentationInputSchema = z.object({
     .array(z.string().nullable())
     .optional()
     .describe("Array of real Unsplash image URLs (one per slide)"),
+  customCSS: z.string().optional().describe("LLM-generated CSS override block for custom gradients, typography, etc."),
+  googleFont: z.string().optional().describe("Google Fonts family name chosen by LLM (e.g. 'Playfair Display', 'Space Grotesk')"),
+  closingData: z
+    .object({
+      headline: z.string(),
+      subtext: z.string(),
+      ctaText: z.string().optional(),
+    })
+    .optional()
+    .describe("LLM-generated closing slide content"),
 });
 
 const headingDraftInputSchema = z.object({
@@ -447,16 +459,21 @@ const imageTag = (
 const buildHeuristicHeadings = (topic: string, count: number) => {
   const base = topic.trim();
   const templates = [
-    `Introduction to ${base}`,
-    `${base}: Current Landscape`,
-    `Key Drivers in ${base}`,
-    `${base} Use Cases`,
-    `Implementation Strategy`,
-    `Challenges & Solutions`,
-    `Measuring Success`,
-    `Future of ${base}`,
-    `Action Plan`,
-    `Q&A`,
+    `The Story of ${base}`,
+    `Why ${base} Matters Now`,
+    `${base}: Core Principles`,
+    `${base} in the Real World`,
+    `Breakthroughs & Milestones`,
+    `The People Behind ${base}`,
+    `${base} vs. The Alternatives`,
+    `Inside the Numbers`,
+    `What Critics Get Wrong About ${base}`,
+    `The Road Ahead for ${base}`,
+    `Lessons Learned`,
+    `Expert Perspectives`,
+    `${base} Around the Globe`,
+    `The Defining Moments`,
+    `Looking Forward`,
   ];
   return Array.from({ length: count }).map(
     (_, i) => templates[i] || `${base} — Slide ${i + 1}`
@@ -514,15 +531,20 @@ function renderContentSlide(
     .map((l) => l.trim())
     .filter(Boolean);
 
+  const useFragments = slide.useFragments !== false; // default true
   const bulletHtml =
     contentLines.length > 1
       ? `<ul>${contentLines
           .map(
             (line, i) =>
-              `<li class="fragment fade-in" data-fragment-index="${i}">${line}</li>`
+              useFragments
+                ? `<li class="fragment fade-in" data-fragment-index="${i}">${line}</li>`
+                : `<li>${line}</li>`
           )
           .join("")}</ul>`
-      : `<p class="fragment fade-in">${slide.content}</p>`;
+      : useFragments
+        ? `<p class="fragment fade-in">${slide.content}</p>`
+        : `<p>${slide.content}</p>`;
 
   // ─── Full-image overlay ───
   if (layout === "full-image-overlay") {
@@ -613,30 +635,43 @@ function renderContentSlide(
       </section>`;
 }
 
-/** Build a varied closing slide based on slide count hash. */
+/** Render the closing slide using LLM-provided content when available, with a quality fallback. */
 function renderClosingSlide(
   title: string,
   topic: string,
   totalContentSlides: number,
   imgCounter: { value: number },
-  colors: ColorPalette
+  colors: ColorPalette,
+  closingData?: { headline: string; subtext: string; ctaText?: string }
 ): string {
-  const variant = totalContentSlides % 4;
   const keywords = topic.split(" ").slice(0, 3).join(",");
 
+  // LLM-generated closing slide
+  if (closingData) {
+    const bgImg = buildFallbackImageUrl(1600, 900, `${keywords}-closing`, imgCounter.value++);
+    return `
+      <section data-transition="zoom" data-background-image="${bgImg}" data-background-size="cover" class="overlay-slide centered">
+        <div class="overlay-box" style="text-align:center; max-width:760px;">
+          <h2 class="fragment fade-in" style="font-size:36pt; line-height:1.15;">${closingData.headline}</h2>
+          <div style="width:60px; height:3px; background:${colors.accent}; margin:16px auto;" class="fragment fade-in"></div>
+          <p class="fragment fade-in" style="font-size:17pt; margin-top:8px; color:${colors.muted};">${closingData.subtext}</p>
+          ${closingData.ctaText ? `<div class="fragment zoom-in" style="margin-top:24px; display:inline-block; padding:14px 32px; background:${colors.primary}; color:#fff; border-radius:8px; font-size:16pt; font-weight:700; letter-spacing:0.03em;">${closingData.ctaText}</div>` : ""}
+        </div>
+      </section>`;
+  }
+
+  // Fallback variants when no LLM data
+  const variant = totalContentSlides % 3;
+
   if (variant === 0) {
-    const bgImg = buildFallbackImageUrl(
-      1600,
-      900,
-      `${keywords}-conclusion`,
-      imgCounter.value++
-    );
+    const bgImg = buildFallbackImageUrl(1600, 900, `${keywords} conclusion`, imgCounter.value++);
     return `
       <section data-transition="zoom" data-background-image="${bgImg}" data-background-size="cover" class="overlay-slide centered">
         <div class="overlay-box" style="text-align:center;">
-          <h2 class="fragment fade-in" style="font-size:36pt;">Thank You</h2>
-          <p class="fragment fade-in" style="font-size:18pt; margin-top:12px;">Questions &amp; Discussion</p>
-          <p class="fragment fade-in caption" style="margin-top:16px;">${title}</p>
+          <h2 class="fragment fade-in" style="font-size:36pt;">The Bottom Line</h2>
+          <div style="width:60px; height:3px; background:${colors.accent}; margin:16px auto;" class="fragment fade-in"></div>
+          <p class="fragment fade-in" style="font-size:18pt; margin-top:12px;">${topic} — what it means for you</p>
+          <p class="fragment fade-in caption" style="margin-top:16px;">Questions &amp; Discussion</p>
         </div>
       </section>`;
   }
@@ -644,40 +679,23 @@ function renderClosingSlide(
   if (variant === 1) {
     return `
       <section data-transition="fade" class="centered">
-        <h2 class="fragment fade-in" style="font-size:32pt;">Key Takeaways</h2>
+        <h2 class="fragment fade-in" style="font-size:32pt;">What We Learned</h2>
         <div style="max-width:600px; margin:20px auto; text-align:left;">
-          <div class="accent-card fragment fade-up">What we covered about ${topic}</div>
-          <div class="accent-card fragment fade-up" style="border-color:${colors.secondary};">Why it matters now</div>
-          <div class="accent-card fragment fade-up" style="border-color:${colors.accent};">Where to go from here</div>
+          <div class="accent-card fragment fade-up">The core of ${topic}</div>
+          <div class="accent-card fragment fade-up" style="border-color:${colors.secondary};">Why it changes everything</div>
+          <div class="accent-card fragment fade-up" style="border-color:${colors.accent};">Your next move</div>
         </div>
         <p class="fragment fade-in caption" style="margin-top:20px;">Thank you for your attention</p>
       </section>`;
   }
 
-  if (variant === 2) {
-    const bgImg = buildFallbackImageUrl(
-      1600,
-      900,
-      `${keywords}-future`,
-      imgCounter.value++
-    );
-    return `
-      <section data-transition="convex" data-background-image="${bgImg}" data-background-size="cover" class="overlay-slide centered">
-        <div class="overlay-box" style="text-align:center;">
-          <h2 class="fragment fade-in" style="font-size:32pt;">Next Steps</h2>
-          <p class="fragment fade-in" style="font-size:16pt; margin-top:12px;">Ready to put these ideas into action?</p>
-          <div class="fragment zoom-in" style="margin-top:20px; display:inline-block; padding:12px 28px; background:${colors.primary}; color:#fff; border-radius:8px; font-size:16pt; font-weight:600;">Let&apos;s Get Started &rarr;</div>
-        </div>
-      </section>`;
-  }
-
-  // variant 3 — clean minimal
+  // variant 2 — bold CTA
   return `
-      <section data-transition="fade" class="centered">
+      <section data-transition="convex" class="centered">
         <h2 style="font-size:40pt; margin-bottom:16px;" class="fragment fade-in">${title}</h2>
         <div style="width:80px; height:4px; background:${colors.accent}; margin:0 auto 20px; border-radius:2px;" class="fragment fade-in"></div>
-        <p class="fragment fade-in" style="font-size:18pt;">Thank you for your time</p>
-        <p class="fragment fade-in caption" style="margin-top:16px;">Questions? Let&apos;s discuss.</p>
+        <p class="fragment fade-in" style="font-size:18pt;">The conversation starts here.</p>
+        <div class="fragment zoom-in" style="margin-top:24px; display:inline-block; padding:14px 32px; background:${colors.primary}; color:#fff; border-radius:8px; font-size:16pt; font-weight:700;">Let&apos;s Get Started &rarr;</div>
       </section>`;
 }
 
@@ -692,6 +710,9 @@ export function generatePresentationPayload({
   customColors,
   agentColors,
   unsplashImages,
+  customCSS,
+  googleFont,
+  closingData,
 }: CreatePresentationInput) {
   // Resolve colors — prefer agent-generated colors, then custom, then auto
   let colors: ColorPalette;
@@ -725,16 +746,17 @@ export function generatePresentationPayload({
     slidesHtml += renderContentSlide(slides[i], i, topic, imgCounter, unsplashImages);
   }
 
-  // Closing slide (varied)
+  // Closing slide (LLM-generated or varied fallback)
   slidesHtml += renderClosingSlide(
     title,
     topic,
     slides.length,
     imgCounter,
-    colors
+    colors,
+    closingData
   );
 
-  const htmlContent = buildFullHtml(title, slidesHtml, colors);
+  const htmlContent = buildFullHtml(title, slidesHtml, colors, googleFont, customCSS);
 
   return {
     error: false,
@@ -751,15 +773,22 @@ export function generatePresentationPayload({
 function buildFullHtml(
   title: string,
   slidesHtml: string,
-  colors: ColorPalette
+  colors: ColorPalette,
+  googleFont?: string,
+  customCSS?: string
 ): string {
+  const fontFamily = googleFont || "Inter";
+  const fontSlug = fontFamily.replace(/ /g, "+");
+  const googleFontLink = googleFont
+    ? `<link href="https://fonts.googleapis.com/css2?family=${fontSlug}:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">`
+    : `<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  ${googleFontLink}
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/dist/reveal.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/dist/theme/black.css">
   <style>
@@ -774,7 +803,13 @@ function buildFullHtml(
       --overlay-bg: ${colors.overlayBg};
     }
 
-    .reveal { font-family: "Inter", "Segoe UI", Helvetica, sans-serif; }
+    body {
+      background-color: var(--r-background-color);
+      /* Subtle radial gradient to break up flat backgrounds */
+      background-image: radial-gradient(circle at 50% 40%, var(--card-bg) 0%, var(--r-background-color) 90%);
+    }
+
+    .reveal { font-family: "${fontFamily}", "Inter", "Segoe UI", Helvetica, sans-serif; }
 
     /* ---- SLIDE LAYOUT ---- */
     .reveal .slides > section,
@@ -968,6 +1003,9 @@ function buildFullHtml(
     .reveal .controls { color: var(--primary); }
     .reveal .slide-number { color: var(--muted); font-size: 10pt; }
   </style>
+  ${customCSS ? `<style id="agent-custom">
+${customCSS}
+  </style>` : ""}
 </head>
 <body>
   <div class="reveal">

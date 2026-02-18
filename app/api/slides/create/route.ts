@@ -48,25 +48,35 @@ const agentSlideSchema = z.object({
       title: z.string().describe("Slide heading (2-8 words, punchy and specific)"),
       bullets: z
         .array(z.string())
-        .describe("2-5 bullet points with REAL facts, stats, or concrete information. Each bullet should be one concise sentence with actual content, not generic filler."),
+        .describe("3-5 bullet points (fewer is better, never crowd) with REAL facts, stats, or concrete information. Each bullet should be one concise sentence with actual content, not generic filler."),
       layout: z
         .enum(["text-image-split", "full-image-overlay", "two-column", "text-only", "image-grid"])
         .describe("Choose the best layout for this slide's content"),
       imageSearchQuery: z
         .string()
-        .describe("A specific 2-4 word Unsplash search query that will find a highly relevant image for THIS slide's content. Be specific — e.g. 'red Ferrari F40' not 'car'."),
+        .describe("A descriptive, visual Unsplash search query (2-5 words). Focus on mood, lighting, and subject. e.g. 'cinematic red ferrari on track' instead of 'car'. 'modern minimal office workspace' instead of 'office'."),
       transition: z
         .enum(["slide", "zoom", "convex", "fade"])
         .describe("Slide transition effect"),
+      useFragments: z
+        .boolean()
+        .describe("true = bullets animate in one-by-one (use for step-by-step flows, comparisons, reveals). false = all bullets appear at once (use for data-heavy, factual, or info-dense slides). Choose deliberately."),
     })
   ),
   theme: z.object({
-    primary: z.string().describe("Primary color hex (e.g. #dc2626). Should match the topic's vibe — red for Ferrari, pink for Valentine's, green for nature, etc."),
+    primary: z.string().describe("Primary color hex. CAPTURE THE EMOTIONAL IDENTITY of the topic — be unexpected and bold. Cybersecurity? Blood-red or acid green. Blockchain? Gold on obsidian. Ancient Rome? Burnt sienna. Tech doesn't have to be blue."),
     secondary: z.string().describe("Secondary color hex that complements the primary"),
     accent: z.string().describe("Accent color hex for highlights and bullets"),
-    bg: z.string().describe("Dark background color hex (keep dark for readability, e.g. #0f0f15)"),
-    text: z.string().describe("Light text color hex (keep light for contrast, e.g. #f1f5f9)"),
+    bg: z.string().describe("Background color hex. Dark mode (e.g. #0f0f15) is preferred for tech/modern topics. Light mode (e.g. #f8f9fa) is allowed for wellness, medical, or clean topics. Use the most appropriate."),
+    text: z.string().describe("Text color hex (must contrast with bg). e.g. #f1f5f9 for dark mode, #1e293b for light mode."),
     muted: z.string().describe("Muted text color hex for captions and secondary text"),
+  }),
+  googleFont: z.string().describe("Google Fonts family that matches the mood of this topic. Examples: 'Playfair Display' for luxury/editorial, 'Space Grotesk' for tech/modern, 'Bebas Neue' for sports/energy, 'Lora' for history/academic, 'DM Sans' for clean minimal, 'Syne' for creative/bold. Pick the most fitting, not always the default."),
+  customCSS: z.string().describe("A CSS override block (no <style> tags, just rules) for this presentation. Use it for: custom gradients on h2, unique bullet markers, background textures on .overlay-slide, accent typography. Be creative but don't break readability. Can be empty string."),
+  closingSlide: z.object({
+    headline: z.string().describe("A powerful, topic-specific closing headline. NOT 'Thank You' or 'Questions & Discussion'. Make it memorable — a bold claim, call to action, or profound takeaway specific to this topic."),
+    subtext: z.string().describe("Supporting line that reinforces the headline. One sentence, specific to the topic."),
+    ctaText: z.string().describe("CTA button text when there's a clear next step (e.g. 'Start Building Today', 'Join the Movement'). Use empty string '' if no CTA is appropriate."),
   }),
 });
 
@@ -105,7 +115,7 @@ export async function POST(req: NextRequest) {
     const { object: generated } = await generateObject({
       model: modelInstance,
       schema: agentSlideSchema,
-      prompt: `You are a presentation content expert. Create detailed, factual slide content for a presentation about "${parsed.topic}".
+      prompt: `You are a presentation content expert. Create detailed, factual, and visually expressive slide content for a presentation about "${parsed.topic}".
 
 Title: "${parsed.title}"
 ${parsed.subtitle ? `Subtitle: "${parsed.subtitle}"` : ""}
@@ -113,28 +123,58 @@ ${parsed.subtitle ? `Subtitle: "${parsed.subtitle}"` : ""}
 Slide headings (in order):
 ${normalizedHeadings.map((h, i) => `${i + 1}. ${h}`).join("\n")}
 
-CRITICAL RULES:
-1. Write EXACTLY 2-5 bullet points per slide (not more, not less). Each bullet should be REAL, FACTUAL content with specific stats, facts, dates, names, and concrete details.
+CONTENT RULES:
+1. Write 3-5 bullet points per slide. Fewer is better — never crowd. Each bullet must contain REAL, FACTUAL content: specific stats, dates, names, and concrete details.
    - BAD: "Key points about Ferrari vs Benz: Current Landscape"
    - GOOD: "Ferrari's 2024 revenue hit €6.4B, up 17% YoY, with the SF-90 XX leading supercar sales"
-2. Each bullet should be a complete, informative sentence (not a generic heading or placeholder).
-3. For the imageSearchQuery, write specific queries that will match real photos on Unsplash. Be concrete:
-   - BAD: "cars background" 
-   - GOOD: "Ferrari 488 red sports car"
-   - BAD: "technology"
-   - GOOD: "circuit board macro photography"
-4. Choose a color theme that MATCHES the topic's identity/vibe:
-   - Ferrari → red primary (#dc2626), dark bg
-   - Valentine's Day → pink (#ec4899), rose tones
-   - Nature/Environment → green (#22c55e)
-   - Ocean/Marine → cyan/teal (#06b6d4)
-   - Finance → deep blue (#1e40af)
-   - Technology → electric blue (#3b82f6) or purple
-   - Food/Cooking → warm amber (#f59e0b)
-   - Be creative for other topics — pick colors that evoke the subject
-5. Vary layouts across slides — don't use the same layout for every slide.
-6. First slide should be an overview/introduction, last slide should be a summary/conclusion.
-7. ALWAYS use dark background colors (low brightness) so text stays readable.`,
+2. Each bullet must be a complete, informative sentence — not a generic heading or placeholder.
+3. First slide = overview/introduction. Last content slide = summary/conclusion.
+4. Vary layouts across slides — don't repeat the same layout consecutively.
+
+IMAGE QUERIES (imageSearchQuery):
+- Use 2-5 words. Be descriptive and visual.
+- BAD: "technology" → GOOD: "glowing blue circuit board close up"
+- BAD: "team" → GOOD: "diverse startup team meeting modern office"
+- BAD: "red Ferrari" → GOOD: "cinematic red Ferrari F40 on race track"
+
+FRAGMENT STRATEGY (useFragments):
+- Set true ONLY where progressive reveal genuinely helps: step-by-step processes, comparisons, before/after, sequential arguments.
+- Set false for factual/data-heavy slides where showing everything at once is clearer.
+- Do NOT default to true for every slide.
+
+COLOR THEMING (theme):
+- Pick colors that CAPTURE THE EMOTIONAL IDENTITY of the topic. Be unexpected and specific.
+- DON'T default to blue/tech unless the topic is literally a tech product.
+- Examples: cybersecurity → blood-red (#7f1d1d) on near-black; blockchain → gold (#d97706) on obsidian; wellness → sage green (#4d7c0f) on soft cream (#fcfdfa).
+- Choose Dark or Light mode based on topic sentiment.
+- SUGGEST A GRADIENT (linear-gradient) in customCSS if appropriate.
+
+TYPOGRAPHY (googleFont):
+- Pick a font that matches the emotional register of the topic:
+  - Luxury, history, editorial → 'Playfair Display' or 'Lora'
+  - Tech, SaaS, modern → 'Space Grotesk' or 'DM Sans'
+  - Sports, energy, impact → 'Bebas Neue' or 'Oswald'
+  - Creative, design, art → 'Syne' or 'Cabinet Grotesk'
+  - Academic, science → 'Lora' or 'Source Serif 4'
+  - Do NOT always choose Inter.
+
+CUSTOM CSS (customCSS):
+- Write 2-5 CSS rules that personalize the deck. Ideas:
+  - Custom h2 gradient using the topic's colors
+  - Unique bullet marker (\\25BA arrow, ✦ star, — dash…)
+  - Background tint on .overlay-box
+  - Letter-spacing or text-transform on h1/h2 for personality
+- Rules only (no <style> tags). Can be empty string if nothing meaningful to add.
+
+CLOSING SLIDE (closingSlide):
+- headline: A bold, topic-specific statement. NOT "Thank You". Think: the most powerful insight or call to action from this topic.
+  - BAD: "Thank You", "Questions & Discussion"
+  - GOOD (for Ferrari): "The Prancing Horse Never Slows Down"
+  - GOOD (for Climate Change): "The Window Is Closing. Act Now."
+- subtext: One specific supporting sentence about this topic.
+- ctaText (optional): A button label only if there's a natural next step (e.g. "Start Building", "Join the Mission").
+
+ALWAYS keep backgrounds dark (low brightness) so text remains readable.`,
     });
 
     // Fetch real Unsplash images for each slide
@@ -150,6 +190,7 @@ CRITICAL RULES:
       imageCount: s.layout === "image-grid" ? 3 : s.layout === "two-column" ? 2 : 1,
       transition: s.transition,
       unsplashImageUrl: imageResults[i] || undefined,
+      useFragments: s.useFragments,
     }));
 
     // Build color palette from LLM-chosen theme
@@ -177,6 +218,15 @@ CRITICAL RULES:
       },
       agentColors: colors,
       unsplashImages: imageResults,
+      googleFont: generated.googleFont,
+      customCSS: generated.customCSS || undefined,
+      closingData: generated.closingSlide
+        ? {
+            headline: generated.closingSlide.headline,
+            subtext: generated.closingSlide.subtext,
+            ctaText: generated.closingSlide.ctaText || undefined,
+          }
+        : undefined,
     });
 
     return NextResponse.json(result);

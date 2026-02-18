@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-import { PresentationIcon, DownloadIcon, ExternalLinkIcon, EyeIcon } from "lucide-react";
+import { PresentationIcon, DownloadIcon, ExternalLinkIcon, EyeIcon, Maximize2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 
@@ -156,13 +156,21 @@ export function PresentationResult({
             <p className="text-base font-medium mt-1">{title}</p>
           </div>
 
-          {/* Preview Info */}
-          <div className="rounded-lg bg-muted/30 p-3 space-y-2">
-            <div className="flex items-center gap-2 text-sm">
-              <EyeIcon className="w-4 h-4 text-muted-foreground" />
-              <span className="text-muted-foreground">
-                Features: Image frames, animations, responsive design
-              </span>
+          {/* Preview */}
+          <div className="relative aspect-video w-full overflow-hidden rounded-lg border bg-muted/50 mt-4 group">
+            <iframe 
+              srcDoc={htmlContent}
+              className="absolute inset-0 h-[400%] w-[400%] origin-top-left scale-25 border-0 select-none pointer-events-none bg-background"
+              title="Presentation Preview"
+            />
+            <div 
+              className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/10 transition-colors cursor-pointer" 
+              onClick={handleOpenInNewTab}
+            >
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 backdrop-blur-sm px-4 py-2 rounded-full shadow-sm text-sm font-medium flex items-center gap-2">
+                <Maximize2Icon className="w-4 h-4" />
+                Click to open full screen
+              </div>
             </div>
           </div>
 
