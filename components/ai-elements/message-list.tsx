@@ -157,7 +157,7 @@ export type MessageListProps = {
 
 export function MessageList({ messages, isLoading, status, onRegenerate, error, model }: MessageListProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const [scrollContainer, setScrollContainer] = useState<HTMLDivElement | null>(null);
   
   // Deduplicate messages to prevent React key collisions
   // This can happen during streaming updates or localStorage restoration
@@ -182,7 +182,7 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error, 
       const scrollEl = wrapperRef.current.querySelector('[style*="overflow"]') as HTMLDivElement 
         || wrapperRef.current.firstElementChild as HTMLDivElement;
       if (scrollEl) {
-        (scrollContainerRef as React.MutableRefObject<HTMLDivElement | null>).current = scrollEl;
+        setScrollContainer(scrollEl);
       }
     }
   }, []);
@@ -190,13 +190,15 @@ export function MessageList({ messages, isLoading, status, onRegenerate, error, 
   return (
     <div ref={wrapperRef} className="relative h-full">
       {/* Scroll Progress Indicator */}
-      <div className="pointer-events-none absolute left-0 top-0 z-50 w-full">
-        <div className="absolute left-0 top-0 h-1 w-full bg-muted/30" />
-        <ScrollProgress
-          containerRef={scrollContainerRef}
-          className="absolute top-0 bg-primary"
-        />
-      </div>
+      {scrollContainer && (
+        <div className="pointer-events-none absolute left-0 top-0 z-50 w-full">
+          <div className="absolute left-0 top-0 h-1 w-full bg-muted/30" />
+          <ScrollProgress
+            containerRef={{ current: scrollContainer }}
+            className="absolute top-0 bg-primary"
+          />
+        </div>
+      )}
       <Conversation className="h-full">
         <ConversationContent className="max-w-3xl mx-auto w-full py-10 px-4 lg:px-0 gap-8">
         <AnimatePresence initial={false}>
