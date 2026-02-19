@@ -432,9 +432,9 @@ export function PromptInputArea({
                 className="absolute bottom-full left-0 mb-4 w-full z-50 px-4"
             >
                 <div 
-                    className="bg-white/30 backdrop-blur-3xl border border-black/10 shadow-[4px_9px_4.5px_0_rgba(0,0,0,0.25)] rounded-4xl overflow-hidden p-2"
+                    className="bg-black/75 backdrop-blur-3xl border border-white/10 shadow-[4px_9px_4.5px_0_rgba(0,0,0,0.5)] rounded-4xl overflow-hidden p-2"
                 >
-                <div className="px-3 py-2 text-xs font-semibold text-foreground/70 uppercase tracking-wider">
+                <div className="px-3 py-2 text-xs font-semibold text-white/50 uppercase tracking-wider">
                     Available Tools
                 </div>
                 <div 
@@ -470,19 +470,19 @@ export function PromptInputArea({
                         className={cn(
                             "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all duration-200",
                             index === selectedIndex 
-                            ? "bg-black/10 text-foreground" 
-                            : "hover:bg-black/5 text-foreground/90"
+                            ? "bg-white/15 text-white" 
+                            : "hover:bg-white/10 text-white/80"
                         )}
                         >
                         <div className={cn(
                             "flex items-center justify-center size-8 rounded-lg",
-                            index === selectedIndex ? "bg-black/10" : "bg-black/5"
+                            index === selectedIndex ? "bg-white/15" : "bg-white/10"
                         )}>
-                            <ToolIcon className="size-4 text-foreground" />
+                            <ToolIcon className="size-4 text-white/80" />
                         </div>
                         <div className="flex flex-col flex-1 min-w-0">
-                            <span className="font-medium text-sm text-foreground">@{tool.name}</span>
-                            <span className="text-xs text-foreground/50 line-clamp-1">{tool.description}</span>
+                            <span className="font-medium text-sm text-white">@{tool.name}</span>
+                            <span className="text-xs text-white/40 line-clamp-1">{tool.description}</span>
                         </div>
                         </button>
                     );
