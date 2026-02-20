@@ -248,27 +248,30 @@ export function GenUIStack({ items }: { items: GenUIItem[] }) {
   const handleScroll = (e: React.WheelEvent) => {
     if (isScrollingRef.current) return;
 
-    // Respect scrollable children — only trap at top / bottom boundary
-    let target = e.target as HTMLElement | null;
-    while (target && target !== containerRef.current) {
-      if (target.scrollHeight > target.clientHeight) {
-        const s = window.getComputedStyle(target);
-        if (s.overflowY === "auto" || s.overflowY === "scroll") {
-          const atTop = target.scrollTop === 0;
-          const atBottom =
-            Math.abs(
-              target.scrollHeight - target.clientHeight - target.scrollTop,
-            ) < 1;
-          if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atBottom)) return;
-          break;
+    // If the user is scrolling horizontally, use it for navigation
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && Math.abs(e.deltaX) > 5) {
+      // Respect scrollable children — only trap at left / right boundary
+      let target = e.target as HTMLElement | null;
+      while (target && target !== containerRef.current) {
+        if (target.scrollWidth > target.clientWidth) {
+          const s = window.getComputedStyle(target);
+          if (s.overflowX === "auto" || s.overflowX === "scroll") {
+            const atLeft = target.scrollLeft === 0;
+            const atRight =
+              Math.abs(
+                target.scrollWidth - target.clientWidth - target.scrollLeft,
+              ) < 1;
+            if ((e.deltaX < 0 && !atLeft) || (e.deltaX > 0 && !atRight)) return;
+            break;
+          }
         }
+        target = target.parentElement;
       }
-      target = target.parentElement;
-    }
 
-    if (e.deltaY > 0 && activeIndex > 0) navigate(activeIndex - 1);
-    else if (e.deltaY < 0 && activeIndex < items.length - 1)
-      navigate(activeIndex + 1);
+      if (e.deltaX < 0 && activeIndex > 0) navigate(activeIndex - 1);
+      else if (e.deltaX > 0 && activeIndex < items.length - 1)
+        navigate(activeIndex + 1);
+    }
   };
 
   if (items.length === 0) return null;
@@ -326,7 +329,7 @@ export function GenUIStack({ items }: { items: GenUIItem[] }) {
               damping: 27,
             }}
           >
-            <div className="flex-1 min-h-0 overflow-hidden p-5 flex flex-col">
+            <div className="flex-1 min-h-0 overflow-y-auto p-5 flex flex-col custom-scrollbar">
               {items[activeIndex].component}
             </div>
           </motion.div>
@@ -359,7 +362,7 @@ export function GenUIStack({ items }: { items: GenUIItem[] }) {
             animate={{ opacity: [0.4, 0.8, 0.4] }}
             transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
           >
-            scroll to browse
+            scroll horizontally to browse
           </motion.span>
         </div>
       )}
