@@ -233,7 +233,7 @@ export function GitHubIssueConfirmation({
                   <ChevronsUpDownIcon className="h-4 w-4 text-muted-foreground" />
                 </button>
                 {showRepoDropdown && (
-                  <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-popover shadow-lg max-h-48 overflow-y-auto">
+                  <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-popover shadow-lg max-h-48 overflow-y-auto scrollbar-hide">
                     {availableRepos.map((repo) => (
                       <button
                         key={repo.fullName}

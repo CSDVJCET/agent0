@@ -193,6 +193,28 @@ export function ChatUI() {
     return () => window.removeEventListener("keydown", handleEscape);
   }, [isChatModalOpen]);
 
+  // Prevent body scroll and layout shift when the modal is open
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const originalOverflow = document.body.style.overflow;
+    const originalPaddingRight = document.body.style.paddingRight;
+
+    if (isChatModalOpen) {
+      const scrollBarWidth = window.innerWidth - document.documentElement.clientWidth;
+      document.body.style.overflow = "hidden";
+      if (scrollBarWidth) document.body.style.paddingRight = `${scrollBarWidth}px`;
+    } else {
+      document.body.style.overflow = originalOverflow || "";
+      document.body.style.paddingRight = originalPaddingRight || "";
+    }
+
+    return () => {
+      document.body.style.overflow = originalOverflow || "";
+      document.body.style.paddingRight = originalPaddingRight || "";
+    };
+  }, [isChatModalOpen]);
+
   // Simplified handleSubmit using AI SDK's new API
   const handleSubmit = async (value: { text: string; files: any[] }) => {
     if (!value.text.trim() && attachments.length === 0) return;
@@ -555,24 +577,23 @@ export function ChatUI() {
 
                 {/* Chat Content */}
                 <div className="relative h-full flex flex-col no-horizontal-scroll">
-                  {/* Scroll Progress at the very top border */}
-                  <div className="absolute top-0 left-0 w-full z-50 pointer-events-none">
-                    {isModalRefHydrated && (
-                      <ScrollProgress
-                        containerRef={modalScrollRef}
-                        className="h-1 bg-primary"
-                      />
-                    )}
-                  </div>
+                  {/* Scroll Progress at the left border */}
+                  {isModalRefHydrated && (
+                    <ScrollProgress
+                      containerRef={modalScrollRef}
+                      className="w-[3px] bg-white/40"
+                      orientation="vertical"
+                    />
+                  )}
 
-                  {/* Messages Area with Custom Scrollbar */}
+                  {/* Messages Area with Hidden Scrollbar */}
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.2, duration: 0.4 }}
                     className="flex-1 overflow-hidden px-8 pt-8 no-horizontal-scroll"
                   >
-                    <div className="h-full overflow-y-auto custom-scrollbar no-horizontal-scroll">
+                    <div className="h-full overflow-y-auto scrollbar-hide no-horizontal-scroll">
                       <MessageList
                         messages={dedupedMessages}
                         isLoading={isLoading}

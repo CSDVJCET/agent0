@@ -8,6 +8,7 @@ interface ScrollProgressProps {
   className?: string;
   springOptions?: SpringOptions;
   containerRef?: RefObject<HTMLDivElement | null>;
+  orientation?: 'horizontal' | 'vertical';
 }
 
 const DEFAULT_SPRING_OPTIONS: SpringOptions = {
@@ -20,20 +21,25 @@ export function ScrollProgress({
   className,
   springOptions,
   containerRef,
+  orientation = 'horizontal',
 }: ScrollProgressProps) {
   const { scrollYProgress } = useScroll({
     container: containerRef,
   });
 
-  const scaleX = useSpring(scrollYProgress, {
+  const scale = useSpring(scrollYProgress, {
     ...(springOptions ?? DEFAULT_SPRING_OPTIONS),
   });
 
   return (
     <motion.div
-      className={cn('inset-x-0 top-0 h-1 origin-left', className)}
+      className={cn(
+        'absolute z-50 pointer-events-none',
+        orientation === 'horizontal' ? 'inset-x-0 top-0 h-1 origin-left' : 'inset-y-0 left-0 w-1 origin-top',
+        className
+      )}
       style={{
-        scaleX,
+        [orientation === 'horizontal' ? 'scaleX' : 'scaleY']: scale,
       }}
     />
   );
