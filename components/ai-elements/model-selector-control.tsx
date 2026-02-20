@@ -15,6 +15,7 @@ import {
 } from "@/components/ai-elements/model-selector";
 import { Button } from "@/components/ui/button";
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export type Model = {
   id: string;
@@ -30,6 +31,7 @@ export type ModelSelectorControlProps = {
   onSelectModel: (model: Model) => void;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
+  className?: string;
 };
 
 export function ModelSelectorControl({
@@ -38,6 +40,7 @@ export function ModelSelectorControl({
   onSelectModel,
   isOpen,
   onOpenChange,
+  className,
 }: ModelSelectorControlProps) {
   // Group models by provider
   const googleModels = models.filter((m) => m.provider === "google");
@@ -51,7 +54,10 @@ export function ModelSelectorControl({
         <Button
           variant="outline"
           size="sm"
-          className="h-8 gap-2 rounded-full border-dashed px-3 bg-background/50 backdrop-blur-sm"
+          className={cn(
+            "h-8 gap-2 rounded-full border-dashed px-3 bg-background/50 backdrop-blur-sm",
+            className
+          )}
         >
           <ModelSelectorLogo provider={selectedModel.provider} />
           <span className="text-xs font-medium">{selectedModel.name}</span>

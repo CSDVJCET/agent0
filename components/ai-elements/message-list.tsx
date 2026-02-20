@@ -155,9 +155,10 @@ export type MessageListProps = {
   containerRef?: React.RefObject<HTMLDivElement | null>;
   onRefHydrated?: () => void;
   model?: string;
+  hideGenUI?: boolean;
 };
 
-export function MessageList({ messages, isLoading, status, onRegenerate, error, containerRef, onRefHydrated, model }: MessageListProps) {
+export function MessageList({ messages, isLoading, status, onRegenerate, error, containerRef, onRefHydrated, model, hideGenUI = false }: MessageListProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const internalScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = containerRef || internalScrollContainerRef;
@@ -314,20 +315,21 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
                         const isCompleted = toolInvocation.state === "result";
                         const hasError = toolInvocation.result?.error === true;
 
-                        // Schedule Calendar Event (with human-in-the-loop confirmation)
-                        if (toolInvocation.toolName === "scheduleCalendarEvent" && isCompleted) {
-                          const result = toolInvocation.result;
-                          if (result.status === "pending_confirmation") {
-                            return (
-                              <EventSchedulingConfirmation
-                                key={toolInvocation.toolCallId}
-                                toolCallId={toolInvocation.toolCallId}
-                                eventDetails={result.eventDetails}
-                                reasoning={result.reasoning}
-                              />
-                            );
+                        if (!hideGenUI) {
+                          // Schedule Calendar Event (with human-in-the-loop confirmation)
+                          if (toolInvocation.toolName === "scheduleCalendarEvent" && isCompleted) {
+                            const result = toolInvocation.result;
+                            if (result.status === "pending_confirmation") {
+                              return (
+                                <EventSchedulingConfirmation
+                                  key={toolInvocation.toolCallId}
+                                  toolCallId={toolInvocation.toolCallId}
+                                  eventDetails={result.eventDetails}
+                                  reasoning={result.reasoning}
+                                />
+                              );
+                            }
                           }
-                        }
 
                         // Confirm Scheduled Event (shows success after creation)
                         if (toolInvocation.toolName === "confirmScheduledEvent" && isCompleted) {
@@ -837,6 +839,7 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
                             </div>
                           );
                         }
+                        } // End of !hideGenUI block
 
                         // Default tool rendering
                         return (
@@ -865,7 +868,7 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
                     })()}
 
                     {/* PDF Result from metadata (not tool parts) */}
-                    {message.role === "assistant" && (message.metadata as any)?.pdfResult && (() => {
+                    {!hideGenUI && message.role === "assistant" && (message.metadata as any)?.pdfResult && (() => {
                       const pdf = (message.metadata as any).pdfResult as PdfOperationResult;
                       if (pdf.error) return null; // Error already shown in text content
                       

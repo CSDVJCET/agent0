@@ -9,7 +9,7 @@ import { StripLargeDataChatTransport } from "@/lib/chat-transport";
 import { TreePine } from "lucide-react";
 
 // Components
-import { ChatHeader } from "@/components/chat-header";
+import { DynamicIsland } from "@/components/dynamic-island";
 import { PromptInputArea } from "@/components/prompt-input-area";
 import { MessageList } from "@/components/ai-elements/message-list";
 import { AttachmentsPreview } from "@/components/ai-elements/attachments-preview";
@@ -18,6 +18,7 @@ import { IntegrationsModal } from "@/components/integrations-modal";
 import { IntegrationPanel } from "@/components/integration-panel";
 import { FileDropZone } from "@/components/file-drop-zone";
 import { ScrollProgress } from "@/components/ui/scroll-progress";
+import { GenUIStack, extractGenUIs } from "@/components/gen-ui-stack";
 
 // Hooks and Constants
 import { useChatState } from "@/hooks/use-chat-state";
@@ -421,6 +422,7 @@ export function ChatUI() {
   if (!isLoaded) return null;
 
   const isStarted = dedupedMessages.length > 0;
+  const genUIs = extractGenUIs(dedupedMessages, selectedModel.id);
 
   return (
     <FileDropZone onFilesDropped={handleFilesDropped}>
@@ -429,16 +431,16 @@ export function ChatUI() {
         style={{ backgroundImage: 'url("/Dashboard.png")' }}
       >
         {/* Header */}
-        <ChatHeader
+        <DynamicIsland 
           models={MODELS}
           selectedModel={selectedModel}
           onSelectModel={setSelectedModel}
           isModelOpen={isModelOpen}
           onModelOpenChange={setIsModelOpen}
-          onNewChat={handleNewChat}
           onOpenIntegrations={() => setIsIntegrationsModalOpen(true)}
+          onNewChat={handleNewChat}
         />
-
+        
       {/* Main Content Area */}
       <div className="flex-1 overflow-hidden relative">
         {/* Empty State / Suggestions (when no messages) */}
@@ -513,62 +515,77 @@ export function ChatUI() {
               className="fixed inset-0 z-40" 
             />
 
-            {/* Modal Container with Liquid Glass Effect */}
+            {/* Outer Positioning Wrapper — holds Chat + Gen UI side by side */}
             <motion.div
-              initial={{
-                opacity: 0,
-                scale: 0.92,
-                y: 40,
-              }}
+              initial={{ opacity: 0, scale: 0.92, y: 40 }}
               animate={{
                 opacity: 1,
                 scale: 1,
                 y: 0,
-                top: attachments.length > 0 ? "40%" : "46%", // Shift up when attachments present
+                top: attachments.length > 0 ? "40%" : "46%",
               }}
-              exit={{
-                opacity: 0,
-                scale: 0.92,
-                y: 40,
-              }}
-              transition={{
-                duration: 0.5,
-                ease: [0.16, 1, 0.3, 1],
-              }}
-              className="fixed left-1/2 -translate-x-1/2 -translate-y-1/2 w-[85vw] max-w-6xl h-[75vh] z-50 overflow-hidden rounded-3xl no-horizontal-scroll"
-              style={{
-                background: "linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.1) 100%)",
-                backdropFilter: "blur(60px) saturate(180%)",
-                border: "1px solid rgba(255,255,255,0.3)",
-                boxShadow: "0 25px 80px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(255,255,255,0.1)",
-              }}
+              exit={{ opacity: 0, scale: 0.92, y: 40 }}
+              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+              className="fixed left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 flex flex-row items-center"
+              style={{ gap: "16px" }}
             >
-              {/* Glass Shine Effect */}
+              {/* Chat Panel — wide rectangle */}
               <motion.div
-                initial={{ x: "-100%" }}
-                animate={{ x: "200%" }}
-                transition={{
-                  duration: 2,
-                  ease: [0.4, 0, 0.2, 1],
-                  delay: 0.2,
-                }}
-                className="absolute inset-0 pointer-events-none"
+                animate={{ width: genUIs.length > 0 ? "60vw" : "85vw" }}
+                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                className="relative h-[75vh] overflow-hidden rounded-3xl no-horizontal-scroll shrink-0"
                 style={{
-                  background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)",
-                  width: "40%",
+                  background: "linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.1) 100%)",
+                  backdropFilter: "blur(60px) saturate(180%)",
+                  border: "1px solid rgba(255,255,255,0.3)",
+                  boxShadow: "0 25px 80px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(255,255,255,0.1)",
                 }}
-              />
+              >
+                {/* Glass Shine Effect */}
+                <motion.div
+                  initial={{ x: "-100%" }}
+                  animate={{ x: "200%" }}
+                  transition={{ duration: 2, ease: [0.4, 0, 0.2, 1], delay: 0.2 }}
+                  className="absolute inset-0 pointer-events-none z-10"
+                  style={{
+                    background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)",
+                    width: "40%",
+                  }}
+                />
 
-              {/* Modal Content */}
-              <div className="relative h-full flex flex-col no-horizontal-scroll">
-                {/* Scroll Progress at the very top border */}
-                <div className="absolute top-0 left-0 w-full z-50 pointer-events-none">
-                   {isModalRefHydrated && (
-                     <ScrollProgress
+                {/* Chat Content */}
+                <div className="relative h-full flex flex-col no-horizontal-scroll">
+                  {/* Scroll Progress at the very top border */}
+                  <div className="absolute top-0 left-0 w-full z-50 pointer-events-none">
+                    {isModalRefHydrated && (
+                      <ScrollProgress
                         containerRef={modalScrollRef}
                         className="h-1 bg-primary"
-                     />
-                   )}
+                      />
+                    )}
+                  </div>
+
+                  {/* Messages Area with Custom Scrollbar */}
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.2, duration: 0.4 }}
+                    className="flex-1 overflow-hidden px-8 pt-8 no-horizontal-scroll"
+                  >
+                    <div className="h-full overflow-y-auto custom-scrollbar no-horizontal-scroll">
+                      <MessageList
+                        messages={dedupedMessages}
+                        isLoading={isLoading}
+                        onRegenerate={handleRegenerate}
+                        status={status}
+                        error={error}
+                        containerRef={modalScrollRef}
+                        onRefHydrated={() => setIsModalRefHydrated(true)}
+                        model={selectedModel.id}
+                        hideGenUI={genUIs.length > 0}
+                      />
+                    </div>
+                  </motion.div>
                 </div>
 
                 {/* Close Button */}
@@ -595,28 +612,28 @@ export function ChatUI() {
                     />
                   </svg>
                 </motion.button>
+              </motion.div>
 
-                {/* Messages Area with Custom Scrollbar */}
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.2, duration: 0.4 }}
-                  className="flex-1 overflow-hidden px-8 pt-8 no-horizontal-scroll"
-                >
-                  <div className="h-full overflow-y-auto custom-scrollbar no-horizontal-scroll">
-                    <MessageList
-                      messages={dedupedMessages}
-                      isLoading={isLoading}
-                      onRegenerate={handleRegenerate}
-                      status={status}
-                      error={error}
-                      containerRef={modalScrollRef}
-                      onRefHydrated={() => setIsModalRefHydrated(true)}
-                      model={selectedModel.id}
-                    />
-                  </div>
-                </motion.div>
-              </div>
+              {/* Gen UI Panel — tall separate rectangle */}
+              <AnimatePresence>
+                {genUIs.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, width: 0, scale: 0.92 }}
+                    animate={{ opacity: 1, width: "27vw", scale: 1 }}
+                    exit={{ opacity: 0, width: 0, scale: 0.92 }}
+                    transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                    className="h-[75vh] overflow-hidden rounded-3xl shrink-0"
+                    style={{
+                      background: "linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.09) 100%)",
+                      backdropFilter: "blur(60px) saturate(180%)",
+                      border: "1px solid rgba(255,255,255,0.3)",
+                      boxShadow: "0 25px 80px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(255,255,255,0.1)",
+                    }}
+                  >
+                    <GenUIStack items={genUIs} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           </>
         )}
