@@ -11,6 +11,7 @@ import { gmailTools } from "@/ai/gmail-tools";
 import { tasksTools } from "@/ai/tasks-tools";
 import { githubTools } from "@/ai/github-tools";
 import { slidesTools } from "@/ai/slides-tools";
+import { imageTools } from "@/ai/image-tools";
 // PDF tools removed — handled entirely client-side to avoid tool part serialization issues
 import { GMAIL_AGENT_PROMPT } from "@/ai/prompts/gmail";
 import { GITHUB_AGENT_PROMPT } from "@/ai/prompts/github";
@@ -307,6 +308,10 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
           // Remove PDF tool parts entirely — these are client-side only
           if (part.type === "tool-mergePDFs" || part.type === "tool-compressPDF") return false;
           if (part.type === "tool-invocation" && (part.toolName === "mergePDFs" || part.toolName === "compressPDF")) return false;
+          // Remove generateImage tool parts entirely — base64 images are massive (500KB–2MB)
+          // and the LLM has no need to see them; the result is rendered purely in the UI
+          if (part.type === "tool-generateImage") return false;
+          if (part.type === "tool-invocation" && part.toolName === "generateImage") return false;
           return true;
         })
         .map(part => {
@@ -513,6 +518,10 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
         } else {
           console.warn("Slides tool mentioned but not installed");
         }
+      }
+      // Image generation tool (Cloudflare Workers AI - Flux-1-Schnell)
+      if (lowerToolName === "image") {
+        tools.generateImage = imageTools.generateImage;
       }
       // PDF tools — handled entirely client-side (no LLM involvement)
       // The @pdf mention is intercepted in chat-ui.tsx before reaching this route

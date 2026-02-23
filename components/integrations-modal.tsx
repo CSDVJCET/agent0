@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { CloudSun, Plus, Trash2, ExternalLink, Calendar, FileText, Mail, ListTodo, Network, FileStack, Github } from "lucide-react";
+import { CloudSun, Plus, Trash2, ExternalLink, Calendar, FileText, Mail, ListTodo, Network, FileStack, Github, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { GlowEffect } from "@/components/ui/glow-effect";
@@ -85,6 +85,14 @@ const INTEGRATIONS = [
     icon: Github,
     color: "text-gray-300",
     bgColor: "bg-gray-500/10",
+  },
+  {
+    id: "image",
+    name: "Image",
+    description: "Generate images from text prompts using Cloudflare Workers AI (Flux-1-Schnell).",
+    icon: ImageIcon,
+    color: "text-violet-400",
+    bgColor: "bg-violet-500/10",
   },
 ];
 

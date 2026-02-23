@@ -47,6 +47,14 @@ const marketplaceTools = [
     icon: "mail",
     enabled: true,
   },
+  {
+    id: "image",
+    name: "Image",
+    description: "Generate images from text prompts using Cloudflare Workers AI (Flux-1-Schnell)",
+    category: "creative",
+    icon: "image",
+    enabled: true,
+  },
   // Add more tools here as needed
 ];
 
