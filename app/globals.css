@@ -120,6 +120,25 @@ body {
   overflow-x: hidden !important;
 }
 
+/* Scrollbar Hide Utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+.hide-child-scrollbar > div {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-child-scrollbar > div::-webkit-scrollbar {
+  display: none;
+}
+
 /* Thin Scrollbar Utility */
 .scrollbar-thin {
   scrollbar-width: thin;
@@ -146,5 +165,9 @@ body {
 
 .hover\:scrollbar-thumb-white\/30:hover::-webkit-scrollbar-thumb {
   background-color: rgba(255, 255, 255, 0.3);
+}
+
+.perspective-1000 {
+  perspective: 1000px;
 }
 }

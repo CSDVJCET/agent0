@@ -104,7 +104,7 @@ export function IntegrationsModal({
             Add integrations to enhance your chat experience.
           </DialogDescription>
         </DialogHeader>
-        <div className="flex-1 overflow-y-auto min-h-0 pr-2 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent hover:scrollbar-thumb-white/30">
+        <div className="flex-1 overflow-y-auto min-h-0 pr-2 scrollbar-hide">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 py-4">
             <AnimatePresence mode="popLayout">
               {INTEGRATIONS.map((integration) => {
