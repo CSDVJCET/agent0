@@ -58,6 +58,7 @@ When summarizing emails or threads:
   - \`subject:keyword\` - Search in subject line
   - \`is:unread\` / \`is:read\` - Filter by read status
   - \`is:starred\` - Starred emails
+  - \`is:important\` - Gmail's priority inbox emails
   - \`has:attachment\` - Emails with attachments
   - \`after:YYYY/MM/DD\` - Emails after date
   - \`before:YYYY/MM/DD\` - Emails before date

@@ -663,6 +663,253 @@ export const confirmSendEmailTool = tool({
 });
 
 /**
+ * Get important or starred emails
+ */
+export const getImportantEmailsTool = tool({
+  description: "Get important or starred emails from the user's inbox. Uses Gmail's is:important OR is:starred filter to find priority messages. Use this when the user asks for their important emails, starred messages, or priority inbox.",
+  inputSchema: z.object({
+    max_results: z.number().optional().default(10).describe("Maximum number of results to return (1-100)"),
+  }),
+  execute: async ({ max_results }) => {
+    const accessToken = await getAccessToken();
+
+    if (!accessToken) {
+      return {
+        error: true,
+        message: "Gmail is not connected. Please connect your Google account first by visiting /api/auth/google",
+      };
+    }
+
+    try {
+      const query = "is:important OR is:starred";
+      const params = new URLSearchParams({
+        q: query,
+        maxResults: String(max_results || 10),
+      });
+
+      const result = await gmailRequest<{ messages?: Array<{ id: string; threadId: string }> }>(
+        accessToken,
+        `/users/me/messages?${params.toString()}`
+      );
+
+      if (!result.success) {
+        return {
+          error: true,
+          message: result.error || "Failed to fetch important emails",
+        };
+      }
+
+      const messageIds = result.data?.messages || [];
+
+      if (messageIds.length === 0) {
+        return {
+          error: false,
+          messageCount: 0,
+          messages: [],
+          message: "No important or starred emails found",
+        };
+      }
+
+      // Fetch message details for each result
+      const messages = await Promise.all(
+        messageIds.slice(0, max_results || 10).map(async ({ id }) => {
+          const msgResult = await gmailRequest<any>(
+            accessToken,
+            `/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`
+          );
+
+          if (msgResult.success && msgResult.data) {
+            const headers = parseHeaders(msgResult.data.payload?.headers || []);
+            return {
+              id: msgResult.data.id,
+              threadId: msgResult.data.threadId,
+              snippet: msgResult.data.snippet,
+              from: headers.from,
+              to: headers.to,
+              subject: headers.subject,
+              date: headers.date,
+              labelIds: msgResult.data.labelIds,
+            };
+          }
+          return null;
+        })
+      );
+
+      const validMessages = messages.filter(Boolean);
+
+      return {
+        error: false,
+        messageCount: validMessages.length,
+        messages: validMessages,
+        message: `Found ${validMessages.length} important/starred email(s)`,
+      };
+    } catch (err) {
+      return {
+        error: true,
+        message: err instanceof Error ? err.message : "Failed to fetch important emails",
+      };
+    }
+  },
+});
+
+/**
+ * Get emails from specific important contacts
+ */
+export const getContactEmailsTool = tool({
+  description: "Search for emails from a specific list of important contacts. Builds a Gmail search query using from: operators to find messages from the given contact email addresses. Use this when the user wants to see emails from specific people or a list of VIP contacts.",
+  inputSchema: z.object({
+    contacts: z.union([
+      z.array(z.string()),
+      z.string(),
+    ]).describe("Email addresses of contacts to search for. Can be an array of emails or a comma-separated string (e.g., 'alice@example.com, bob@example.com')"),
+    max_results: z.number().optional().default(10).describe("Maximum number of results to return (1-100)"),
+  }),
+  execute: async ({ contacts, max_results }) => {
+    const accessToken = await getAccessToken();
+
+    if (!accessToken) {
+      return {
+        error: true,
+        message: "Gmail is not connected. Please connect your Google account first by visiting /api/auth/google",
+      };
+    }
+
+    try {
+      // Normalize contacts to an array
+      const contactList = Array.isArray(contacts)
+        ? contacts
+        : contacts.split(",").map((c: string) => c.trim()).filter(Boolean);
+
+      if (contactList.length === 0) {
+        return {
+          error: true,
+          message: "No contacts provided. Please supply at least one email address.",
+        };
+      }
+
+      // Build Gmail search query: from:contact1 OR from:contact2 OR ...
+      const query = contactList.map((email: string) => `from:${email}`).join(" OR ");
+
+      const params = new URLSearchParams({
+        q: query,
+        maxResults: String(max_results || 10),
+      });
+
+      const result = await gmailRequest<{ messages?: Array<{ id: string; threadId: string }> }>(
+        accessToken,
+        `/users/me/messages?${params.toString()}`
+      );
+
+      if (!result.success) {
+        return {
+          error: true,
+          message: result.error || "Failed to search emails from contacts",
+        };
+      }
+
+      const messageIds = result.data?.messages || [];
+
+      if (messageIds.length === 0) {
+        return {
+          error: false,
+          messageCount: 0,
+          messages: [],
+          message: `No emails found from the specified contacts: ${contactList.join(", ")}`,
+        };
+      }
+
+      // Fetch message details for each result
+      const messages = await Promise.all(
+        messageIds.slice(0, max_results || 10).map(async ({ id }) => {
+          const msgResult = await gmailRequest<any>(
+            accessToken,
+            `/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`
+          );
+
+          if (msgResult.success && msgResult.data) {
+            const headers = parseHeaders(msgResult.data.payload?.headers || []);
+            return {
+              id: msgResult.data.id,
+              threadId: msgResult.data.threadId,
+              snippet: msgResult.data.snippet,
+              from: headers.from,
+              to: headers.to,
+              subject: headers.subject,
+              date: headers.date,
+              labelIds: msgResult.data.labelIds,
+            };
+          }
+          return null;
+        })
+      );
+
+      const validMessages = messages.filter(Boolean);
+
+      return {
+        error: false,
+        messageCount: validMessages.length,
+        messages: validMessages,
+        searchedContacts: contactList,
+        message: `Found ${validMessages.length} email(s) from contacts: ${contactList.join(", ")}`,
+      };
+    } catch (err) {
+      return {
+        error: true,
+        message: err instanceof Error ? err.message : "Failed to search contact emails",
+      };
+    }
+  },
+});
+
+/**
+ * Star/mark an email as important
+ */
+export const markAsImportantTool = tool({
+  description: "Star or mark an email as important by adding the STARRED label. Use this when the user wants to star, flag, or mark a specific email as important.",
+  inputSchema: z.object({
+    message_id: z.string().describe("The Gmail message ID to mark as important/starred"),
+  }),
+  execute: async ({ message_id }) => {
+    const accessToken = await getAccessToken();
+
+    if (!accessToken) {
+      return {
+        error: true,
+        message: "Gmail is not connected. Please connect your Google account first by visiting /api/auth/google",
+      };
+    }
+
+    try {
+      const result = await gmailRequest<any>(
+        accessToken,
+        `/users/me/messages/${encodeURIComponent(message_id)}/modify`,
+        "POST",
+        { addLabelIds: ["STARRED"] }
+      );
+
+      if (!result.success) {
+        return {
+          error: true,
+          message: result.error || "Failed to mark email as important",
+        };
+      }
+
+      return {
+        error: false,
+        messageId: result.data?.id,
+        labelIds: result.data?.labelIds,
+        message: `Successfully starred/marked email ${message_id} as important`,
+      };
+    } catch (err) {
+      return {
+        error: true,
+        message: err instanceof Error ? err.message : "Failed to mark email as important",
+      };
+    }
+  },
+});
+
+/**
  * Export all Gmail tools
  */
 export const gmailTools = {
@@ -673,4 +920,7 @@ export const gmailTools = {
   getMessageContent: getMessageContentTool,
   composeEmail: composeEmailTool,
   confirmSendEmail: confirmSendEmailTool,
+  getImportantEmails: getImportantEmailsTool,
+  getContactEmails: getContactEmailsTool,
+  markAsImportant: markAsImportantTool,
 };

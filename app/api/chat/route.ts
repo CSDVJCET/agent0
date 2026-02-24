@@ -465,6 +465,9 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
           tools.createDraft = gmailTools.createDraft;
           tools.sendMessage = gmailTools.sendMessage;
           tools.getMessageContent = gmailTools.getMessageContent;
+          tools.getImportantEmails = gmailTools.getImportantEmails;
+          tools.getContactEmails = gmailTools.getContactEmails;
+          tools.markAsImportant = gmailTools.markAsImportant;
         } else {
           console.warn("Gmail tool mentioned but not installed");
         }
@@ -562,6 +565,16 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
       "8) When user says 'PR from X to Y', that means head=X, base=Y — validate both branches exist first."
     : "";
 
+  const gmailGuidance = mentionedTools.some(t => t.toLowerCase() === "gmail")
+    ? " Gmail Agent Instructions: You are a multi-step agentic Gmail assistant. " +
+      "When the user asks about important emails, use getImportantEmails to fetch starred/important messages. " +
+      "When the user asks about emails from specific people or VIP contacts, use getContactEmails with their email addresses. " +
+      "When the user wants to star or flag an email, use markAsImportant with the message ID. " +
+      "For composing emails, ALWAYS use composeEmail to present a draft for user review before sending. " +
+      "Chain tools when needed: e.g., searchEmails → getMessageContent → composeEmail for reply workflows. " +
+      "After presenting email search results or drafts, DO NOT repeat the full content as text — the tool UI handles display."
+    : "";
+
   const slidesGuidance = mentionedTools.some(t => ["slides", "presentation", "ppt"].includes(t.toLowerCase()))
     ? ` ${SLIDES_PROMPT}\n\nSlides workflow is mandatory: first call schedulePresentationHeadings to produce a pending confirmation heading plan (no HTML output). Generate SPECIFIC, DESCRIPTIVE headings that reflect real content about the topic — not generic headings like "Current Landscape" or "Key Drivers". For example, for "Ferrari vs Benz" use headings like "Ferrari's Racing Heritage: 75+ Years of F1 Dominance", "Mercedes-Benz: Engineering Luxury Since 1886", etc. Wait for user confirmation in UI. The backend AI agent automatically generates real factual content, picks topic-matching colors, and fetches relevant Unsplash images — you do NOT need to call createPresentation. Never output raw HTML directly as assistant text. When the presentation card/tool UI is available, do not output slide outlines, summaries, or duplicate narrative text in chat. Only send assistant text if you must ask a direct clarification question due to missing required inputs.`
     : "";
@@ -627,7 +640,7 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
 
       const result = streamText({
         model: modelInstance,
-        system: `${systemPrompt}${calendarGuidance}${formsGuidance}${tasksGuidance}${githubGuidance}${slidesGuidance}`,
+        system: `${systemPrompt}${calendarGuidance}${formsGuidance}${tasksGuidance}${gmailGuidance}${githubGuidance}${slidesGuidance}`,
         messages: modelMessages,
         tools: hasCurrentTools ? currentTools : undefined,
         toolChoice: hasCurrentTools ? "auto" : "none",
