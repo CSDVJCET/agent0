@@ -86,8 +86,10 @@ function getDisplayTextContent(
     return rawTextContent;
   }
 
-  // Check for ANY slides tool (heading plan OR final creation)
+  // Hide fallback text when dedicated Gen UI cards exist
   const SLIDES_TOOL_NAMES = ["createPresentation", "schedulePresentationHeadings"];
+  const IMAGE_TOOL_NAMES = ["generateImage"];
+  const GEN_UI_TOOL_NAMES = [...SLIDES_TOOL_NAMES, ...IMAGE_TOOL_NAMES];
 
   const extractToolName = (part: MyUIMessage["parts"][number]): string | null => {
     if (!part || typeof part !== "object") return null;
@@ -101,19 +103,19 @@ function getDisplayTextContent(
     return null;
   };
 
-  const hasSlidesTool = toolInvocations.some((part) => {
+  const hasGenUITool = toolInvocations.some((part) => {
     const name = extractToolName(part);
-    return name !== null && SLIDES_TOOL_NAMES.includes(name);
+    return name !== null && GEN_UI_TOOL_NAMES.includes(name);
   });
 
-  if (!hasSlidesTool) {
+  if (!hasGenUITool) {
     return rawTextContent;
   }
 
   // Check if the tool has produced a result (not just pending)
-  const hasSlidesResult = toolInvocations.some((part) => {
+  const hasGenUIResult = toolInvocations.some((part) => {
     const name = extractToolName(part);
-    if (!name || !SLIDES_TOOL_NAMES.includes(name)) return false;
+    if (!name || !GEN_UI_TOOL_NAMES.includes(name)) return false;
 
     const t = (part as any).toolInvocation || part;
     const state = (t as any).state || "";
@@ -125,7 +127,7 @@ function getDisplayTextContent(
     return hasResult;
   });
 
-  if (!hasSlidesResult) {
+  if (!hasGenUIResult) {
     return rawTextContent;
   }
 
@@ -839,7 +841,13 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
                             </div>
                           );
                         }
+
                         } // End of !hideGenUI block
+
+                        // generateImage is always rendered in the gen-ui stack — hide the raw tool part
+                        if (toolInvocation.toolName === "generateImage") {
+                          return null;
+                        }
 
                         // Default tool rendering
                         return (
