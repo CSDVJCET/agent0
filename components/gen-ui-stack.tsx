@@ -30,7 +30,7 @@ import { TaskCompleteDisplay } from "@/components/ai-elements/task-complete-disp
 import { PdfResult } from "@/components/ai-elements/pdf-result";
 import { PresentationResult, PresentationLoading } from "@/components/ai-elements/presentation-result";
 import { SlidesHeadingConfirmation } from "@/components/ai-elements/slides-heading-confirmation";
-import { ImageGenerationLoading, ImageGenerationResult } from "@/components/ai-elements/image-generation";
+import { ImageGenerationLoading, ImageGenerationResult, ImageGeneration } from "@/components/ai-elements/image-generation";
 import { Weather, WeatherLoading } from "@/components/weather";
 
 export type GenUIItem = {
@@ -175,7 +175,15 @@ export function extractGenUIs(messages: MyUIMessage[], model?: string): GenUIIte
       } else if (toolInvocation.toolName === "createPresentation") {
         component = isCompleted ? <PresentationResult {...toolInvocation.result} /> : <PresentationLoading title={toolInvocation.args?.title} />;
       } else if (toolInvocation.toolName === "generateImage") {
-        component = isCompleted ? <ImageGenerationResult {...toolInvocation.result} /> : <ImageGenerationLoading prompt={toolInvocation.args?.prompt} />;
+        // Single stable node — no AnimatePresence, no layout shift
+        component = (
+          <ImageGeneration
+            key={toolInvocation.toolCallId}
+            isReady={isCompleted}
+            prompt={toolInvocation.args?.prompt}
+            {...(isCompleted ? toolInvocation.result : {})}
+          />
+        );
       }
 
       if (component) {
