@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { motion } from "motion/react";
+import { motion, Variants } from "motion/react";
 
 // ─── Analog Clock ────────────────────────────────────────────────────────────
 // Round to 3 decimal places to prevent floating-point serialization mismatches
@@ -277,22 +277,52 @@ const DAYS = [
 ];
 
 // ─── Animation Variants ──────────────────────────────────────────────────────
-const container = {
-  hidden: {},
+const container: Variants = {
+  hidden: { opacity: 0, scale: 0.95, filter: "blur(10px)" },
   visible: {
+    opacity: 1,
+    scale: 1,
+    filter: "blur(0px)",
     transition: {
-      staggerChildren: 0.12,
+      type: "spring",
+      stiffness: 300,
+      damping: 30,
+      staggerChildren: 0.15,
+      delayChildren: 0.1,
     },
   },
 };
 
-const lineVariant = {
-  hidden: { opacity: 0, y: 28 },
+const lineVariant: Variants = {
+  hidden: { opacity: 0, y: 20, scale: 0.95, filter: "blur(8px)" },
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.55, ease: "easeOut" as const },
+    scale: 1,
+    filter: "blur(0px)",
+    transition: { 
+      type: "spring", 
+      stiffness: 400, 
+      damping: 30,
+      mass: 0.8,
+      staggerChildren: 0.08,
+    },
   },
+};
+
+const wordVariant: Variants = {
+  hidden: { opacity: 0, y: 15, scale: 0.9, filter: "blur(4px)" },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    filter: "blur(0px)",
+    transition: {
+      type: "spring",
+      stiffness: 500,
+      damping: 25,
+    }
+  }
 };
 
 // ─── Typography helpers ───────────────────────────────────────────────────────
@@ -336,16 +366,31 @@ export function AtAGlance({
       async ({ coords }) => {
         const { latitude, longitude } = coords;
         try {
-          const [weatherRes, geoRes] = await Promise.all([
-            fetch(
-              `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code,is_day,wind_speed_10m&temperature_unit=celsius&wind_speed_unit=kmh`
-            ),
-            fetch(
-              `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
-            ),
-          ]);
+          // Fetch weather first, as it's more reliable and important
+          const weatherRes = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code,is_day,wind_speed_10m&temperature_unit=celsius&wind_speed_unit=kmh`
+          );
           const wData = await weatherRes.json();
-          const gData = await geoRes.json();
+
+          if (wData.error || !wData.current) {
+            throw new Error("Weather API error");
+          }
+
+          let city = location;
+          try {
+            const geoRes = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+            );
+            const gData = await geoRes.json();
+            city =
+              gData.address?.city ??
+              gData.address?.town ??
+              gData.address?.village ??
+              gData.address?.county ??
+              location;
+          } catch {
+            // Ignore geocoding errors
+          }
 
           const code: number = wData.current.weather_code;
           const isDay: boolean = wData.current.is_day === 1;
@@ -354,12 +399,6 @@ export function AtAGlance({
           const hour = now.getHours();
           const isWindy = windSpeed > 40 && code <= 3;
           const imageSrc = getWeatherImage(code, !isDay, hour, isWindy);
-          const city =
-            gData.address?.city ??
-            gData.address?.town ??
-            gData.address?.village ??
-            gData.address?.county ??
-            location;
 
           setLiveWeather({
             temp: Math.round(wData.current.temperature_2m),
@@ -381,11 +420,10 @@ export function AtAGlance({
   const formattedTime = time ? formatTime(time) : "";
 
   const displayCondition = liveWeather?.label ?? weatherCondition;
-  const displayLocation = liveWeather?.location ?? location;
   const weatherImageSrc = liveWeather?.imageSrc ?? "/weather/cloudy.png";
 
   const lineClass =
-    "flex flex-wrap items-center gap-x-3 gap-y-2 font-bold leading-tight";
+    "flex flex-wrap items-center justify-center gap-x-3 gap-y-2 font-bold leading-tight";
   const textBase =
     "text-4xl sm:text-5xl md:text-6xl lg:text-7xl";
 
@@ -398,44 +436,45 @@ export function AtAGlance({
     >
       {/* Line 1 – Happy [Day]! */}
       <motion.div variants={lineVariant} className={lineClass}>
-        <span className={`${muted} ${textBase}`}>Happy</span>
-        <span className={`${vivid} ${textBase}`}>{day}!</span>
+        <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>Happy</motion.span>
+        <motion.span variants={wordVariant} className={`${vivid} ${textBase}`}>{day}!</motion.span>
       </motion.div>
 
       {/* Line 2 – It's [Clock] [Time] and [WeatherIcon] [Condition] */}
       <motion.div variants={lineVariant} className={lineClass}>
-        <span className={`${muted} ${textBase}`}>It&apos;s</span>
-        <AnalogClock time={time} />
-        <span className={`${vivid} ${textBase}`}>{formattedTime}</span>
-        <span className={`${muted} ${textBase}`}>and</span>
-        <WeatherPlaceholder size={64} src={weatherImageSrc} />
-        {liveWeather && (
-          <span className={`${vivid} text-2xl sm:text-3xl font-semibold tabular-nums`}>
-            {liveWeather.temp}°C
-          </span>
+        <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>It&apos;s</motion.span>
+        <motion.span variants={wordVariant}><AnalogClock time={time} /></motion.span>
+        <motion.span variants={wordVariant} className={`${vivid} ${textBase}`}>{formattedTime}</motion.span>
+        <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>and</motion.span>
+        <motion.span variants={wordVariant}><WeatherPlaceholder size={64} src={weatherImageSrc} /></motion.span>
+        {liveWeather && typeof liveWeather.temp === 'number' && !isNaN(liveWeather.temp) && (
+          <motion.span 
+            initial={{ opacity: 0, y: 15, scale: 0.9, filter: "blur(4px)" }}
+            animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+            transition={{ type: "spring", stiffness: 500, damping: 25 }}
+            className="inline-flex items-center justify-center px-5 py-1.5 rounded-full bg-white/10 border border-white/20 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.12)]"
+          >
+            <span className={`${vivid} text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tighter tabular-nums`}>
+              {liveWeather.temp}°
+            </span>
+          </motion.span>
         )}
-        <span className={`${vivid} ${textBase}`}>{displayCondition}</span>
+        <motion.span variants={wordVariant} className={`${vivid} ${textBase}`}>{displayCondition}</motion.span>
       </motion.div>
 
-      {/* Line 3 – in [Location] */}
-      <motion.div variants={lineVariant} className={lineClass}>
-        <span className={`${muted} ${textBase}`}>in</span>
-        <span className={`${vivid} ${textBase}`}>{displayLocation}</span>
-      </motion.div>
-
-      {/* Line 4 – You got [Gmail] [n] emails and have */}
+      {/* Line 3 – You got [Gmail] [n] emails and have */}
       <motion.div variants={lineVariant} className={`${lineClass} mt-2`}>
-        <span className={`${muted} ${textBase}`}>You got</span>
-        <GmailPlaceholder size={64} />
-        <span className={`${vivid} ${textBase}`}>{emailCount} emails</span>
-        <span className={`${muted} ${textBase}`}>and have</span>
+        <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>You got</motion.span>
+        <motion.span variants={wordVariant}><GmailPlaceholder size={64} /></motion.span>
+        <motion.span variants={wordVariant} className={`${vivid} ${textBase}`}>{emailCount} emails</motion.span>
+        <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>and have</motion.span>
       </motion.div>
 
-      {/* Line 5 – [Teams] [n] meetings today */}
+      {/* Line 4 – [Teams] [n] meetings today */}
       <motion.div variants={lineVariant} className={lineClass}>
-        <TeamsPlaceholder size={64} />
-        <span className={`${vivid} ${textBase}`}>{meetingCount} meetings</span>
-        <span className={`${muted} ${textBase}`}>today</span>
+        <motion.span variants={wordVariant}><TeamsPlaceholder size={64} /></motion.span>
+        <motion.span variants={wordVariant} className={`${vivid} ${textBase}`}>{meetingCount} meetings</motion.span>
+        <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>today</motion.span>
       </motion.div>
     </motion.div>
   );
