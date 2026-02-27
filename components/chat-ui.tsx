@@ -6,19 +6,18 @@ import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import type { MyUIMessage, PdfOperationResult } from "@/types/chat";
 import { StripLargeDataChatTransport } from "@/lib/chat-transport";
-import { TreePine } from "lucide-react";
-
 // Components
 import { DynamicIsland } from "@/components/dynamic-island";
 import { PromptInputArea } from "@/components/prompt-input-area";
 import { MessageList } from "@/components/ai-elements/message-list";
 import { AttachmentsPreview } from "@/components/ai-elements/attachments-preview";
-import { SuggestionsGrid } from "@/components/ai-elements/chat-suggestions-grid";
 import { IntegrationsModal } from "@/components/integrations-modal";
 import { IntegrationPanel } from "@/components/integration-panel";
 import { FileDropZone } from "@/components/file-drop-zone";
 import { ScrollProgress } from "@/components/ui/scroll-progress";
 import { GenUIStack, extractGenUIs } from "@/components/gen-ui-stack";
+import { Folder } from "@/components/folder";
+import { TodoList } from "@/components/todo-list";
 
 // Hooks and Constants
 import { useChatState } from "@/hooks/use-chat-state";
@@ -26,7 +25,7 @@ import { useLocalStorageSync } from "@/hooks/use-local-storage-sync";
 import { useFileHandlers } from "@/hooks/use-file-handlers";
 import { useExtensionListeners } from "@/hooks/use-extension-listeners";
 import { useIntegrationHandlers } from "@/hooks/use-integration-handlers";
-import { MODELS, DEFAULT_SUGGESTIONS, STORAGE_KEYS } from "@/lib/chat-constants";
+import { MODELS, STORAGE_KEYS } from "@/lib/chat-constants";
 
 export function ChatUI() {
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
@@ -435,11 +434,6 @@ export function ChatUI() {
     });
   }, [regenerate, selectedModel, enableSearch, enableThinking, mentionedTools]);
 
-  const handleSuggestionClick = useCallback((suggestion: string) => {
-    setInputValue(suggestion);
-    if (suggestion.includes("Search")) setEnableSearch(true);
-  }, []);
-
   // Prevent hydration mismatch by not rendering until loaded
   if (!isLoaded) return null;
 
@@ -465,31 +459,33 @@ export function ChatUI() {
         
       {/* Main Content Area */}
       <div className="flex-1 overflow-hidden relative">
-        {/* Empty State / Suggestions (when no messages) */}
-        {!isStarted && !isChatModalOpen && (
+        {/* Dashboard Background Widgets (visible when no chat started) */}
+        {!isStarted && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col items-center justify-center h-full px-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5 }}
+            className="absolute inset-0 overflow-hidden pointer-events-none"
           >
-            <div className="max-w-3xl w-full space-y-6 pb-32">
-              <div className="flex flex-col items-center text-center space-y-3">
-                <motion.div 
-                  className="flex items-center justify-center size-16 rounded-2xl bg-primary/10 text-primary mb-4 cursor-pointer hover:bg-primary/20 transition-colors"
-                  onClick={handleNewChat}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <TreePine className="size-8" />
-                </motion.div>
-                <h2 className="text-4xl font-bold text-foreground">What can I help you with?</h2>
-                <p className="text-lg text-foreground/60">Ask me anything or try one of these suggestions</p>
-              </div>
-              <SuggestionsGrid
-                suggestions={DEFAULT_SUGGESTIONS}
-                onSuggestionClick={handleSuggestionClick}
-              />
-            </div>
+            {/* Folder widget - left side (hidden on small screens) */}
+            <motion.div
+              initial={{ opacity: 0, x: -40 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+              className="absolute top-1/2 left-[8%] -translate-y-1/2 pointer-events-auto hidden lg:block"
+            >
+              <Folder />
+            </motion.div>
+
+            {/* TodoList widget - right side (hidden on small screens) */}
+            <motion.div
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="absolute top-1/2 right-[8%] -translate-y-1/2 pointer-events-auto hidden lg:block"
+            >
+              <TodoList />
+            </motion.div>
           </motion.div>
         )}
 
