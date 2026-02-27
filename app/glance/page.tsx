@@ -14,8 +14,6 @@ export default function GlancePage() {
       }}
     >
       <AtAGlance
-        location="Kochi"
-        weatherCondition="Cloudy"
         emailCount={2}
         meetingCount={2}
       />
