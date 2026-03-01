@@ -1,113 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef, createContext, useContext } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
-import { motion, Variants, useMotionValue, useSpring } from "motion/react";
-
-// ─── Custom Cursor & Magnetism ───────────────────────────────────────────────
-const CursorContext = createContext({
-  active: null as string | null,
-  setActive: (_v: string | null) => {},
-});
-
-function CustomCursor() {
-  const { active } = useContext(CursorContext);
-  const mouseX = useMotionValue(-100);
-  const mouseY = useMotionValue(-100);
-  
-  const cursorX = useSpring(mouseX, { stiffness: 800, damping: 35, mass: 0.2 });
-  const cursorY = useSpring(mouseY, { stiffness: 800, damping: 35, mass: 0.2 });
-
-  useEffect(() => {
-    const moveCursor = (e: MouseEvent) => {
-      mouseX.set(e.clientX);
-      mouseY.set(e.clientY);
-    };
-    window.addEventListener("mousemove", moveCursor);
-    return () => window.removeEventListener("mousemove", moveCursor);
-  }, [mouseX, mouseY]);
-
-  let label = "";
-  if (active === "clock") label = "Current Time";
-  else if (active === "weather") label = "Live Weather";
-  else if (active === "temp") label = "Temperature";
-  else if (active === "gmail") label = "Open Inbox";
-  else if (active === "teams") label = "Join Meeting";
-
-  const isActive = active !== null;
-
-  return (
-    <motion.div
-      className="pointer-events-none fixed top-0 left-0 z-9999 flex items-center justify-center rounded-full shadow-lg"
-      style={{
-        x: cursorX,
-        y: cursorY,
-        translateX: "16px",
-        translateY: "16px",
-      }}
-      initial={false}
-      animate={{
-        opacity: isActive ? 1 : 0,
-        scale: isActive ? 1 : 0.8,
-        backgroundColor: "rgba(15, 23, 42, 0.85)", // slate-900 / 85%
-        padding: isActive ? "6px 12px" : "0px",
-        border: isActive ? "1px solid rgba(255, 255, 255, 0.2)" : "0px solid rgba(255, 255, 255, 0)",
-        backdropFilter: "blur(8px)",
-      }}
-      transition={{ type: "spring", stiffness: 500, damping: 30 }}
-    >
-      <span className="text-white/90 text-sm font-medium tracking-tight whitespace-nowrap">
-        {label}
-      </span>
-    </motion.div>
-  );
-}
-
-function MagneticWrap({ children, id }: { children: React.ReactNode; id?: string }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const scale = useSpring(1, { stiffness: 300, damping: 20, mass: 0.5 });
-  const { setActive } = useContext(CursorContext);
-  
-  const springX = useSpring(x, { stiffness: 150, damping: 15, mass: 0.1 });
-  const springY = useSpring(y, { stiffness: 150, damping: 15, mass: 0.1 });
-
-  const handleMouse = (e: React.MouseEvent<HTMLSpanElement>) => {
-    const { clientX, clientY } = e;
-    if (ref.current) {
-      const { height, width, left, top } = ref.current.getBoundingClientRect();
-      const middleX = clientX - (left + width / 2);
-      const middleY = clientY - (top + height / 2);
-      x.set(middleX * 0.3);
-      y.set(middleY * 0.3);
-    }
-  };
-
-  const reset = () => {
-    x.set(0);
-    y.set(0);
-    scale.set(1);
-    setActive(null);
-  };
-
-  const handleMouseEnter = () => {
-    scale.set(1.08); // Slight scale up
-    if (id) setActive(id);
-  };
-
-  return (
-    <motion.span
-      ref={ref}
-      onMouseMove={handleMouse}
-      onMouseLeave={reset}
-      onMouseEnter={handleMouseEnter}
-      style={{ x: springX, y: springY, scale, display: "inline-flex" }}
-    >
-      {children}
-    </motion.span>
-  );
-}
+import { motion, Variants } from "motion/react";
 
 // ─── Analog Clock ────────────────────────────────────────────────────────────
 // Round to 3 decimal places to prevent floating-point serialization mismatches
@@ -532,17 +427,13 @@ export function AtAGlance({
   const textBase =
     "text-4xl sm:text-5xl md:text-6xl lg:text-7xl";
 
-  const [cursorActive, setCursorActive] = useState<string | null>(null);
-
   return (
-    <CursorContext.Provider value={{ active: cursorActive, setActive: setCursorActive }}>
-      <CustomCursor />
-      <motion.div
-        variants={container}
-        initial="hidden"
-        animate="visible"
-        className="flex flex-col items-center gap-4 px-6 text-center select-none"
-      >
+    <motion.div
+      variants={container}
+      initial="hidden"
+      animate="visible"
+      className="flex flex-col items-center gap-4 px-6 text-center select-none"
+    >
       {/* Line 1 – Happy [Day]! */}
       <motion.div variants={lineVariant} className={lineClass}>
         <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>Happy</motion.span>
@@ -552,29 +443,21 @@ export function AtAGlance({
       {/* Line 2 – It's [Clock] [Time] and [WeatherIcon] [Condition] */}
       <motion.div variants={lineVariant} className={lineClass}>
         <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>It&apos;s</motion.span>
-        <motion.span variants={wordVariant}><MagneticWrap id="clock"><AnalogClock time={time} /></MagneticWrap></motion.span>
+        <motion.span variants={wordVariant}><AnalogClock time={time} /></motion.span>
         <motion.span variants={wordVariant} className={`${vivid} ${textBase}`}>{formattedTime}</motion.span>
         <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>and</motion.span>
-        <motion.span variants={wordVariant}><MagneticWrap id="weather"><WeatherPlaceholder size={64} src={weatherImageSrc} /></MagneticWrap></motion.span>
+        <motion.span variants={wordVariant}><WeatherPlaceholder size={64} src={weatherImageSrc} /></motion.span>
         {liveWeather && typeof liveWeather.temp === 'number' && !isNaN(liveWeather.temp) && (
-          <MagneticWrap id="temp">
-            <motion.span 
-              initial={{ opacity: 0, y: 15, scale: 0.9, filter: "blur(4px)" }}
-              animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-              transition={{ type: "spring", stiffness: 500, damping: 25 }}
-              className="relative overflow-hidden inline-flex items-center justify-center px-6 py-1.5 rounded-[1.03519rem] border border-slate-400/20 shadow-[0_8px_32px_rgba(0,0,0,0.3)] bg-linear-to-br from-slate-700/60 to-slate-900/90 backdrop-blur-2xl"
-            >
-              {/* Grain / Noise overlay */}
-              <span className="absolute inset-0 opacity-[0.2] mix-blend-overlay pointer-events-none" style={{ backgroundImage: "url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.85%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E')" }}></span>
-              
-              {/* Subtle top inner glow */}
-              <span className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-white/20 to-transparent"></span>
-              
-              <span className={`relative z-10 text-transparent bg-clip-text bg-linear-to-b from-white to-slate-400 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tighter tabular-nums drop-shadow-md`}>
-                {liveWeather.temp}°
-              </span>
-            </motion.span>
-          </MagneticWrap>
+          <motion.span 
+            initial={{ opacity: 0, y: 15, scale: 0.9, filter: "blur(4px)" }}
+            animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+            transition={{ type: "spring", stiffness: 500, damping: 25 }}
+            className="inline-flex items-center justify-center px-5 py-1.5 rounded-full bg-white/10 border border-white/20 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.12)]"
+          >
+            <span className={`${vivid} text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tighter tabular-nums`}>
+              {liveWeather.temp}°
+            </span>
+          </motion.span>
         )}
         <motion.span variants={wordVariant} className={`${vivid} ${textBase}`}>{displayCondition}</motion.span>
       </motion.div>
@@ -582,18 +465,17 @@ export function AtAGlance({
       {/* Line 3 – You got [Gmail] [n] emails and have */}
       <motion.div variants={lineVariant} className={`${lineClass} mt-2`}>
         <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>You got</motion.span>
-        <motion.span variants={wordVariant}><MagneticWrap id="gmail"><GmailPlaceholder size={64} /></MagneticWrap></motion.span>
+        <motion.span variants={wordVariant}><GmailPlaceholder size={64} /></motion.span>
         <motion.span variants={wordVariant} className={`${vivid} ${textBase}`}>{emailCount} emails</motion.span>
         <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>and have</motion.span>
       </motion.div>
 
       {/* Line 4 – [Teams] [n] meetings today */}
       <motion.div variants={lineVariant} className={lineClass}>
-        <motion.span variants={wordVariant}><MagneticWrap id="teams"><TeamsPlaceholder size={64} /></MagneticWrap></motion.span>
+        <motion.span variants={wordVariant}><TeamsPlaceholder size={64} /></motion.span>
         <motion.span variants={wordVariant} className={`${vivid} ${textBase}`}>{meetingCount} meetings</motion.span>
         <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>today</motion.span>
       </motion.div>
     </motion.div>
-    </CursorContext.Provider>
   );
 }
