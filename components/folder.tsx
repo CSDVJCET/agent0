@@ -10,8 +10,8 @@ const imgGroup5 = "https://www.figma.com/api/mcp/asset/417e12ab-439a-4713-929e-4
 
 export function Folder() {
   return (
-    <motion.div 
-      className="relative w-[400px] h-[400px] group cursor-pointer"
+    <motion.div
+      className="relative w-[306px] h-72 group cursor-pointer"
       initial="initial"
       whileHover="hover"
       style={{ perspective: 1000 }}

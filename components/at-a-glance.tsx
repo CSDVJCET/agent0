@@ -115,7 +115,7 @@ function MagneticWrap({ children, id }: { children: React.ReactNode; id?: string
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 
 function AnalogClock({ time }: { time: Date | null }) {
-  const size = 72;
+  const size = 70;
   const cx = size / 2;
   const cy = size / 2;
   const r = size / 2 - 2;
@@ -227,8 +227,8 @@ function AnalogClock({ time }: { time: Date | null }) {
         <line
           x1={cx}
           y1={cy}
-          x2={handX(hourDeg, r - 16)}
-          y2={handY(hourDeg, r - 16)}
+          x2={handX(hourDeg, r - 15)}
+          y2={handY(hourDeg, r - 15)}
           stroke="#2f3542"
           strokeWidth="4"
           strokeLinecap="round"
@@ -255,7 +255,7 @@ function AnalogClock({ time }: { time: Date | null }) {
 // ─── Icon Placeholders ───────────────────────────────────────────────────────
 function IconBox({
   children,
-  size = 60,
+  size = 62,
 }: {
   children: React.ReactNode;
   size?: number;
@@ -268,7 +268,7 @@ function IconBox({
         justifyContent: "center",
         width: size,
         height: size,
-        borderRadius: 14,
+        borderRadius: 15,
         background: "rgba(255,255,255,0.25)",
         backdropFilter: "blur(8px)",
         border: "1.5px solid rgba(255,255,255,0.35)",
@@ -282,7 +282,7 @@ function IconBox({
 }
 
 // Gmail icon using the actual SVG asset
-function GmailPlaceholder({ size = 60 }: { size?: number }) {
+function GmailPlaceholder({ size = 62 }: { size?: number }) {
   const imgSize = Math.round(size * 0.58);
   return (
     <IconBox size={size}>
@@ -292,7 +292,7 @@ function GmailPlaceholder({ size = 60 }: { size?: number }) {
 }
 
 // Teams icon using the actual SVG asset
-function TeamsPlaceholder({ size = 60 }: { size?: number }) {
+function TeamsPlaceholder({ size = 62 }: { size?: number }) {
   const imgSize = Math.round(size * 0.6);
   return (
     <IconBox size={size}>
@@ -331,8 +331,8 @@ function getWeatherLabel(code: number): string {
 }
 
 // Weather icon using the actual PNG asset
-function WeatherPlaceholder({ size = 60, src = "/weather/cloudy.png" }: { size?: number; src?: string }) {
-  const radius = "1.03519rem";
+function WeatherPlaceholder({ size = 62, src = "/weather/cloudy.png" }: { size?: number; src?: string }) {
+  const radius = "0.95rem";
   return (
     <span
       style={{
@@ -528,9 +528,9 @@ export function AtAGlance({
   const weatherImageSrc = liveWeather?.imageSrc ?? "/weather/cloudy.png";
 
   const lineClass =
-    "flex flex-wrap items-center justify-center gap-x-3 gap-y-2 font-bold leading-tight";
+    "flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1.5 font-bold leading-tight";
   const textBase =
-    "text-4xl sm:text-5xl md:text-6xl lg:text-7xl";
+    "text-2xl sm:text-3xl md:text-5xl lg:text-6xl";
 
   const [cursorActive, setCursorActive] = useState<string | null>(null);
 
@@ -541,7 +541,7 @@ export function AtAGlance({
         variants={container}
         initial="hidden"
         animate="visible"
-        className="flex flex-col items-center gap-4 px-6 text-center select-none"
+        className="flex flex-col items-center gap-3.5 px-6 text-center select-none"
       >
       {/* Line 1 – Happy [Day]! */}
       <motion.div variants={lineVariant} className={lineClass}>
@@ -555,14 +555,14 @@ export function AtAGlance({
         <motion.span variants={wordVariant}><MagneticWrap id="clock"><AnalogClock time={time} /></MagneticWrap></motion.span>
         <motion.span variants={wordVariant} className={`${vivid} ${textBase}`}>{formattedTime}</motion.span>
         <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>and</motion.span>
-        <motion.span variants={wordVariant}><MagneticWrap id="weather"><WeatherPlaceholder size={64} src={weatherImageSrc} /></MagneticWrap></motion.span>
+        <motion.span variants={wordVariant}><MagneticWrap id="weather"><WeatherPlaceholder size={62} src={weatherImageSrc} /></MagneticWrap></motion.span>
         {liveWeather && typeof liveWeather.temp === 'number' && !isNaN(liveWeather.temp) && (
           <MagneticWrap id="temp">
             <motion.span 
               initial={{ opacity: 0, y: 15, scale: 0.9, filter: "blur(4px)" }}
               animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
               transition={{ type: "spring", stiffness: 500, damping: 25 }}
-              className="relative overflow-hidden inline-flex items-center justify-center px-6 py-1.5 rounded-[1.03519rem] border border-slate-400/20 shadow-[0_8px_32px_rgba(0,0,0,0.3)] bg-linear-to-br from-slate-700/60 to-slate-900/90 backdrop-blur-2xl"
+              className="relative overflow-hidden inline-flex items-center justify-center px-4.5 py-1.5 rounded-2xl border border-slate-400/20 shadow-[0_8px_32px_rgba(0,0,0,0.3)] bg-linear-to-br from-slate-700/60 to-slate-900/90 backdrop-blur-2xl"
             >
               {/* Grain / Noise overlay */}
               <span className="absolute inset-0 opacity-[0.2] mix-blend-overlay pointer-events-none" style={{ backgroundImage: "url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.85%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E')" }}></span>
@@ -570,7 +570,7 @@ export function AtAGlance({
               {/* Subtle top inner glow */}
               <span className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-white/20 to-transparent"></span>
               
-              <span className={`relative z-10 text-transparent bg-clip-text bg-linear-to-b from-white to-slate-400 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tighter tabular-nums drop-shadow-md`}>
+              <span className={`relative z-10 text-transparent bg-clip-text bg-linear-to-b from-white to-slate-400 text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-bold tracking-tighter tabular-nums drop-shadow-md`}>
                 {liveWeather.temp}°
               </span>
             </motion.span>
@@ -580,16 +580,16 @@ export function AtAGlance({
       </motion.div>
 
       {/* Line 3 – You got [Gmail] [n] emails and have */}
-      <motion.div variants={lineVariant} className={`${lineClass} mt-2`}>
+      <motion.div variants={lineVariant} className={`${lineClass} mt-1.5`}>
         <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>You got</motion.span>
-        <motion.span variants={wordVariant}><MagneticWrap id="gmail"><GmailPlaceholder size={64} /></MagneticWrap></motion.span>
+        <motion.span variants={wordVariant}><MagneticWrap id="gmail"><GmailPlaceholder size={62} /></MagneticWrap></motion.span>
         <motion.span variants={wordVariant} className={`${vivid} ${textBase}`}>{emailCount} emails</motion.span>
         <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>and have</motion.span>
       </motion.div>
 
       {/* Line 4 – [Teams] [n] meetings today */}
       <motion.div variants={lineVariant} className={lineClass}>
-        <motion.span variants={wordVariant}><MagneticWrap id="teams"><TeamsPlaceholder size={64} /></MagneticWrap></motion.span>
+        <motion.span variants={wordVariant}><MagneticWrap id="teams"><TeamsPlaceholder size={62} /></MagneticWrap></motion.span>
         <motion.span variants={wordVariant} className={`${vivid} ${textBase}`}>{meetingCount} meetings</motion.span>
         <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>today</motion.span>
       </motion.div>

@@ -18,6 +18,9 @@ import { ScrollProgress } from "@/components/ui/scroll-progress";
 import { GenUIStack, extractGenUIs } from "@/components/gen-ui-stack";
 import { Folder } from "@/components/folder";
 import { TodoList } from "@/components/todo-list";
+import { AtAGlance } from "@/components/at-a-glance";
+import { TodaySchedule } from "@/components/today-schedule";
+import { AudioWave } from "@/components/audio-wave";
 
 // Hooks and Constants
 import { useChatState } from "@/hooks/use-chat-state";
@@ -437,7 +440,6 @@ export function ChatUI() {
   // Prevent hydration mismatch by not rendering until loaded
   if (!isLoaded) return null;
 
-  const isStarted = dedupedMessages.length > 0;
   const genUIs = extractGenUIs(dedupedMessages, selectedModel.id);
 
   return (
@@ -459,35 +461,40 @@ export function ChatUI() {
         
       {/* Main Content Area */}
       <div className="flex-1 overflow-hidden relative">
-        {/* Dashboard Background Widgets (visible when no chat started) */}
-        {!isStarted && (
+        {/* Dashboard Background Widgets (always visible) */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5 }}
+          className="absolute inset-0 overflow-hidden pointer-events-none z-0 flex flex-col justify-center"
+        >
+          {/* Left side widgets (hidden on small screens) */}
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5 }}
-            className="absolute inset-0 overflow-hidden pointer-events-none"
+            initial={{ opacity: 0, x: -40 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute top-[48%] left-[2%] 2xl:left-[4%] -translate-y-1/2 pointer-events-auto hidden xl:flex flex-col gap-8 scale-[0.765] lg:scale-[0.81] xl:scale-[0.855] origin-left"
           >
-            {/* Folder widget - left side (hidden on small screens) */}
-            <motion.div
-              initial={{ opacity: 0, x: -40 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-              className="absolute top-1/2 left-[8%] -translate-y-1/2 pointer-events-auto hidden lg:block"
-            >
-              <Folder />
-            </motion.div>
-
-            {/* TodoList widget - right side (hidden on small screens) */}
-            <motion.div
-              initial={{ opacity: 0, x: 40 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-              className="absolute top-1/2 right-[8%] -translate-y-1/2 pointer-events-auto hidden lg:block"
-            >
-              <TodoList />
-            </motion.div>
+            <TodoList />
+            <TodaySchedule />
           </motion.div>
-        )}
+
+          {/* Centered At a Glance Text - moved below dynamic island and scaled down */}
+          <div className="absolute inset-x-0 top-[14%] flex flex-col items-center justify-start pointer-events-auto z-0 scale-[0.675] sm:scale-[0.81] origin-top">
+            <AtAGlance location="Kochi" weatherCondition="cloudy" emailCount={2} meetingCount={2} />
+          </div>
+
+          {/* Right side widgets (hidden on small screens) */}
+          <motion.div
+            initial={{ opacity: 0, x: 40 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute top-[48%] right-[2%] 2xl:right-[4%] -translate-y-1/2 pointer-events-auto hidden xl:flex flex-col gap-8 scale-[0.765] lg:scale-[0.81] xl:scale-[0.855] origin-right items-center"
+          >
+            <AudioWave />
+            <Folder />
+          </motion.div>
+        </motion.div>
 
         {/* Input Area Container */}
         <div className={cn(

@@ -28,7 +28,7 @@ export function TodaySchedule({
   return (
     <div
       className={cn(
-        "relative w-[306px] rounded-[28px] overflow-hidden p-5 pb-7",
+        "relative w-[306px] h-72 rounded-[28px] overflow-hidden p-5 pb-7",
         className
       )}
       style={{
