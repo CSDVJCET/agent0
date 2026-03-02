@@ -52,29 +52,55 @@ export function TodoList() {
   };
 
   return (
-    <div className="relative w-[320px] h-[320px] mx-auto flex items-center justify-center select-none">
-      {/* Yellow sticky background */}
-      <div className="absolute inset-0 bg-[#fddf72] rounded-[15px]" />
-
-      {/* Back paper (rotated) */}
-      <div
-        className="absolute bg-[#fff6e5] rounded-[5px]"
+    <div
+      className="relative w-[306px] h-72 mx-auto flex items-center justify-center select-none rounded-[28px] p-4"
+      style={{
+        background: "rgba(255,255,255,0.12)",
+        backdropFilter: "blur(40px) saturate(1.6)",
+        WebkitBackdropFilter: "blur(40px) saturate(1.6)",
+        border: "1px solid rgba(255,255,255,0.25)",
+        boxShadow:
+          "0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(255,255,255,0.05)",
+      }}
+    >
+      {/* Inner inset container */}
+      <div 
+        className="absolute inset-4 rounded-[18px] bg-black/5"
         style={{
-          width: 230,
-          height: 230,
-          boxShadow: "0px 3.5px 3.5px rgba(0,0,0,0.25)",
-          transform: "rotate(-9deg)",
+          boxShadow: "inset 0 4px 10px rgba(0,0,0,0.1)",
         }}
       />
 
-      {/* Front paper */}
-      <motion.div
-        className="relative bg-[#fff6e5] rounded-[5px] flex flex-col pt-5 pb-4 px-7"
+      {/* Yellow sticky background */}
+      <div 
+        className="absolute inset-4 rounded-[18px] bg-[#fddf72]"
         style={{
-          width: 230,
-          height: 230,
-          boxShadow: "3.5px 3.5px 3.5px rgba(0,0,0,0.25)",
+          margin: "12px",
+          boxShadow: "0 2px 10px rgba(0,0,0,0.05)"
         }}
+      />
+
+      {/* Container for the 3D papers, scaled down slightly to fit */}
+      <div className="relative w-full h-full flex items-center justify-center scale-90">
+        {/* Back paper (rotated) */}
+        <div
+          className="absolute bg-[#fff6e5] rounded-[5px]"
+          style={{
+            width: 210,
+            height: 210,
+            boxShadow: "0px 3.5px 3.5px rgba(0,0,0,0.25)",
+            transform: "rotate(-9deg)",
+          }}
+        />
+
+        {/* Front paper */}
+        <motion.div
+          className="relative bg-[#fff6e5] rounded-[5px] flex flex-col pt-5 pb-4 px-5"
+          style={{
+            width: 210,
+            height: 210,
+            boxShadow: "3.5px 3.5px 3.5px rgba(0,0,0,0.25)",
+          }}
         whileHover={{ 
           scale: 1.02, 
           rotate: 1, 
@@ -84,7 +110,7 @@ export function TodoList() {
         transition={{ type: "spring", stiffness: 300, damping: 20 }}
       >
         {/* Task list */}
-        <div className="flex-1 flex flex-col gap-[6px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <div className="flex-1 flex flex-col gap-1.5 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <AnimatePresence>
             {tasks.map((task) => (
               <motion.div
@@ -176,6 +202,7 @@ export function TodoList() {
           </motion.button>
         </form>
       </motion.div>
+      </div>
     </div>
   );
 }

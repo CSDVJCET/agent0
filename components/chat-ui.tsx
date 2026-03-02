@@ -6,19 +6,21 @@ import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import type { MyUIMessage, PdfOperationResult } from "@/types/chat";
 import { StripLargeDataChatTransport } from "@/lib/chat-transport";
-import { TreePine } from "lucide-react";
-
 // Components
 import { DynamicIsland } from "@/components/dynamic-island";
 import { PromptInputArea } from "@/components/prompt-input-area";
 import { MessageList } from "@/components/ai-elements/message-list";
 import { AttachmentsPreview } from "@/components/ai-elements/attachments-preview";
-import { SuggestionsGrid } from "@/components/ai-elements/chat-suggestions-grid";
 import { IntegrationsModal } from "@/components/integrations-modal";
 import { IntegrationPanel } from "@/components/integration-panel";
 import { FileDropZone } from "@/components/file-drop-zone";
 import { ScrollProgress } from "@/components/ui/scroll-progress";
 import { GenUIStack, extractGenUIs } from "@/components/gen-ui-stack";
+import { Folder } from "@/components/folder";
+import { TodoList } from "@/components/todo-list";
+import { AtAGlance } from "@/components/at-a-glance";
+import { TodaySchedule } from "@/components/today-schedule";
+import { AudioWave } from "@/components/audio-wave";
 
 // Hooks and Constants
 import { useChatState } from "@/hooks/use-chat-state";
@@ -464,15 +466,9 @@ export function ChatUI() {
     });
   }, [regenerate, selectedModel, enableSearch, enableThinking, mentionedTools]);
 
-  const handleSuggestionClick = useCallback((suggestion: string) => {
-    setInputValue(suggestion);
-    if (suggestion.includes("Search")) setEnableSearch(true);
-  }, []);
-
   // Prevent hydration mismatch by not rendering until loaded
   if (!isLoaded) return null;
 
-  const isStarted = dedupedMessages.length > 0;
   const genUIs = extractGenUIs(dedupedMessages, selectedModel.id);
 
   return (
@@ -494,33 +490,40 @@ export function ChatUI() {
         
       {/* Main Content Area */}
       <div className="flex-1 overflow-hidden relative">
-        {/* Empty State / Suggestions (when no messages) */}
-        {!isStarted && !isChatModalOpen && (
+        {/* Dashboard Background Widgets (always visible) */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5 }}
+          className="absolute inset-0 overflow-hidden pointer-events-none z-0 flex flex-col justify-center"
+        >
+          {/* Left side widgets (hidden on small screens) */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col items-center justify-center h-full px-4"
+            initial={{ opacity: 0, x: -40 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute top-[48%] left-[2%] 2xl:left-[4%] -translate-y-1/2 pointer-events-auto hidden xl:flex flex-col gap-8 scale-[0.765] lg:scale-[0.81] xl:scale-[0.855] origin-left"
           >
-            <div className="max-w-3xl w-full space-y-6 pb-32">
-              <div className="flex flex-col items-center text-center space-y-3">
-                <motion.div 
-                  className="flex items-center justify-center size-16 rounded-2xl bg-primary/10 text-primary mb-4 cursor-pointer hover:bg-primary/20 transition-colors"
-                  onClick={handleNewChat}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <TreePine className="size-8" />
-                </motion.div>
-                <h2 className="text-4xl font-bold text-foreground">What can I help you with?</h2>
-                <p className="text-lg text-foreground/60">Ask me anything or try one of these suggestions</p>
-              </div>
-              <SuggestionsGrid
-                suggestions={DEFAULT_SUGGESTIONS}
-                onSuggestionClick={handleSuggestionClick}
-              />
-            </div>
+            <TodoList />
+            <TodaySchedule />
           </motion.div>
-        )}
+
+          {/* Centered At a Glance Text - moved below dynamic island and scaled down */}
+          <div className="absolute inset-x-0 top-[14%] flex flex-col items-center justify-start pointer-events-auto z-0 scale-[0.675] sm:scale-[0.81] origin-top">
+            <AtAGlance location="Kochi" weatherCondition="cloudy" emailCount={2} meetingCount={2} />
+          </div>
+
+          {/* Right side widgets (hidden on small screens) */}
+          <motion.div
+            initial={{ opacity: 0, x: 40 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute top-[48%] right-[2%] 2xl:right-[4%] -translate-y-1/2 pointer-events-auto hidden xl:flex flex-col gap-8 scale-[0.765] lg:scale-[0.81] xl:scale-[0.855] origin-right items-center"
+          >
+            <AudioWave />
+            <Folder />
+          </motion.div>
+        </motion.div>
 
         {/* Input Area Container */}
         <div className={cn(
