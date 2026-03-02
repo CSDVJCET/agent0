@@ -23,3 +23,11 @@ export type DocumentChunkInsert = Database['public']['Tables']['document_chunks'
 
 // Match documents function return type
 export type MatchedDocument = Database['public']['Functions']['match_documents']['Returns'][number]
+
+// Chat & memory types
+export type ChatSession = Database['public']['Tables']['chat_sessions']['Row']
+export type ChatSessionInsert = Database['public']['Tables']['chat_sessions']['Insert']
+export type ChatMessage = Database['public']['Tables']['chat_messages']['Row']
+export type ChatMessageInsert = Database['public']['Tables']['chat_messages']['Insert']
+export type UserMemory = Database['public']['Tables']['user_memories']['Row']
+export type UserMemoryInsert = Database['public']['Tables']['user_memories']['Insert']

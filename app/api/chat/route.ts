@@ -18,6 +18,9 @@ import { GITHUB_AGENT_PROMPT } from "@/ai/prompts/github";
 import { SLIDES_PROMPT } from "@/ai/prompts/slides";
 import { isToolInstalled } from "@/lib/installed-tools";
 import { getNextFallbackModel, isRateLimitError, type ModelRetryMetadata } from "@/lib/model-fallback";
+import { auth } from '@clerk/nextjs/server';
+import { getMemoriesForUser, formatMemoriesForPrompt } from '@/lib/db/memory';
+import { createMemoryTools } from '@/ai/memory-tools';
 
 // Initialize free provider clients
 const groq = createOpenAI({
@@ -172,6 +175,7 @@ function getModelInstance(model: string, enableThinking: boolean) {
 const bodySchema = z.object({
   messages: z.array(z.any()), // Will be validated as UIMessage[] at runtime
   model: z.string(),
+  sessionId: z.string().uuid().optional(),
   enableSearch: z.boolean().optional(),
   enableThinking: z.boolean().optional(),
   enableUrlContext: z.boolean().optional(),
@@ -224,12 +228,25 @@ export async function POST(req: Request) {
   const {
     messages,
     model,
+    sessionId,
     enableSearch = false,
     enableThinking = true,
     enableUrlContext = true,
     enableCodeExecution = true,
     mentionedTools = [],
   } = parsedBody;
+
+  // Load user memories — always on, core property
+  const { userId } = await auth()
+  let memoryBlock = ''
+  if (userId) {
+    try {
+      const memories = await getMemoriesForUser(userId)
+      memoryBlock = formatMemoriesForPrompt(memories)
+    } catch (e) {
+      console.error("[Memory] Failed to load memories:", e);
+    }
+  }
 
   // Type-cast messages to MyUIMessage[] for type safety
   let uiMessages = messages as MyUIMessage[];
@@ -549,6 +566,16 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
     }
   }
 
+  // Inject memory tools — always active except when Google provider tools are present
+  // (Google provider tools and function tools cannot be mixed in the same request)
+  const hasProviderTools = 'google_search' in tools || 'url_context' in tools || 'code_execution' in tools;
+  if (userId && !hasProviderTools) {
+    const memTools = createMemoryTools(userId);
+    tools.saveMemory = memTools.saveMemory;
+    tools.getMemories = memTools.getMemories;
+    tools.deleteMemory = memTools.deleteMemory;
+  }
+
   // Build guidance strings outside the retry loop to avoid redeclaration
   const calendarGuidance = mentionedTools.some(t => t.toLowerCase() === "calendar")
     ? " When the user asks about calendar events or scheduling, use the calendar tools to fetch, create, update, or delete events. For scheduling, use scheduleCalendarEvent to present options to the user first."
@@ -632,6 +659,11 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
       // Build system prompt with agent-specific persona if needed
       let systemPrompt = `The current date and time is ${new Date().toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" })}. Use this to resolve relative date mentions like "today", "tomorrow", "next Monday", etc. If the user asks for "events today" or "schedule", assume the default time range starts now and ends at the end of the day or covers a reasonable period, do not ask for clarification unless necessary.`;
 
+      // Memory proactive instruction — injected only when saveMemory tool is available
+      if (!hasProviderTools && userId) {
+        systemPrompt += `\n\nMemory Instructions: You have access to saveMemory, getMemories, and deleteMemory tools. PROACTIVELY call saveMemory whenever the user shares ANY personal information — their name, preferred name, email, phone, location, timezone, occupation, interests, favorite things, preferences (like colors, themes, languages), or goals. Do this silently without mentioning it unless the user asks. When the user says "my name is X" or "call me X", immediately call saveMemory with key=preferred_name. When they say "forget X" or "don't remember X", call deleteMemory. Use getMemories only if the user asks what you know about them.`;
+      }
+
       // Add Gmail agent persona when Gmail tools are active
       if (mentionedTools.some(tool => tool.toLowerCase() === "gmail")) {
         systemPrompt += "\n\n" + GMAIL_AGENT_PROMPT;
@@ -649,7 +681,7 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
 
       const result = streamText({
         model: modelInstance,
-        system: `${systemPrompt}${calendarGuidance}${formsGuidance}${tasksGuidance}${gmailGuidance}${githubGuidance}${slidesGuidance}`,
+        system: `${systemPrompt}${calendarGuidance}${formsGuidance}${tasksGuidance}${gmailGuidance}${githubGuidance}${slidesGuidance}${memoryBlock}`,
         messages: modelMessages,
         tools: hasCurrentTools ? currentTools : undefined,
         toolChoice: hasCurrentTools ? "auto" : "none",
