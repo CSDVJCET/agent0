@@ -474,7 +474,7 @@ export function ChatUI() {
             initial={{ opacity: 0, x: -40 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute top-[48%] left-[2%] 2xl:left-[4%] -translate-y-1/2 pointer-events-auto hidden xl:flex flex-col gap-8 scale-[0.765] lg:scale-[0.81] xl:scale-[0.855] origin-left"
+            className="absolute top-[48%] left-[2%] 2xl:left-[4%] -translate-y-1/2 pointer-events-auto hidden xl:flex flex-col gap-8 scale-[0.765] lg:scale-[0.81] xl:scale-[0.855] origin-left z-20"
           >
             <TodoList />
             <TodaySchedule />
@@ -486,7 +486,7 @@ export function ChatUI() {
           </div>
 
           {/* Email Carousel */}
-          <div className="absolute inset-x-0 bottom-28 z-0 pointer-events-none flex w-full justify-center">
+          <div className="absolute inset-x-0 bottom-28 z-10 pointer-events-none flex w-full justify-center">
             <div className="w-full xl:w-[85%] 2xl:w-[90%] max-w-[1600px]">
               <EmailCardCarousel />
             </div>
