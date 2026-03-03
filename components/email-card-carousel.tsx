@@ -17,7 +17,7 @@ export function EmailCardCarousel() {
 
   return (
     <div 
-      className="relative w-full pointer-events-auto"
+      className="relative w-full pointer-events-auto my-4"
       style={{
         maskImage: "linear-gradient(to right, transparent, black 10%, black 90%, transparent)",
         WebkitMaskImage: "linear-gradient(to right, transparent, black 5%, black 95%, transparent)"
@@ -29,13 +29,13 @@ export function EmailCardCarousel() {
         onWheel={handleWheel}
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
-        <div className="snap-center shrink-0 w-[450px]">
+        <div className="snap-center shrink-0">
           <EmailCard />
         </div>
-        <div className="snap-center shrink-0 w-[450px]">
+        <div className="snap-center shrink-0">
           <EmailCard />
         </div>
-        <div className="snap-center shrink-0 w-[450px]">
+        <div className="snap-center shrink-0">
           <EmailCard />
         </div>
       </div>
