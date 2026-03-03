@@ -4,10 +4,6 @@ import React, { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Play, Pause, SkipForward } from "lucide-react";
 
-// Figma Assets
-const imgRectangle172 = "https://www.figma.com/api/mcp/asset/ef382b6c-7098-424f-b7bd-1d02274304fc";
-const defaultThumbnail = "https://www.figma.com/api/mcp/asset/0b4b77d8-bdd2-499f-96fe-62fec07a1809"; // Default / Video placeholder
-const audioThumbnail = "https://placehold.co/600x600/1e1e1e/FFF.png?text=Audio"; // Fallback for audio
 
 export function MusicComponent({ className }: { className?: string }) {
   const [mediaState, setMediaState] = useState<{
@@ -23,7 +19,6 @@ export function MusicComponent({ className }: { className?: string }) {
       // Security: ensure message is from same window (relayed by content script)
       if (event.source !== window || !event.data || event.data.type !== 'AGENT0_MEDIA_UPDATE') return;
       
-      console.log("MusicComponent received update:", event.data.data);
       setMediaState(event.data.data);
     };
     window.addEventListener('message', handler);
@@ -41,10 +36,6 @@ export function MusicComponent({ className }: { className?: string }) {
 
   const isPlaying = mediaState?.isPlaying || false;
   const hasMedia = mediaState?.hasMedia || false;
-  const isVideo = mediaState?.type === 'video';
-
-  // Determine thumbnail
-  const currentThumbnail = hasMedia && !isVideo ? audioThumbnail : defaultThumbnail;
 
   return (
     <div className={cn("h-[112.615px] relative w-[247.437px]", className)} data-name="Music" data-node-id="460:216">
@@ -53,7 +44,7 @@ export function MusicComponent({ className }: { className?: string }) {
         <div className="absolute blur-[1.4px] border-3 border-[#fdefe4] border-solid inset-0 pointer-events-none rounded-[23.792px] shadow-[7px_9px_4.9px_0px_rgba(0,0,0,0.25)]" data-node-id="290:135">
           <div className="absolute inset-0 overflow-hidden rounded-[23.792px]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img alt="" className="absolute h-[128.1%] left-[-1.81%] max-w-none top-[-3.63%] w-[103.65%]" src={imgRectangle172} />
+            <img alt="" className="absolute h-[128.1%] left-[-1.81%] max-w-none top-[-3.63%] w-[103.65%]" src="/assets/imgRectangle172.png" />
           </div>
           <div className="absolute inset-[-3px] rounded-[inherit] shadow-[inset_0px_4px_4px_0px_rgba(0,0,0,0.25)]" />
         </div>
@@ -103,7 +94,7 @@ export function MusicComponent({ className }: { className?: string }) {
           <img 
             alt="Media Thumbnail" 
             className="absolute inset-0 max-w-none object-cover pointer-events-none rounded-[14px] size-full" 
-            src={currentThumbnail} 
+            src="/assets/imgImage113.png" 
           />
         </div>
       </div>
