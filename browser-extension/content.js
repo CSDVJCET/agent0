@@ -524,6 +524,7 @@ function scanForMedia() {
     title: getMediaTitle(),
     site: detectSiteType(),
     src: mediaToReport.currentSrc || mediaToReport.src,
+    pageUrl: window.location.href,
     duration: isFinite(mediaToReport.duration) ? mediaToReport.duration : 0,
     currentTime: isFinite(mediaToReport.currentTime) ? mediaToReport.currentTime : 0
   };

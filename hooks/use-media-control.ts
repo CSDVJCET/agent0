@@ -21,6 +21,12 @@ export interface MediaControlState {
   isRemote: boolean;
   /** Whether the browser extension is detected */
   extensionConnected: boolean;
+  /** Detected site: 'youtube' | 'ytmusic' | 'spotify' | 'soundcloud' | 'generic' etc. */
+  site: string;
+  /** Resolved artwork URL (YouTube thumbnail, etc.) or empty string */
+  artworkUrl: string;
+  /** Full URL of the tab playing media (used for artwork derivation) */
+  pageUrl: string;
 }
 
 const INITIAL_STATE: MediaControlState = {
@@ -33,7 +39,24 @@ const INITIAL_STATE: MediaControlState = {
   progress: 0,
   isRemote: false,
   extensionConnected: false,
+  site: "",
+  artworkUrl: "",
+  pageUrl: "",
 };
+
+/** Derive an artwork URL from the remote state if possible. */
+function deriveArtworkUrl(site: string, pageUrl: string): string {
+  if (site === "youtube" && pageUrl) {
+    const match = pageUrl.match(/[?&]v=([^&]+)/);
+    if (match) return `https://img.youtube.com/vi/${match[1]}/mqdefault.jpg`;
+  }
+  if (site === "ytmusic" && pageUrl) {
+    // YT Music uses the same video-id param
+    const match = pageUrl.match(/[?&]v=([^&]+)/);
+    if (match) return `https://img.youtube.com/vi/${match[1]}/mqdefault.jpg`;
+  }
+  return "";
+}
 
 // Media event names we listen to on the active local element
 const MEDIA_EVENTS = [
@@ -74,6 +97,7 @@ interface RemoteMediaState {
   title: string;
   site?: string;
   src?: string;
+  pageUrl?: string;
   duration: number;
   currentTime: number;
 }
@@ -131,6 +155,9 @@ export function useMediaControl() {
       progress: duration > 0 ? currentTime / duration : 0,
       isRemote: false,
       extensionConnected: prev.extensionConnected,
+      site: "",
+      artworkUrl: "",
+      pageUrl: "",
     }));
   }, []);
 
@@ -218,6 +245,8 @@ export function useMediaControl() {
             data.currentTime && Number.isFinite(data.currentTime)
               ? data.currentTime
               : 0;
+          const site = data.site || "generic";
+          const pageUrl = data.pageUrl || "";
           setState({
             hasMedia: true,
             isPlaying: data.isPlaying,
@@ -228,6 +257,9 @@ export function useMediaControl() {
             progress: duration > 0 ? currentTime / duration : 0,
             isRemote: true,
             extensionConnected: true,
+            site,
+            artworkUrl: deriveArtworkUrl(site, pageUrl),
+            pageUrl,
           });
         } else {
           setHasRemote(false);
@@ -358,11 +390,46 @@ export function useMediaControl() {
     }
   }, [sendRemoteCommand, setActiveByIndex]);
 
+  const handlePrev = useCallback(() => {
+    // If remote media is present, send prev via extension
+    if (remoteStateRef.current?.hasMedia) {
+      sendRemoteCommand("prev");
+      return;
+    }
+
+    // Local media — seek to start or go to previous in list
+    const list = mediaListRef.current;
+    if (list.length === 0) return;
+
+    const el = activeElRef.current;
+    // If we're more than 3 s in, just restart current track
+    if (el && el.currentTime > 3) {
+      el.currentTime = 0;
+      return;
+    }
+
+    if (list.length === 1) {
+      if (el) el.currentTime = 0;
+      return;
+    }
+
+    if (el) el.pause();
+    const prevIdx =
+      (activeIndexRef.current - 1 + list.length) % list.length;
+    setActiveByIndex(prevIdx);
+    const prev = list[prevIdx];
+    if (prev) {
+      prev.currentTime = 0;
+      prev.play().catch(() => {});
+    }
+  }, [sendRemoteCommand, setActiveByIndex]);
+
   return {
     ...state,
     hasRemote,
     extensionConnected,
     handlePlayPause,
     handleNext,
+    handlePrev,
   };
 }
