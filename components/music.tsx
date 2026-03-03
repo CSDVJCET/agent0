@@ -67,7 +67,6 @@ export function Music({ className }: { className?: string }) {
     artworkUrl,
     handlePlayPause,
     handleNext,
-    handlePrev,
   } = useMediaControl();
 
   const [imgError, setImgError] = useState(false);
@@ -81,75 +80,57 @@ export function Music({ className }: { className?: string }) {
   // Reset error state when artworkUrl changes
   const handleImgError = () => setImgError(true);
 
-  // ── Idle / extension not connected state ──────────────────────
-  if (!hasMedia) {
-    return (
-      <div className={className || "relative w-[420px] h-[180px]"} data-name="Music">
-        <div className="absolute inset-0 rounded-[28px] border-[3px] border-[#fdefe4] overflow-hidden shadow-[7px_9px_12px_0px_rgba(0,0,0,0.35)]">
-          {/* Blurred background image */}
-          <img
-            alt=""
-            className="absolute w-[106%] h-[130%] -top-[4%] -left-[3%] object-cover blur-[6px] scale-105 opacity-40"
-            src={fallbackThumb}
-          />
-          <div className="absolute inset-0 shadow-[inset_0px_4px_8px_0px_rgba(0,0,0,0.3)]" />
-
-          {/* Idle message */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-8 text-center">
-            <div className="flex items-center gap-2">
-              {/* Pulsing dot */}
-              <span
-                className="w-2 h-2 rounded-full"
-                style={{
-                  background: extensionConnected ? "#1DB954" : "#888",
-                  boxShadow: extensionConnected ? "0 0 6px #1DB954" : "none",
-                }}
-              />
-              <span className="text-[11px] font-medium text-[rgba(40,25,10,0.55)]">
-                {extensionConnected ? "Extension connected · waiting for media" : "Install the Agent0 extension to enable cross-tab control"}
-              </span>
-            </div>
-            <p className="text-[10px] text-[rgba(40,25,10,0.35)] leading-relaxed max-w-[260px]">
-              Play something on YouTube, Spotify or any other tab, then control it here.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // ── Active media state ─────────────────────────────────────────
   return (
     <div className={className || "relative w-[420px] h-[180px]"} data-name="Music">
-      {/* Track title above the card */}
-      {displayTitle && (
-        <div className="absolute -top-7 left-0 right-0 flex items-center justify-center gap-2 px-2">
-          {/* Site badge */}
-          {isRemote && site && site !== "generic" && (
-            <span
-              className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
-              style={{
-                background: siteMeta.color + "22",
-                color: siteMeta.color,
-                border: `1px solid ${siteMeta.color}44`,
-              }}
-            >
-              {siteMeta.label}
-            </span>
-          )}
-          <span className="text-xs text-muted-foreground font-medium truncate max-w-[280px]">
-            {displayTitle}
-          </span>
-          {/* Remote indicator dot */}
-          {isRemote && (
+      {/* Above-card row: status when idle, track title when playing */}
+      <div className="absolute -top-7 left-0 right-0 flex items-center justify-center gap-2 px-2">
+        {!hasMedia ? (
+          /* Status message — shown above card when no media is playing */
+          <div className="flex items-center gap-1.5">
             <span
               className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-              title="Controlling another tab"
-              style={{ background: "#1DB954", boxShadow: "0 0 4px #1DB954" }}
+              style={{
+                background: extensionConnected ? "#1DB954" : "#888",
+                boxShadow: extensionConnected ? "0 0 4px #1DB954" : "none",
+              }}
             />
-          )}
-        </div>
-      )}
+            <span className="text-[11px] text-muted-foreground/60">
+              {extensionConnected
+                ? "Extension connected · waiting for media"
+                : "Install the Agent0 extension to enable cross-tab control"}
+            </span>
+          </div>
+        ) : (
+          /* Track title + site badge + remote dot when media is active */
+          <>
+            {isRemote && site && site !== "generic" && (
+              <span
+                className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full flex-shrink-0"
+                style={{
+                  background: siteMeta.color + "22",
+                  color: siteMeta.color,
+                  border: `1px solid ${siteMeta.color}44`,
+                }}
+              >
+                {siteMeta.label}
+              </span>
+            )}
+            {displayTitle && (
+              <span className="text-xs text-muted-foreground font-medium truncate max-w-[280px]">
+                {displayTitle}
+              </span>
+            )}
+            {isRemote && (
+              <span
+                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                title="Controlling another tab"
+                style={{ background: "#1DB954", boxShadow: "0 0 4px #1DB954" }}
+              />
+            )}
+          </>
+        )}
+      </div>
 
       {/* Card */}
       <div className="absolute inset-0 rounded-[28px] border-[3px] border-[#fdefe4] overflow-hidden shadow-[7px_9px_12px_0px_rgba(0,0,0,0.35)]">
@@ -162,15 +143,15 @@ export function Music({ className }: { className?: string }) {
         />
         <div className="absolute inset-0 shadow-[inset_0px_4px_8px_0px_rgba(0,0,0,0.3)]" />
 
-        {/* Controls — prev | play/pause | next */}
-        <div className="absolute inset-0 flex items-center px-6 gap-3">
-          {/* Prev */}
+        {/* Controls — next | play/pause */}
+        <div className="absolute inset-0 flex items-center px-7 gap-5">
+          {/* Next — same size as play/pause */}
           <button
-            onClick={handlePrev}
-            className="flex items-center justify-center w-[56px] h-[56px] rounded-full bg-[rgba(200,170,120,0.22)] backdrop-blur-md shadow-[0_2px_8px_rgba(0,0,0,0.2)] cursor-pointer flex-shrink-0 transition-transform active:scale-95 hover:bg-[rgba(200,170,120,0.35)]"
-            aria-label="Previous track"
+            onClick={handleNext}
+            className="flex items-center justify-center w-[72px] h-[72px] rounded-full bg-[rgba(200,170,120,0.25)] backdrop-blur-md shadow-[0_2px_8px_rgba(0,0,0,0.25)] cursor-pointer flex-shrink-0 transition-transform active:scale-95 hover:bg-[rgba(200,170,120,0.4)]"
+            aria-label="Next track"
           >
-            <PrevIcon />
+            <NextIcon />
           </button>
 
           {/* Play / Pause — with circular progress ring */}
@@ -196,15 +177,6 @@ export function Music({ className }: { className?: string }) {
               />
             </svg>
             {isPlaying ? <PauseIcon /> : <PlayIcon />}
-          </button>
-
-          {/* Next */}
-          <button
-            onClick={handleNext}
-            className="flex items-center justify-center w-[56px] h-[56px] rounded-full bg-[rgba(200,170,120,0.22)] backdrop-blur-md shadow-[0_2px_8px_rgba(0,0,0,0.2)] cursor-pointer flex-shrink-0 transition-transform active:scale-95 hover:bg-[rgba(200,170,120,0.35)]"
-            aria-label="Next track"
-          >
-            <NextIcon />
           </button>
         </div>
 
