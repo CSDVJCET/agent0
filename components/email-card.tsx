@@ -60,14 +60,14 @@ export function EmailCard() {
         <div className="flex items-center gap-4">
           {/* File Attachments (Overlapping avatars) */}
           <div className="flex items-center -space-x-2">
-            <div className="w-[30px] h-[30px] rounded-full bg-[#FFD700] border-[2px] border-white/40 overflow-hidden flex items-center justify-center shrink-0 z-30">
-               <span className="text-black font-bold text-[10px] tracking-tighter leading-none mt-px">{"<>"}</span>
+            <div className="w-[30px] h-[30px] rounded-full bg-[#FFD700] border-[2px] border-white/60 flex items-center justify-center shrink-0 z-30 shadow-sm">
+               <Code className="w-4 h-4 text-black" strokeWidth={2.5} />
             </div>
-            <div className="w-[30px] h-[30px] rounded-full bg-[#FF0000] border-[2px] border-white/40 overflow-hidden flex items-center justify-center shrink-0 z-20">
-               <span className="text-white font-serif font-bold text-[14px] leading-none mb-0.5 mr-0.5">{"⎃"}</span>
+            <div className="w-[30px] h-[30px] rounded-full bg-[#FF0000] border-[2px] border-white/60 flex items-center justify-center shrink-0 z-20 shadow-sm">
+               <File className="w-4 h-4 text-white" strokeWidth={2} />
             </div>
-            <div className="w-[30px] h-[30px] rounded-full bg-[#0047FF] border-[2px] border-white/40 overflow-hidden flex items-center justify-center shrink-0 z-10">
-               <span className="text-white font-bold text-[14px] leading-none">{"W"}</span>
+            <div className="w-[30px] h-[30px] rounded-full bg-[#0047FF] border-[2px] border-white/60 flex items-center justify-center shrink-0 z-10 shadow-sm">
+               <FileText className="w-4 h-4 text-white" strokeWidth={2} />
             </div>
           </div>
 
