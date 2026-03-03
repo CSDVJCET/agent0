@@ -8,9 +8,15 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
 
 // Server-side client with service role key (for API routes)
-export function createServiceClient() {
+// Uses a short connect timeout so DB failures fail fast instead of blocking for 10 s
+export function createServiceClient(timeoutMs = 4000) {
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-  return createClient<Database>(supabaseUrl, supabaseServiceKey)
+  return createClient<Database>(supabaseUrl, supabaseServiceKey, {
+    global: {
+      fetch: (url, options) =>
+        fetch(url, { ...options, signal: AbortSignal.timeout(timeoutMs) }),
+    },
+  })
 }
 
 // Helper types for convenience

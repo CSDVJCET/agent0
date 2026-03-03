@@ -686,8 +686,11 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
         tools: hasCurrentTools ? currentTools : undefined,
         toolChoice: hasCurrentTools ? "auto" : "none",
         providerOptions,
-        // Use stopWhen for multi-step tool calls when custom tools are mentioned
-        ...(mentionedTools.length > 0 && { stopWhen: stepCountIs(8) }),
+        // Always enable multi-step when any tools are present so the model can
+        // call a tool (e.g. getMemories) AND then generate a text response in
+        // the same turn. Without this, the stream stops after the tool call
+        // and the user sees no answer until the next message.
+        ...(hasCurrentTools && { stopWhen: stepCountIs(8) }),
         onError: (error) => {
           console.error("Stream error:", error);
         },

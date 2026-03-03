@@ -3,6 +3,9 @@ import { createServiceClient } from '@/lib/supabase'
 import type { UserMemory } from '@/lib/supabase'
 
 export async function getMemoriesForUser(userId: string): Promise<UserMemory[]> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return []
+  }
   const db = createServiceClient()
   const { data, error } = await db
     .from('user_memories')
@@ -19,6 +22,9 @@ export async function upsertMemory(
   value: string,
   category = 'general'
 ): Promise<UserMemory> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Supabase not configured')
+  }
   const db = createServiceClient()
   const { data, error } = await db
     .from('user_memories')
@@ -33,6 +39,9 @@ export async function upsertMemory(
 }
 
 export async function deleteMemory(userId: string, memoryId: string): Promise<void> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Supabase not configured')
+  }
   const db = createServiceClient()
   const { error } = await db
     .from('user_memories')
