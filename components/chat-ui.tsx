@@ -17,6 +17,7 @@ import { FileDropZone } from "@/components/file-drop-zone";
 import { ScrollProgress } from "@/components/ui/scroll-progress";
 import { GenUIStack, extractGenUIs } from "@/components/gen-ui-stack";
 import { Folder } from "@/components/folder";
+import { Music } from "@/components/music";
 import { EmailCardCarousel } from "@/components/email-card-carousel";
 import { TodoList } from "@/components/todo-list";
 import { AtAGlance } from "@/components/at-a-glance";
@@ -530,6 +531,16 @@ export function ChatUI() {
           >
             <AudioWave />
             <Folder />
+          </motion.div>
+
+          {/* Bottom-right Music Widget */}
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute bottom-4 right-[2%] 2xl:right-[4%] pointer-events-auto hidden xl:flex scale-[0.52] lg:scale-[0.55] xl:scale-[0.585] origin-bottom-right items-center z-10"
+          >
+            <Music />
           </motion.div>
         </motion.div>
 
