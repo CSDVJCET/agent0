@@ -25,10 +25,12 @@ import { AudioWave } from "@/components/audio-wave";
 // Hooks and Constants
 import { useChatState } from "@/hooks/use-chat-state";
 import { useLocalStorageSync } from "@/hooks/use-local-storage-sync";
+import { useSessionSync } from "@/hooks/use-session-sync";
 import { useFileHandlers } from "@/hooks/use-file-handlers";
 import { useExtensionListeners } from "@/hooks/use-extension-listeners";
 import { useIntegrationHandlers } from "@/hooks/use-integration-handlers";
-import { MODELS, STORAGE_KEYS } from "@/lib/chat-constants";
+import { MODELS, DEFAULT_SUGGESTIONS, STORAGE_KEYS } from "@/lib/chat-constants";
+import { useUser } from "@clerk/nextjs";
 
 export function ChatUI() {
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
@@ -44,6 +46,8 @@ export function ChatUI() {
     attachments, setAttachments,
     inputValue, setInputValue,
     isLoaded,
+    currentSessionId, setCurrentSessionId,
+    sessions, setSessions,
     isIntegrationsModalOpen, setIsIntegrationsModalOpen,
     activeIntegration, setActiveIntegration,
     addedIntegrations, setAddedIntegrations,
@@ -52,6 +56,8 @@ export function ChatUI() {
     isTasksConnected, setIsTasksConnected,
     fileInputRef,
   } = state;
+
+  const { isSignedIn } = useUser();
 
   const {
     messages,
@@ -78,6 +84,13 @@ export function ChatUI() {
     },
   });
 
+  // Save messages to Supabase after each AI turn completes
+  useEffect(() => {
+    if (status === 'ready' && messages.length > 0 && isSignedIn && currentSessionId) {
+      saveMessagesToDB();
+    }
+  }, [status, messages.length, isSignedIn, currentSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Hooks for state management
   const { dedupedMessages } = useLocalStorageSync({
     messages,
@@ -91,6 +104,17 @@ export function ChatUI() {
     setIsFormsConnected,
     setIsTasksConnected,
     isLoaded,
+    setIsLoaded: state.setIsLoaded,
+  });
+
+  // Session sync — manages Supabase persistence when signed in
+  const { createNewSession, switchSession, saveMessagesToDB } = useSessionSync({
+    messages,
+    setMessages,
+    currentSessionId,
+    setCurrentSessionId,
+    sessions,
+    setSessions,
     setIsLoaded: state.setIsLoaded,
   });
 
@@ -169,20 +193,24 @@ export function ChatUI() {
 
   // Chat handlers
 
-  const handleNewChat = useCallback(() => {
-    setMessages([]);
+  const handleNewChat = useCallback(async () => {
     setAttachments([]);
     setInputValue("");
     setMentionedTools([]);
     setEnableSearch(true);
     setEnableThinking(true);
     setIsChatModalOpen(false);
-    localStorage.removeItem(STORAGE_KEYS.MESSAGES);
     // Clear the file input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-  }, [setMessages, setAttachments, setInputValue, setMentionedTools, setEnableSearch, setEnableThinking, setIsChatModalOpen, fileInputRef]);
+    if (isSignedIn) {
+      await createNewSession(selectedModel.id);
+    } else {
+      setMessages([]);
+      localStorage.removeItem(STORAGE_KEYS.MESSAGES);
+    }
+  }, [setMessages, setAttachments, setInputValue, setMentionedTools, setEnableSearch, setEnableThinking, setIsChatModalOpen, fileInputRef, isSignedIn, createNewSession, selectedModel]);
 
   // Handle Escape key to close modal
   useEffect(() => {
@@ -405,6 +433,7 @@ export function ChatUI() {
       {
         body: {
           model: selectedModel.id,
+          sessionId: currentSessionId ?? undefined,
           enableSearch,
           enableThinking: selectedModel.supportsThinking ? enableThinking : false,
           enableUrlContext: true,
