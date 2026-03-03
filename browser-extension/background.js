@@ -3,6 +3,10 @@
 // Fixed Agent0 URL (popup configuration removed)
 const agent0Url = 'http://localhost:3000';
 
+// Track the last tab that had playing media (for cross-tab control)
+let lastMediaTabId = null;
+let lastMediaState = null;
+
 const CONTEXT_MENU_IDS = {
   SEND_SELECTION: 'agent0-send-selection',
 };
@@ -298,10 +302,82 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'captureVisibleTab') {
     handleCaptureVisibleTab(request, sender, sendResponse);
-    return true; // Keep channel open for async response
+    return true;
   } else if (request.action === 'sendToAgent0') {
     handleSendToAgent0(request, sendResponse);
     return true;
+  } else if (request.action === 'MEDIA_STATUS_UPDATE') {
+    // A tab is reporting it has media — remember it
+    if (sender.tab?.id) {
+      // Only update lastMediaTabId if media is actually playing,
+      // or if we don't have a media tab yet
+      if (!lastMediaTabId || (request.data && request.data.isPlaying)) {
+        lastMediaTabId = sender.tab.id;
+      }
+      // Always update state if it's from the active media tab
+      if (sender.tab.id === lastMediaTabId) {
+        lastMediaState = request.data;
+      }
+
+      // Forward the update to ALL Agent0 tabs so the Music component updates
+      chrome.tabs.query({ url: `${agent0Url}/*` }, (tabs) => {
+        tabs.forEach((t) => {
+          chrome.tabs.sendMessage(t.id, {
+            action: 'AGENT0_MEDIA_UPDATE',
+            data: request.data
+          }).catch(() => {});
+        });
+      });
+    }
+    sendResponse({ success: true });
+    return false;
+  } else if (request.action === 'RelayMediaControl') {
+    // Agent0 page wants to control media on the last focused media tab
+    const command = request.command;
+    if (lastMediaTabId) {
+      chrome.tabs.sendMessage(lastMediaTabId, {
+        action: 'MEDIA_CONTROL',
+        command: command
+      }).then(() => {
+        // After sending a command, request an immediate state update
+        // so the UI refreshes quickly
+        setTimeout(() => {
+          if (lastMediaTabId) {
+            chrome.tabs.sendMessage(lastMediaTabId, {
+              action: 'REQUEST_STATE_REFRESH'
+            }).catch(() => {});
+          }
+        }, 300);
+      }).catch((err) => {
+        console.error('Failed to relay media control to tab', lastMediaTabId, err);
+        // If the tab is gone, clean up
+        lastMediaTabId = null;
+        lastMediaState = null;
+      });
+    }
+    sendResponse({ success: true });
+    return false;
+  } else if (request.action === 'GET_MEDIA_STATE') {
+    // Agent0 page asking for current media state
+    sendResponse({ success: true, data: lastMediaState });
+    return false;
+  }
+});
+
+// Clean up if the media tab is closed
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (tabId === lastMediaTabId) {
+    lastMediaTabId = null;
+    lastMediaState = null;
+    // Notify Agent0 that media is gone
+    chrome.tabs.query({ url: `${agent0Url}/*` }, (tabs) => {
+      tabs.forEach((t) => {
+        chrome.tabs.sendMessage(t.id, {
+          action: 'AGENT0_MEDIA_UPDATE',
+          data: null
+        }).catch(() => {});
+      });
+    });
   }
 });
 
