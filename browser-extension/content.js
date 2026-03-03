@@ -86,6 +86,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'startCapture') {
     startScreenshotCapture();
     sendResponse({ success: true });
+  } else if (request.action === 'MEDIA_CONTROL') {
+    handleMediaControl(request.command);
+    sendResponse({ success: true });
+  } else if (request.action === 'REQUEST_STATE_REFRESH') {
+    // Force an immediate state report back to background → Agent0
+    lastMediaState = null; // Reset so the next poll sees a change
+    const state = scanForMedia();
+    if (state) {
+      chrome.runtime.sendMessage({
+        action: 'MEDIA_STATUS_UPDATE',
+        data: state
+      }).catch(() => {});
+    }
+    sendResponse({ success: true });
+  } else if (request.action === 'AGENT0_MEDIA_UPDATE') {
+    window.postMessage({ type: 'AGENT0_MEDIA_UPDATE', data: request.data }, '*');
   } else if (request.action === 'extractPageContent') {
     try {
       console.log('Processing extractPageContent request...');
@@ -432,3 +448,246 @@ function showToastNotification(message, type = 'info') {
 }
 
 } // End of initialization check
+
+// --- Media Control Logic ---
+
+let mediaMonitorInterval = null;
+let lastMediaState = null;
+
+/**
+ * Detect the site type for smarter control.
+ */
+function detectSiteType() {
+  const host = window.location.hostname;
+  if (host.includes('youtube.com') && !host.includes('music.youtube')) return 'youtube';
+  if (host.includes('music.youtube.com')) return 'ytmusic';
+  if (host.includes('spotify.com')) return 'spotify';
+  if (host.includes('soundcloud.com')) return 'soundcloud';
+  if (host.includes('netflix.com')) return 'netflix';
+  if (host.includes('music.apple.com')) return 'applemusic';
+  return 'generic';
+}
+
+/**
+ * Try to get a meaningful track title from the page.
+ * Different sites expose it differently.
+ */
+function getMediaTitle() {
+  const site = detectSiteType();
+
+  if (site === 'youtube') {
+    // YouTube: video title is in <h1> or <title>
+    const h1 = document.querySelector('h1.ytd-watch-metadata yt-formatted-string, h1.title');
+    if (h1?.textContent?.trim()) return h1.textContent.trim();
+  }
+
+  if (site === 'ytmusic') {
+    // YT Music: track name is in a specific class
+    const title = document.querySelector('.title.ytmusic-player-bar, .content-info-wrapper .title');
+    if (title?.textContent?.trim()) return title.textContent.trim();
+  }
+
+  if (site === 'spotify') {
+    // Spotify Web Player: track title
+    const title = document.querySelector('[data-testid="context-item-info-title"] a, .track-info__name a, [data-testid="nowplaying-track-link"]');
+    if (title?.textContent?.trim()) return title.textContent.trim();
+  }
+
+  if (site === 'soundcloud') {
+    const title = document.querySelector('.playbackSoundBadge__titleLink');
+    if (title?.textContent?.trim()) return title.textContent.trim();
+  }
+
+  // Fallback: use <title> tag but truncate the site suffix
+  const pageTitle = document.title;
+  // Remove common site suffixes: "Song - YouTube", "Spotify – Song"
+  return pageTitle
+    .replace(/\s*[-–—|]\s*(YouTube|Spotify|SoundCloud|Netflix|Apple Music).*$/i, '')
+    .trim() || pageTitle;
+}
+
+function scanForMedia() {
+  const videos = Array.from(document.querySelectorAll('video'));
+  const audios = Array.from(document.querySelectorAll('audio'));
+  const allMedia = [...videos, ...audios];
+
+  // Find the most 'active' media (playing one preferred)
+  const playingMedia = allMedia.find(m => !m.paused && !m.ended);
+  const mediaToReport = playingMedia || allMedia[0];
+
+  if (!mediaToReport) return null;
+
+  return {
+    hasMedia: true,
+    isPlaying: !mediaToReport.paused,
+    type: mediaToReport.tagName.toLowerCase(), // 'video' or 'audio'
+    title: getMediaTitle(),
+    site: detectSiteType(),
+    src: mediaToReport.currentSrc || mediaToReport.src,
+    pageUrl: window.location.href,
+    duration: isFinite(mediaToReport.duration) ? mediaToReport.duration : 0,
+    currentTime: isFinite(mediaToReport.currentTime) ? mediaToReport.currentTime : 0
+  };
+}
+
+function startMediaMonitoring() {
+  if (mediaMonitorInterval) return;
+
+  // Poll for media status changes
+  mediaMonitorInterval = setInterval(() => {
+    const state = scanForMedia();
+    
+    // Simple diff to avoid flooding messages
+    const stateStr = JSON.stringify(state);
+    if (stateStr !== JSON.stringify(lastMediaState)) {
+      lastMediaState = state;
+      // Always send, even null (so Agent0 knows media stopped)
+      chrome.runtime.sendMessage({
+        action: 'MEDIA_STATUS_UPDATE',
+        data: state
+      }).catch(() => {
+         // Ignore errors (e.g. extension context invalidated)
+      });
+    }
+  }, 1000);
+
+  // Reset cached state on play/pause so next poll detects the change
+  document.addEventListener('play', () => { lastMediaState = null; }, true);
+  document.addEventListener('pause', () => { lastMediaState = null; }, true);
+}
+
+/**
+ * Handle play/pause/next/prev commands from Agent0.
+ * Uses site-specific selectors for Next/Prev when available,
+ * falls back to generic HTML5 media controls.
+ */
+function handleMediaControl(command) {
+  const site = detectSiteType();
+  const videos = Array.from(document.querySelectorAll('video'));
+  const audios = Array.from(document.querySelectorAll('audio'));
+  const allMedia = [...videos, ...audios];
+  
+  // Prioritize playing media for 'pause', or any media for 'play'
+  let target = allMedia.find(m => !m.paused) || allMedia[0];
+  if (!target && allMedia.length > 0) target = allMedia[0];
+
+  if (command === 'play') {
+    if (target) {
+      target.play().catch(() => {});
+    } else {
+      // No HTML5 media found — try clicking native play buttons
+      const playBtn = findSiteButton('play', site);
+      if (playBtn) playBtn.click();
+    }
+    return;
+  }
+
+  if (command === 'pause') {
+    if (target && !target.paused) {
+      target.pause();
+    } else {
+      const pauseBtn = findSiteButton('pause', site);
+      if (pauseBtn) pauseBtn.click();
+    }
+    return;
+  }
+
+  if (command === 'next') {
+    // Try site-specific next buttons first
+    const nextBtn = findSiteButton('next', site);
+    if (nextBtn) {
+      nextBtn.click();
+    } else if (target) {
+      // Generic fallback: seek forward 10s
+      target.currentTime = Math.min(target.currentTime + 10, target.duration || Infinity);
+    }
+    return;
+  }
+
+  if (command === 'prev') {
+    const prevBtn = findSiteButton('prev', site);
+    if (prevBtn) {
+      prevBtn.click();
+    } else if (target) {
+      target.currentTime = Math.max(target.currentTime - 10, 0);
+    }
+    return;
+  }
+}
+
+/**
+ * Find the right button for a given action on a specific site.
+ * Returns the DOM element or null.
+ */
+function findSiteButton(action, site) {
+  const selectors = {
+    youtube: {
+      play: '.ytp-play-button',
+      pause: '.ytp-play-button',
+      next: '.ytp-next-button',
+      prev: '.ytp-prev-button, a.ytp-prev-button',
+    },
+    ytmusic: {
+      play: '#play-pause-button, tp-yt-paper-icon-button.play-pause-button',
+      pause: '#play-pause-button, tp-yt-paper-icon-button.play-pause-button',
+      next: '.next-button, tp-yt-paper-icon-button.next-button',
+      prev: '.previous-button, tp-yt-paper-icon-button.previous-button',
+    },
+    spotify: {
+      play: '[data-testid="control-button-playpause"], button[aria-label="Play"]',
+      pause: '[data-testid="control-button-playpause"], button[aria-label="Pause"]',
+      next: '[data-testid="control-button-skip-forward"], button[aria-label="Next"]',
+      prev: '[data-testid="control-button-skip-back"], button[aria-label="Previous"]',
+    },
+    soundcloud: {
+      play: '.playControl',
+      pause: '.playControl',
+      next: '.skipControl__next',
+      prev: '.skipControl__previous',
+    },
+    generic: {
+      play: null,
+      pause: null,
+      next: '[aria-label*="Next" i], [title*="Next" i], .next-button, .skip-forward',
+      prev: '[aria-label*="Previous" i], [title*="Previous" i], .prev-button, .skip-back',
+    },
+  };
+
+  const siteSelectors = selectors[site] || selectors.generic;
+  const selector = siteSelectors[action];
+  if (!selector) return null;
+
+  const btn = document.querySelector(selector);
+  return btn;
+}
+
+// Start monitoring as soon as content script loads
+startMediaMonitoring();
+
+// Listen for messages from the web page (only on localhost/Agent0)
+if (window.location.origin.includes('localhost')) {
+  window.addEventListener('message', (event) => {
+    if (event.source !== window) return;
+
+    if (event.data?.type === 'AGENT0_SEND_MEDIA_CONTROL') {
+      // Relay from /mc page → background → media tab
+      chrome.runtime.sendMessage({
+        action: 'RelayMediaControl',
+        command: event.data.command
+      }).catch(() => {});
+    }
+
+    if (event.data?.type === 'AGENT0_REQUEST_MEDIA_STATE') {
+      // Page is asking for current remote media state
+      chrome.runtime.sendMessage({
+        action: 'GET_MEDIA_STATE'
+      }, (response) => {
+        window.postMessage({
+          type: 'AGENT0_MEDIA_UPDATE',
+          data: response?.data || null
+        }, '*');
+      });
+    }
+  });
+}
+
