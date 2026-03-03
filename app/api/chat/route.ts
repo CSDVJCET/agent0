@@ -18,6 +18,10 @@ import { GITHUB_AGENT_PROMPT } from "@/ai/prompts/github";
 import { SLIDES_PROMPT } from "@/ai/prompts/slides";
 import { isToolInstalled } from "@/lib/installed-tools";
 import { getNextFallbackModel, isRateLimitError, type ModelRetryMetadata } from "@/lib/model-fallback";
+import { auth } from '@clerk/nextjs/server';
+import { getMemoriesForUser, formatMemoriesForPrompt } from '@/lib/db/memory';
+import { createMemoryTools } from '@/ai/memory-tools';
+import { extractAndSaveMemories } from '@/lib/memory-extractor';
 
 // Initialize free provider clients
 const groq = createOpenAI({
@@ -172,6 +176,7 @@ function getModelInstance(model: string, enableThinking: boolean) {
 const bodySchema = z.object({
   messages: z.array(z.any()), // Will be validated as UIMessage[] at runtime
   model: z.string(),
+  sessionId: z.string().uuid().optional(),
   enableSearch: z.boolean().optional(),
   enableThinking: z.boolean().optional(),
   enableUrlContext: z.boolean().optional(),
@@ -224,12 +229,42 @@ export async function POST(req: Request) {
   const {
     messages,
     model,
+    sessionId,
     enableSearch = false,
     enableThinking = true,
     enableUrlContext = true,
     enableCodeExecution = true,
     mentionedTools = [],
   } = parsedBody;
+
+  // Load user memories — always on, core property
+  const { userId } = await auth()
+  let memoryBlock = ''
+  if (userId) {
+    try {
+      const memories = await getMemoriesForUser(userId)
+      memoryBlock = formatMemoriesForPrompt(memories)
+    } catch (e) {
+      console.error("[Memory] Failed to load memories:", e);
+    }
+
+    // Fire-and-forget: silently extract personal facts from the last user message.
+    // Runs in parallel with the main stream — never delays the response.
+    const lastUserMsg = (messages as MyUIMessage[])
+      .slice()
+      .reverse()
+      .find((m) => m.role === 'user')
+    const lastUserText = lastUserMsg?.parts
+      ?.filter((p: { type: string }) => p.type === 'text')
+      .map((p: { type: string; text?: string }) => p.text ?? '')
+      .join(' ')
+      .trim()
+    if (lastUserText) {
+      extractAndSaveMemories(userId, lastUserText).catch((e) =>
+        console.error('[MemoryExtractor] Failed:', e)
+      )
+    }
+  }
 
   // Type-cast messages to MyUIMessage[] for type safety
   let uiMessages = messages as MyUIMessage[];
@@ -549,6 +584,17 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
     }
   }
 
+  // Inject memory tools — always active except when Google provider tools are present
+  // (Google provider tools and function tools cannot be mixed in the same request)
+  const hasProviderTools = 'google_search' in tools || 'url_context' in tools || 'code_execution' in tools;
+  if (userId && !hasProviderTools) {
+    const memTools = createMemoryTools(userId);
+    tools.saveMemory = memTools.saveMemory;
+    tools.getMemories = memTools.getMemories;
+    tools.deleteMemory = memTools.deleteMemory;
+    tools.searchMemory = memTools.searchMemory;
+  }
+
   // Build guidance strings outside the retry loop to avoid redeclaration
   const calendarGuidance = mentionedTools.some(t => t.toLowerCase() === "calendar")
     ? " When the user asks about calendar events or scheduling, use the calendar tools to fetch, create, update, or delete events. For scheduling, use scheduleCalendarEvent to present options to the user first."
@@ -632,6 +678,18 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
       // Build system prompt with agent-specific persona if needed
       let systemPrompt = `The current date and time is ${new Date().toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" })}. Use this to resolve relative date mentions like "today", "tomorrow", "next Monday", etc. If the user asks for "events today" or "schedule", assume the default time range starts now and ends at the end of the day or covers a reasonable period, do not ask for clarification unless necessary.`;
 
+      // Memory instructions — always present so the model can leverage stored context
+      // even in provider-tool-only mode (memory block is always injected via system prompt).
+      if (userId) {
+        if (!hasProviderTools) {
+          // Full tool-based instructions when saveMemory/searchMemory are available
+          systemPrompt += `\n\nMemory Instructions: You have access to saveMemory, getMemories, deleteMemory, and searchMemory tools.\n- PROACTIVELY call saveMemory whenever the user shares ANY personal info (name, email, phone, location, timezone, occupation, preferences, goals, or anyone else's contact details). Do this silently without mentioning it.\n- When the user says "my name is X" or "call me X", immediately call saveMemory with key=preferred_name, category=personal.\n- When the user mentions another person's contact info ("Alice's email is x@y.z"), save it as key=contact_alice_email, category=contact.\n- When the user says "forget X" or "don't remember X", call deleteMemory.\n- ENTITY RESOLUTION: When the user refers to a person by name for any action ("send email to Johnson", "call Sarah", "schedule with Alice"), FIRST check the Contacts section of the memory block above. If their details are there, use them directly. If NOT found in the memory block, call searchMemory with the person's name to attempt a live lookup before asking the user.\n- Use getMemories only if the user explicitly asks what you know about them.`;
+        } else {
+          // Read-only guidance when only provider tools are active
+          systemPrompt += `\n\nMemory Context: The memory block above contains facts about this user including contacts. When the user refers to a person by name ("email Johnson", "call Sarah"), check the Contacts section of the memory block first and use their details directly if found.`;
+        }
+      }
+
       // Add Gmail agent persona when Gmail tools are active
       if (mentionedTools.some(tool => tool.toLowerCase() === "gmail")) {
         systemPrompt += "\n\n" + GMAIL_AGENT_PROMPT;
@@ -649,13 +707,16 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
 
       const result = streamText({
         model: modelInstance,
-        system: `${systemPrompt}${calendarGuidance}${formsGuidance}${tasksGuidance}${gmailGuidance}${githubGuidance}${slidesGuidance}`,
+        system: `${systemPrompt}${calendarGuidance}${formsGuidance}${tasksGuidance}${gmailGuidance}${githubGuidance}${slidesGuidance}${memoryBlock}`,
         messages: modelMessages,
         tools: hasCurrentTools ? currentTools : undefined,
         toolChoice: hasCurrentTools ? "auto" : "none",
         providerOptions,
-        // Use stopWhen for multi-step tool calls when custom tools are mentioned
-        ...(mentionedTools.length > 0 && { stopWhen: stepCountIs(8) }),
+        // Always enable multi-step when any tools are present so the model can
+        // call a tool (e.g. getMemories) AND then generate a text response in
+        // the same turn. Without this, the stream stops after the tool call
+        // and the user sees no answer until the next message.
+        ...(hasCurrentTools && { stopWhen: stepCountIs(8) }),
         onError: (error) => {
           console.error("Stream error:", error);
         },
