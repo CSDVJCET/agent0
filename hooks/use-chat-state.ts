@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import type { Model } from "@/components/ai-elements/model-selector-control";
 import type { FileAttachment } from "@/components/ai-elements/attachments-preview";
 import { MODELS } from "@/lib/chat-constants";
+import type { ChatSessionSummary } from "@/hooks/use-session-sync";
 
 export function useChatState() {
   const [selectedModel, setSelectedModel] = useState<Model>(MODELS[0]);
@@ -12,6 +13,10 @@ export function useChatState() {
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoaded, setIsLoaded] = useState(false);
+  
+  // Session state
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
   
   // Integrations state
   const [isIntegrationsModalOpen, setIsIntegrationsModalOpen] = useState(false);
@@ -40,6 +45,10 @@ export function useChatState() {
     setInputValue,
     isLoaded,
     setIsLoaded,
+    currentSessionId,
+    setCurrentSessionId,
+    sessions,
+    setSessions,
     isIntegrationsModalOpen,
     setIsIntegrationsModalOpen,
     activeIntegration,

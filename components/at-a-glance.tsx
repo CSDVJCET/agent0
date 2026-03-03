@@ -115,7 +115,7 @@ function MagneticWrap({ children, id }: { children: React.ReactNode; id?: string
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 
 function AnalogClock({ time }: { time: Date | null }) {
-  const size = 70;
+  const size = 78;
   const cx = size / 2;
   const cy = size / 2;
   const r = size / 2 - 2;
@@ -132,7 +132,7 @@ function AnalogClock({ time }: { time: Date | null }) {
     background: "rgba(176, 196, 222, 0.9)",
     backdropFilter: "blur(4px)",
     WebkitBackdropFilter: "blur(4px)",
-    border: "2px solid rgba(255, 255, 255, 0.6)",
+    border: "2.5px solid rgba(255, 255, 255, 0.6)",
     boxShadow:
       "inset 0 1px 1px rgba(255,255,255,0.6), inset 0 -2px 4px rgba(0,0,0,0.1), 0 4px 10px rgba(0,0,0,0.15)",
     flexShrink: 0,
@@ -149,11 +149,11 @@ function AnalogClock({ time }: { time: Date | null }) {
   ].map(({ label, angle }) => {
     const rad = ((angle - 90) * Math.PI) / 180;
     // Position numbers slightly inset
-    const tr = r - 10;
+    const tr = r - 11;
     return {
       label,
       x: r3(cx + tr * Math.cos(rad)),
-      y: r3(cy + tr * Math.sin(rad) + 4), // +4 for vertical centering approximation
+      y: r3(cy + tr * Math.sin(rad) + 5), // +5 for vertical centering approximation
     };
   });
 
@@ -161,7 +161,7 @@ function AnalogClock({ time }: { time: Date | null }) {
   const dots = [1, 2, 4, 5, 7, 8, 10, 11].map((hour) => {
     const angle = hour * 30;
     const rad = ((angle - 90) * Math.PI) / 180;
-    const tr = r - 10;
+    const tr = r - 11;
     return {
       key: hour,
       cx: r3(cx + tr * Math.cos(rad)),
@@ -175,21 +175,21 @@ function AnalogClock({ time }: { time: Date | null }) {
       <span style={wrap}>
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: "block" }}>
           {/* Glass sheen highlight top */}
-          <path d={`M ${cx - r * 0.7} ${cy - r * 0.7} Q ${cx} ${cy - r * 0.95} ${cx + r * 0.7} ${cy - r * 0.7}`} stroke="rgba(255,255,255,0.4)" strokeWidth="2" fill="none" opacity="0.8" />
+          <path d={`M ${cx - r * 0.7} ${cy - r * 0.7} Q ${cx} ${cy - r * 0.95} ${cx + r * 0.7} ${cy - r * 0.7}`} stroke="rgba(255,255,255,0.4)" strokeWidth="2.5" fill="none" opacity="0.8" />
           
           {/* Hourly Red Dots */}
           {dots.map((d) => (
-            <circle key={d.key} cx={d.cx} cy={d.cy} r="1.5" fill="#e55039" />
+            <circle key={d.key} cx={d.cx} cy={d.cy} r="1.8" fill="#e55039" />
           ))}
 
           {/* Major Numbers */}
           {numbers.map(({ label, x, y }) => (
-            <text key={label} x={x} y={y} textAnchor="middle" fontSize="10" fontWeight="900" fill="#1e272e" style={{ fontFamily: 'Arial, sans-serif' }}>{label}</text>
+            <text key={label} x={x} y={y} textAnchor="middle" fontSize="11" fontWeight="900" fill="#1e272e" style={{ fontFamily: 'Arial, sans-serif' }}>{label}</text>
           ))}
           
           {/* Hands placeholder */}
-           <line x1={cx} y1={cy} x2={cx + 10} y2={cy + 10} stroke="#2f3542" strokeWidth="3" strokeLinecap="round" />
-           <circle cx={cx} cy={cy} r="2.5" fill="#2f3542" />
+           <line x1={cx} y1={cy} x2={cx + 12} y2={cy + 12} stroke="#2f3542" strokeWidth="3.5" strokeLinecap="round" />
+           <circle cx={cx} cy={cy} r="3" fill="#2f3542" />
         </svg>
       </span>
     );
@@ -215,22 +215,22 @@ function AnalogClock({ time }: { time: Date | null }) {
 
         {/* Hourly Red Dots */}
         {dots.map((d) => (
-          <circle key={d.key} cx={d.cx} cy={d.cy} r="1.8" fill="#eb4d4b" />
+          <circle key={d.key} cx={d.cx} cy={d.cy} r="2" fill="#eb4d4b" />
         ))}
 
         {/* Major Numbers */}
         {numbers.map(({ label, x, y }) => (
-          <text key={label} x={x} y={y} textAnchor="middle" fontSize="11" fontWeight="800" fill="#130f40" style={{ fontFamily: 'var(--font-sans), sans-serif' }}>{label}</text>
+          <text key={label} x={x} y={y} textAnchor="middle" fontSize="12" fontWeight="800" fill="#130f40" style={{ fontFamily: 'var(--font-sans), sans-serif' }}>{label}</text>
         ))}
 
         {/* Hour hand - Thick, Dark, Rounded */}
         <line
           x1={cx}
           y1={cy}
-          x2={handX(hourDeg, r - 15)}
-          y2={handY(hourDeg, r - 15)}
+          x2={handX(hourDeg, r - 17)}
+          y2={handY(hourDeg, r - 17)}
           stroke="#2f3542"
-          strokeWidth="4"
+          strokeWidth="4.5"
           strokeLinecap="round"
         />
 
@@ -238,15 +238,15 @@ function AnalogClock({ time }: { time: Date | null }) {
         <line
           x1={cx}
           y1={cy}
-          x2={handX(minuteDeg, r - 8)}
-          y2={handY(minuteDeg, r - 8)}
+          x2={handX(minuteDeg, r - 9)}
+          y2={handY(minuteDeg, r - 9)}
           stroke="#2f3542"
-          strokeWidth="3"
+          strokeWidth="3.5"
           strokeLinecap="round"
         />
 
         {/* Centre dot */}
-        <circle cx={cx} cy={cy} r="2.5" fill="#2f3542" />
+        <circle cx={cx} cy={cy} r="3" fill="#2f3542" />
       </svg>
     </span>
   );
@@ -255,7 +255,7 @@ function AnalogClock({ time }: { time: Date | null }) {
 // ─── Icon Placeholders ───────────────────────────────────────────────────────
 function IconBox({
   children,
-  size = 62,
+  size = 68,
 }: {
   children: React.ReactNode;
   size?: number;
@@ -268,7 +268,7 @@ function IconBox({
         justifyContent: "center",
         width: size,
         height: size,
-        borderRadius: 15,
+        borderRadius: 16,
         background: "rgba(255,255,255,0.25)",
         backdropFilter: "blur(8px)",
         border: "1.5px solid rgba(255,255,255,0.35)",
@@ -282,7 +282,7 @@ function IconBox({
 }
 
 // Gmail icon using the actual SVG asset
-function GmailPlaceholder({ size = 62 }: { size?: number }) {
+function GmailPlaceholder({ size = 68 }: { size?: number }) {
   const imgSize = Math.round(size * 0.58);
   return (
     <IconBox size={size}>
@@ -292,7 +292,7 @@ function GmailPlaceholder({ size = 62 }: { size?: number }) {
 }
 
 // Teams icon using the actual SVG asset
-function TeamsPlaceholder({ size = 62 }: { size?: number }) {
+function TeamsPlaceholder({ size = 68 }: { size?: number }) {
   const imgSize = Math.round(size * 0.6);
   return (
     <IconBox size={size}>
@@ -331,8 +331,8 @@ function getWeatherLabel(code: number): string {
 }
 
 // Weather icon using the actual PNG asset
-function WeatherPlaceholder({ size = 62, src = "/weather/cloudy.png" }: { size?: number; src?: string }) {
-  const radius = "0.95rem";
+function WeatherPlaceholder({ size = 68, src = "/weather/cloudy.png" }: { size?: number; src?: string }) {
+  const radius = "1.05rem";
   return (
     <span
       style={{
@@ -530,7 +530,7 @@ export function AtAGlance({
   const lineClass =
     "flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1.5 font-bold leading-tight";
   const textBase =
-    "text-2xl sm:text-3xl md:text-5xl lg:text-6xl";
+    "text-3xl sm:text-4xl md:text-6xl lg:text-7xl";
 
   const [cursorActive, setCursorActive] = useState<string | null>(null);
 
@@ -555,7 +555,7 @@ export function AtAGlance({
         <motion.span variants={wordVariant}><MagneticWrap id="clock"><AnalogClock time={time} /></MagneticWrap></motion.span>
         <motion.span variants={wordVariant} className={`${vivid} ${textBase}`}>{formattedTime}</motion.span>
         <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>and</motion.span>
-        <motion.span variants={wordVariant}><MagneticWrap id="weather"><WeatherPlaceholder size={62} src={weatherImageSrc} /></MagneticWrap></motion.span>
+        <motion.span variants={wordVariant}><MagneticWrap id="weather"><WeatherPlaceholder size={68} src={weatherImageSrc} /></MagneticWrap></motion.span>
         {liveWeather && typeof liveWeather.temp === 'number' && !isNaN(liveWeather.temp) && (
           <MagneticWrap id="temp">
             <motion.span 
@@ -570,7 +570,7 @@ export function AtAGlance({
               {/* Subtle top inner glow */}
               <span className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-white/20 to-transparent"></span>
               
-              <span className={`relative z-10 text-transparent bg-clip-text bg-linear-to-b from-white to-slate-400 text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-bold tracking-tighter tabular-nums drop-shadow-md`}>
+              <span className={`relative z-10 text-transparent bg-clip-text bg-linear-to-b from-white to-slate-400 text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-bold tracking-tighter tabular-nums drop-shadow-md`}>
                 {liveWeather.temp}°
               </span>
             </motion.span>
@@ -582,14 +582,14 @@ export function AtAGlance({
       {/* Line 3 – You got [Gmail] [n] emails and have */}
       <motion.div variants={lineVariant} className={`${lineClass} mt-1.5`}>
         <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>You got</motion.span>
-        <motion.span variants={wordVariant}><MagneticWrap id="gmail"><GmailPlaceholder size={62} /></MagneticWrap></motion.span>
+        <motion.span variants={wordVariant}><MagneticWrap id="gmail"><GmailPlaceholder size={68} /></MagneticWrap></motion.span>
         <motion.span variants={wordVariant} className={`${vivid} ${textBase}`}>{emailCount} emails</motion.span>
         <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>and have</motion.span>
       </motion.div>
 
       {/* Line 4 – [Teams] [n] meetings today */}
       <motion.div variants={lineVariant} className={lineClass}>
-        <motion.span variants={wordVariant}><MagneticWrap id="teams"><TeamsPlaceholder size={62} /></MagneticWrap></motion.span>
+        <motion.span variants={wordVariant}><MagneticWrap id="teams"><TeamsPlaceholder size={68} /></MagneticWrap></motion.span>
         <motion.span variants={wordVariant} className={`${vivid} ${textBase}`}>{meetingCount} meetings</motion.span>
         <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>today</motion.span>
       </motion.div>

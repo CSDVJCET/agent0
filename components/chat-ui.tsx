@@ -17,6 +17,7 @@ import { FileDropZone } from "@/components/file-drop-zone";
 import { ScrollProgress } from "@/components/ui/scroll-progress";
 import { GenUIStack, extractGenUIs } from "@/components/gen-ui-stack";
 import { Folder } from "@/components/folder";
+import { EmailCardCarousel } from "@/components/email-card-carousel";
 import { TodoList } from "@/components/todo-list";
 import { AtAGlance } from "@/components/at-a-glance";
 import { TodaySchedule } from "@/components/today-schedule";
@@ -25,10 +26,12 @@ import { AudioWave } from "@/components/audio-wave";
 // Hooks and Constants
 import { useChatState } from "@/hooks/use-chat-state";
 import { useLocalStorageSync } from "@/hooks/use-local-storage-sync";
+import { useSessionSync } from "@/hooks/use-session-sync";
 import { useFileHandlers } from "@/hooks/use-file-handlers";
 import { useExtensionListeners } from "@/hooks/use-extension-listeners";
 import { useIntegrationHandlers } from "@/hooks/use-integration-handlers";
-import { MODELS, STORAGE_KEYS } from "@/lib/chat-constants";
+import { MODELS, DEFAULT_SUGGESTIONS, STORAGE_KEYS } from "@/lib/chat-constants";
+import { useUser } from "@clerk/nextjs";
 
 export function ChatUI() {
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
@@ -44,6 +47,8 @@ export function ChatUI() {
     attachments, setAttachments,
     inputValue, setInputValue,
     isLoaded,
+    currentSessionId, setCurrentSessionId,
+    sessions, setSessions,
     isIntegrationsModalOpen, setIsIntegrationsModalOpen,
     activeIntegration, setActiveIntegration,
     addedIntegrations, setAddedIntegrations,
@@ -52,6 +57,8 @@ export function ChatUI() {
     isTasksConnected, setIsTasksConnected,
     fileInputRef,
   } = state;
+
+  const { isSignedIn } = useUser();
 
   const {
     messages,
@@ -78,6 +85,13 @@ export function ChatUI() {
     },
   });
 
+  // Save messages to Supabase after each AI turn completes
+  useEffect(() => {
+    if (status === 'ready' && messages.length > 0 && isSignedIn && currentSessionId) {
+      saveMessagesToDB();
+    }
+  }, [status, messages.length, isSignedIn, currentSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Hooks for state management
   const { dedupedMessages } = useLocalStorageSync({
     messages,
@@ -91,6 +105,17 @@ export function ChatUI() {
     setIsFormsConnected,
     setIsTasksConnected,
     isLoaded,
+    setIsLoaded: state.setIsLoaded,
+  });
+
+  // Session sync — manages Supabase persistence when signed in
+  const { createNewSession, switchSession, saveMessagesToDB } = useSessionSync({
+    messages,
+    setMessages,
+    currentSessionId,
+    setCurrentSessionId,
+    sessions,
+    setSessions,
     setIsLoaded: state.setIsLoaded,
   });
 
@@ -169,20 +194,24 @@ export function ChatUI() {
 
   // Chat handlers
 
-  const handleNewChat = useCallback(() => {
-    setMessages([]);
+  const handleNewChat = useCallback(async () => {
     setAttachments([]);
     setInputValue("");
     setMentionedTools([]);
     setEnableSearch(true);
     setEnableThinking(true);
     setIsChatModalOpen(false);
-    localStorage.removeItem(STORAGE_KEYS.MESSAGES);
     // Clear the file input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-  }, [setMessages, setAttachments, setInputValue, setMentionedTools, setEnableSearch, setEnableThinking, setIsChatModalOpen, fileInputRef]);
+    if (isSignedIn) {
+      await createNewSession(selectedModel.id);
+    } else {
+      setMessages([]);
+      localStorage.removeItem(STORAGE_KEYS.MESSAGES);
+    }
+  }, [setMessages, setAttachments, setInputValue, setMentionedTools, setEnableSearch, setEnableThinking, setIsChatModalOpen, fileInputRef, isSignedIn, createNewSession, selectedModel]);
 
   // Handle Escape key to close modal
   useEffect(() => {
@@ -405,6 +434,7 @@ export function ChatUI() {
       {
         body: {
           model: selectedModel.id,
+          sessionId: currentSessionId ?? undefined,
           enableSearch,
           enableThinking: selectedModel.supportsThinking ? enableThinking : false,
           enableUrlContext: true,
@@ -473,7 +503,7 @@ export function ChatUI() {
             initial={{ opacity: 0, x: -40 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute top-[48%] left-[2%] 2xl:left-[4%] -translate-y-1/2 pointer-events-auto hidden xl:flex flex-col gap-8 scale-[0.765] lg:scale-[0.81] xl:scale-[0.855] origin-left"
+            className="absolute top-[48%] left-[2%] 2xl:left-[4%] -translate-y-1/2 pointer-events-auto hidden xl:flex flex-col gap-8 scale-[0.765] lg:scale-[0.81] xl:scale-[0.855] origin-left z-20"
           >
             <TodoList />
             <TodaySchedule />
@@ -484,12 +514,19 @@ export function ChatUI() {
             <AtAGlance location="Kochi" weatherCondition="cloudy" emailCount={2} meetingCount={2} />
           </div>
 
+          {/* Email Carousel */}
+          <div className="absolute inset-x-0 bottom-28 z-10 pointer-events-none flex w-full justify-center">
+            <div className="w-full xl:w-[85%] 2xl:w-[90%] max-w-[1600px]">
+              <EmailCardCarousel />
+            </div>
+          </div>
+
           {/* Right side widgets (hidden on small screens) */}
           <motion.div
             initial={{ opacity: 0, x: 40 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute top-[48%] right-[2%] 2xl:right-[4%] -translate-y-1/2 pointer-events-auto hidden xl:flex flex-col gap-8 scale-[0.765] lg:scale-[0.81] xl:scale-[0.855] origin-right items-center"
+            className="absolute top-[48%] right-[2%] 2xl:right-[4%] -translate-y-1/2 pointer-events-auto hidden xl:flex flex-col gap-8 scale-[0.765] lg:scale-[0.81] xl:scale-[0.855] origin-right items-center z-10"
           >
             <AudioWave />
             <Folder />
