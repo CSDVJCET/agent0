@@ -21,6 +21,7 @@ import { getNextFallbackModel, isRateLimitError, type ModelRetryMetadata } from 
 import { auth } from '@clerk/nextjs/server';
 import { getMemoriesForUser, formatMemoriesForPrompt } from '@/lib/db/memory';
 import { createMemoryTools } from '@/ai/memory-tools';
+import { extractAndSaveMemories } from '@/lib/memory-extractor';
 
 // Initialize free provider clients
 const groq = createOpenAI({
@@ -245,6 +246,23 @@ export async function POST(req: Request) {
       memoryBlock = formatMemoriesForPrompt(memories)
     } catch (e) {
       console.error("[Memory] Failed to load memories:", e);
+    }
+
+    // Fire-and-forget: silently extract personal facts from the last user message.
+    // Runs in parallel with the main stream — never delays the response.
+    const lastUserMsg = (messages as MyUIMessage[])
+      .slice()
+      .reverse()
+      .find((m) => m.role === 'user')
+    const lastUserText = lastUserMsg?.parts
+      ?.filter((p: { type: string }) => p.type === 'text')
+      .map((p: { type: string; text?: string }) => p.text ?? '')
+      .join(' ')
+      .trim()
+    if (lastUserText) {
+      extractAndSaveMemories(userId, lastUserText).catch((e) =>
+        console.error('[MemoryExtractor] Failed:', e)
+      )
     }
   }
 
@@ -574,6 +592,7 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
     tools.saveMemory = memTools.saveMemory;
     tools.getMemories = memTools.getMemories;
     tools.deleteMemory = memTools.deleteMemory;
+    tools.searchMemory = memTools.searchMemory;
   }
 
   // Build guidance strings outside the retry loop to avoid redeclaration
@@ -659,9 +678,16 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
       // Build system prompt with agent-specific persona if needed
       let systemPrompt = `The current date and time is ${new Date().toLocaleString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" })}. Use this to resolve relative date mentions like "today", "tomorrow", "next Monday", etc. If the user asks for "events today" or "schedule", assume the default time range starts now and ends at the end of the day or covers a reasonable period, do not ask for clarification unless necessary.`;
 
-      // Memory proactive instruction — injected only when saveMemory tool is available
-      if (!hasProviderTools && userId) {
-        systemPrompt += `\n\nMemory Instructions: You have access to saveMemory, getMemories, and deleteMemory tools. PROACTIVELY call saveMemory whenever the user shares ANY personal information — their name, preferred name, email, phone, location, timezone, occupation, interests, favorite things, preferences (like colors, themes, languages), or goals. Do this silently without mentioning it unless the user asks. When the user says "my name is X" or "call me X", immediately call saveMemory with key=preferred_name. When they say "forget X" or "don't remember X", call deleteMemory. Use getMemories only if the user asks what you know about them.`;
+      // Memory instructions — always present so the model can leverage stored context
+      // even in provider-tool-only mode (memory block is always injected via system prompt).
+      if (userId) {
+        if (!hasProviderTools) {
+          // Full tool-based instructions when saveMemory/searchMemory are available
+          systemPrompt += `\n\nMemory Instructions: You have access to saveMemory, getMemories, deleteMemory, and searchMemory tools.\n- PROACTIVELY call saveMemory whenever the user shares ANY personal info (name, email, phone, location, timezone, occupation, preferences, goals, or anyone else's contact details). Do this silently without mentioning it.\n- When the user says "my name is X" or "call me X", immediately call saveMemory with key=preferred_name, category=personal.\n- When the user mentions another person's contact info ("Alice's email is x@y.z"), save it as key=contact_alice_email, category=contact.\n- When the user says "forget X" or "don't remember X", call deleteMemory.\n- ENTITY RESOLUTION: When the user refers to a person by name for any action ("send email to Johnson", "call Sarah", "schedule with Alice"), FIRST check the Contacts section of the memory block above. If their details are there, use them directly. If NOT found in the memory block, call searchMemory with the person's name to attempt a live lookup before asking the user.\n- Use getMemories only if the user explicitly asks what you know about them.`;
+        } else {
+          // Read-only guidance when only provider tools are active
+          systemPrompt += `\n\nMemory Context: The memory block above contains facts about this user including contacts. When the user refers to a person by name ("email Johnson", "call Sarah"), check the Contacts section of the memory block first and use their details directly if found.`;
+        }
       }
 
       // Add Gmail agent persona when Gmail tools are active

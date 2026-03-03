@@ -1,7 +1,7 @@
 // ai/memory-tools.ts
 import { tool } from "ai";
 import { z } from "zod";
-import { upsertMemory, deleteMemory, getMemoriesForUser } from "@/lib/db/memory";
+import { upsertMemory, deleteMemory, getMemoriesForUser, searchMemoriesForUser } from "@/lib/db/memory";
 
 /**
  * Factory — call with the authenticated userId so execute closures can write
@@ -105,6 +105,40 @@ export function createMemoryTools(userId: string) {
         } catch (e) {
           console.error("[deleteMemory] Failed:", e);
           return { success: false, message: "Failed to delete memory." };
+        }
+      },
+    }),
+
+    /**
+     * Search memories by keyword to resolve a person or fact by name.
+     * Use when the user references someone by name and the system prompt context
+     * doesn't already contain their details (e.g. "send email to Johnson").
+     */
+    searchMemory: tool({
+      description:
+        "Search saved memories by keyword. Use this to look up a specific person's contact details (email, phone) or any stored fact when you only know part of the name/key. Example: query='johnson' returns all memories containing 'johnson' in key or value.",
+      inputSchema: z.object({
+        query: z
+          .string()
+          .describe(
+            "Search term — a person's name, part of a key, or any keyword. Case-insensitive substring match."
+          ),
+      }),
+      execute: async ({ query }) => {
+        try {
+          const results = await searchMemoriesForUser(userId, query);
+          if (results.length === 0)
+            return { results: [], message: `No memories found matching "${query}".` };
+          return {
+            results: results.map((m) => ({
+              key: m.key,
+              value: m.value,
+              category: m.category,
+            })),
+          };
+        } catch (e) {
+          console.error("[searchMemory] Failed:", e);
+          return { results: [], message: "Failed to search memories." };
         }
       },
     }),
