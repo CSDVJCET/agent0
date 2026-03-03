@@ -7,6 +7,22 @@ const agent0Url = 'http://localhost:3000';
 let lastMediaTabId = null;
 let lastMediaState = null;
 
+// ── Persist / restore media state across service-worker restarts ──
+// MV3 service workers are killed after ~30 s of inactivity; session storage
+// survives within the browser session so the /mc page gets instant state on reload.
+function persistMediaState() {
+  chrome.storage.session.set({
+    lastMediaState,
+    lastMediaTabId
+  }).catch(() => {});
+}
+
+// Restore on startup
+chrome.storage.session.get(['lastMediaState', 'lastMediaTabId'], (result) => {
+  if (result.lastMediaState) lastMediaState = result.lastMediaState;
+  if (result.lastMediaTabId) lastMediaTabId = result.lastMediaTabId;
+});
+
 const CONTEXT_MENU_IDS = {
   SEND_SELECTION: 'agent0-send-selection',
 };
@@ -317,6 +333,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       // Always update state if it's from the active media tab
       if (sender.tab.id === lastMediaTabId) {
         lastMediaState = request.data;
+        persistMediaState(); // keep session storage in sync
       }
 
       // Forward the update to ALL Agent0 tabs so the Music component updates

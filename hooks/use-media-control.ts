@@ -229,6 +229,39 @@ export function useMediaControl() {
 
   // ── extension message listener (remote media) ────────────────
   useEffect(() => {
+    // ── Seed from localStorage immediately so the UI isn't blank on reload ──
+    try {
+      const cached = localStorage.getItem("agent0-last-media-state");
+      if (cached) {
+        const data = JSON.parse(cached) as RemoteMediaState;
+        if (data && data.hasMedia) {
+          remoteStateRef.current = data;
+          const duration = Number.isFinite(data.duration) ? data.duration : 0;
+          const currentTime = Number.isFinite(data.currentTime) ? data.currentTime : 0;
+          const site = data.site || "generic";
+          const pageUrl = data.pageUrl || "";
+          setHasRemote(true);
+          setExtensionConnected(true);
+          setState({
+            hasMedia: true,
+            isPlaying: false, // assume paused until extension confirms
+            type: data.type || "audio",
+            title: data.title || "Media",
+            duration,
+            currentTime,
+            progress: duration > 0 ? currentTime / duration : 0,
+            isRemote: true,
+            extensionConnected: true,
+            site,
+            artworkUrl: deriveArtworkUrl(site, pageUrl),
+            pageUrl,
+          });
+        }
+      }
+    } catch {
+      // ignore parse errors
+    }
+
     const handleMessage = (event: MessageEvent) => {
       if (event.source !== window || !event.data) return;
 
@@ -247,7 +280,7 @@ export function useMediaControl() {
               : 0;
           const site = data.site || "generic";
           const pageUrl = data.pageUrl || "";
-          setState({
+          const nextState: MediaControlState = {
             hasMedia: true,
             isPlaying: data.isPlaying,
             type: data.type || "audio",
@@ -260,10 +293,19 @@ export function useMediaControl() {
             site,
             artworkUrl: deriveArtworkUrl(site, pageUrl),
             pageUrl,
-          });
+          };
+          setState(nextState);
+          // Persist so the next page load can show it immediately
+          try {
+            localStorage.setItem("agent0-last-media-state", JSON.stringify(data));
+          } catch {
+            // quota exceeded — ignore
+          }
         } else {
           setHasRemote(false);
           remoteStateRef.current = null;
+          // Clear persisted state when media stops
+          try { localStorage.removeItem("agent0-last-media-state"); } catch { /* ignore */ }
           // Fall back to local media if available
           syncLocalState();
         }
