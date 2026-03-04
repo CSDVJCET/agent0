@@ -35,8 +35,10 @@ function PlaceholderImage({
 export function Folder() {
   const [images, setImages] = useState<CarouselImage[]>([]);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
 
-  useEffect(() => {
+  const fetchImages = () => {
+    setIsFetching(true);
     fetch("/api/images/list")
       .then((r) => r.json())
       .then((data: { images: CarouselImage[] }) => {
@@ -44,8 +46,20 @@ export function Folder() {
       })
       .catch((err) => {
         console.error("[Folder] Failed to fetch blob images:", err);
-      });
+      })
+      .finally(() => setIsFetching(false));
+  };
+
+  // Fetch on mount so previews are ready
+  useEffect(() => {
+    fetchImages();
   }, []);
+
+  const handleClick = () => {
+    // Refresh images from Blob every time the folder is opened
+    fetchImages();
+    setIsGalleryOpen(true);
+  };
 
   // Pick up to 3 preview images (or fall back to placeholders)
   const preview = images.slice(0, 3);
@@ -56,8 +70,8 @@ export function Folder() {
     <>
       <div
         className="relative w-[306px] h-[288px] bg-[rgba(255,255,255,0.2)] rounded-[25px] shadow-[inset_5px_5px_4px_0px_rgba(0,0,0,0.25)] flex items-center justify-center overflow-visible cursor-pointer"
-        onClick={() => setIsGalleryOpen(true)}
-        title="Open gallery"
+        onClick={handleClick}
+        title={isFetching ? "Loading images…" : "Open gallery"}
       >
         <motion.div
           className="relative w-full h-full group scale-[0.8]"

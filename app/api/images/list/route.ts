@@ -16,8 +16,13 @@ export async function GET() {
       token,
     });
 
+    const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "webp", "gif"]);
+
     const images = blobs
-      .filter((b) => b.contentType?.startsWith("image/"))
+      .filter((b) => {
+        const ext = b.pathname.split(".").pop()?.toLowerCase();
+        return ext !== undefined && IMAGE_EXTS.has(ext);
+      })
       .map((b) => ({
         url: `/api/images/blob?url=${encodeURIComponent(b.url)}`,
         title: b.pathname.split("/").pop() ?? b.pathname,
