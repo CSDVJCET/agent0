@@ -10,7 +10,7 @@ const imgGroup5 = "https://www.figma.com/api/mcp/asset/417e12ab-439a-4713-929e-4
 
 export function Folder() {
   return (
-    <div className="relative w-[306px] h-[288px] bg-[rgba(255,255,255,0.2)] rounded-[25px] shadow-[inset_5px_5px_4px_0px_rgba(0,0,0,0.25)] flex items-center justify-center overflow-visible">
+    <div className="relative w-[306px] h-[306px] bg-white/20 backdrop-blur-xl border border-white/10 rounded-[25px] flex items-center justify-center overflow-visible">
       <motion.div
         className="relative w-full h-full group cursor-pointer scale-[0.8]"
         initial="initial"
