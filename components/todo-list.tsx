@@ -133,12 +133,6 @@ export function TodoList() {
           "0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(255,255,255,0.05)",
       }}
     >
-      {/* Inner inset container */}
-      <div
-        className="absolute inset-4 rounded-[18px] bg-black/5"
-        style={{ boxShadow: "inset 0 4px 10px rgba(0,0,0,0.1)" }}
-      />
-
       {/* Yellow sticky background */}
       <div
         className="absolute inset-4 rounded-[18px] bg-[#fddf72]"
