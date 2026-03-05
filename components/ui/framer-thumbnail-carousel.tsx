@@ -57,18 +57,47 @@ export function ThumbnailCarousel({ images }: { images: CarouselImage[] }) {
     }
   };
 
+  // Square image area sized to roughly fill 80vh after accounting for dialog chrome (30% bigger than 60vh)
+  const imgSize = 'calc(80vh - 8rem)';
+
+  const handleDownload = async (url: string, title?: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = title || 'image.png';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      window.open(url, '_blank');
+    }
+  };
+
   if (!images || images.length === 0) {
     return (
-      <div className="flex items-center justify-center aspect-square w-full rounded-2xl bg-white/5 border border-white/10 text-white/40 text-sm">
+      <div
+        className="flex items-center justify-center rounded-[1.5rem] bg-white/10 backdrop-blur-md border border-white/20 text-gray-600 text-sm shadow-inner"
+        style={{ width: imgSize, height: imgSize }}
+      >
         No images yet
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-4 w-full">
-      {/* Main Carousel - Square Aspect Ratio */}
-      <div className="relative overflow-hidden rounded-2xl aspect-square w-full bg-black/20 ring-1 ring-white/10">
+    <motion.div 
+      className="flex flex-col gap-4" 
+      style={{ width: imgSize }}
+      initial={{ opacity: 0, scale: 0.95, y: 10 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ type: "spring", damping: 20, stiffness: 100 }}
+    >
+      {/* Main Carousel - Square */}
+      <div className="relative overflow-hidden rounded-[1.5rem] w-full aspect-square bg-white/10 backdrop-blur-sm border border-white/40 shadow-[inset_0_0_10px_rgba(255,255,255,0.2)]">
         <AnimatePresence initial={false} custom={direction}>
           <motion.img
             key={page}
@@ -93,7 +122,7 @@ export function ThumbnailCarousel({ images }: { images: CarouselImage[] }) {
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           onClick={() => paginate(-1)}
-          className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md bg-black/40 text-white border border-white/20 shadow-lg z-10 hover:bg-black/60 transition-colors"
+          className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-xl bg-white/40 text-black/70 border border-white/60 shadow-[0_4px_12px_rgba(0,0,0,0.1)] z-10 hover:bg-white/60 transition-colors"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
@@ -105,24 +134,25 @@ export function ThumbnailCarousel({ images }: { images: CarouselImage[] }) {
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           onClick={() => paginate(1)}
-          className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md bg-black/40 text-white border border-white/20 shadow-lg z-10 hover:bg-black/60 transition-colors"
+          className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-xl bg-white/40 text-black/70 border border-white/60 shadow-[0_4px_12px_rgba(0,0,0,0.1)] z-10 hover:bg-white/60 transition-colors"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
           </svg>
         </motion.button>
 
-        {/* Title overlay */}
-        {images[index].title && (
-          <motion.div 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            key={images[index].title}
-            className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-black/60 text-white text-xs font-medium backdrop-blur-md border border-white/10 whitespace-nowrap max-w-[85%] truncate z-10"
-          >
-            {images[index].title}
-          </motion.div>
-        )}
+        {/* Download Button */}
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => handleDownload(images[index].url, images[index].title)}
+          className="absolute bottom-4 right-4 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-xl bg-white/40 text-black/70 border border-white/60 shadow-[0_4px_12px_rgba(0,0,0,0.1)] z-10 hover:bg-white/60 transition-colors"
+          title="Download image"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+        </motion.button>
       </div>
 
       <Thumbnails 
@@ -133,7 +163,7 @@ export function ThumbnailCarousel({ images }: { images: CarouselImage[] }) {
           setPage([page + (newIndex - index), newDirection]);
         }} 
       />
-    </div>
+    </motion.div>
   );
 }
 
@@ -169,7 +199,7 @@ function Thumbnails({
       className="overflow-x-auto overflow-y-hidden py-1"
       style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
     >
-      <div className="flex items-center h-20" style={{ gap: GAP_PX, width: 'fit-content' }}>
+      <div className="flex items-center h-12" style={{ gap: GAP_PX, width: 'fit-content' }}>
         {images.map((item, i) => {
           const isActive = i === index;
           return (
@@ -185,7 +215,7 @@ function Thumbnails({
                 opacity: isActive ? 1 : 0.5,
               }}
               transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-              className="relative shrink-0 h-full overflow-hidden rounded-xl ring-1 ring-white/10"
+              className="relative shrink-0 h-full overflow-hidden rounded-2xl ring-1 ring-white/30 shadow-sm"
             >
               <img
                 src={item.url}
@@ -195,7 +225,7 @@ function Thumbnails({
               {isActive && (
                 <motion.div 
                   layoutId="thumbnail-active"
-                  className="absolute inset-0 rounded-xl ring-2 ring-white/80 ring-inset"
+                  className="absolute inset-0 rounded-2xl ring-2 ring-white ring-offset-2 ring-offset-black/5"
                   transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                 />
               )}

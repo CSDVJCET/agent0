@@ -69,7 +69,7 @@ export function Folder() {
   return (
     <>
       <div
-        className="relative w-[306px] h-[288px] bg-[rgba(255,255,255,0.2)] rounded-[25px] shadow-[inset_5px_5px_4px_0px_rgba(0,0,0,0.25)] flex items-center justify-center overflow-visible cursor-pointer"
+        className="relative w-[306px] h-[288px] flex items-center justify-center overflow-visible cursor-pointer"
         onClick={handleClick}
         title={isFetching ? "Loading images…" : "Open gallery"}
       >
@@ -180,9 +180,9 @@ export function Folder() {
 
       {/* Gallery Modal */}
       <Dialog open={isGalleryOpen} onOpenChange={setIsGalleryOpen}>
-        <DialogContent className="sm:max-w-2xl p-4 sm:p-6">
-          <DialogHeader>
-            <DialogTitle className="text-foreground">
+        <DialogContent className="bg-white/20! backdrop-blur-3xl border border-white/40 p-5 w-fit max-w-none sm:max-w-none gap-4 overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.1)] rounded-[2rem]!">
+          <DialogHeader className="px-1">
+            <DialogTitle className="text-gray-800 text-sm font-semibold tracking-wide drop-shadow-sm">
               Image Gallery {images.length > 0 && `(${images.length})`}
             </DialogTitle>
           </DialogHeader>
