@@ -125,7 +125,7 @@ export function EmailCard({
       )}
 
       {/* Main Content Area (White Box) */}
-      <div className="bg-white/80 rounded-[20px] p-4 mb-4">
+      <div className="bg-white/80 rounded-4xl p-4 mb-4">
         {/* Category Badges */}
         {categories.length > 0 && (
           <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -157,13 +157,13 @@ export function EmailCard({
         )}
 
         {/* Snippet Text */}
-        <p className="font-['Rubik'] text-[14px] text-black leading-[20px] tracking-[-0.23px] line-clamp-3">
+        <p className="font-['Rubik'] text-[14px] text-black leading-5 tracking-[-0.23px] line-clamp-3">
           {bodySnippet}
         </p>
       </div>
 
       {/* Divider */}
-      <div className="w-[calc(100%+40px)] -ml-5 border-b-[1px] border-black/10 mb-4" />
+      <div className="w-[calc(100%+40px)] -ml-5 border-b border-black/10 mb-4" />
 
       {/* Bottom Header Section */}
       <div className="flex items-center justify-between w-full relative z-10 px-1">
