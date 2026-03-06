@@ -56,6 +56,7 @@ export function ChatUI() {
     isCalendarConnected, setIsCalendarConnected,
     isFormsConnected, setIsFormsConnected,
     isTasksConnected, setIsTasksConnected,
+    isGmailConnected, setIsGmailConnected,
     fileInputRef,
   } = state;
 
@@ -105,6 +106,7 @@ export function ChatUI() {
     setIsCalendarConnected,
     setIsFormsConnected,
     setIsTasksConnected,
+    setIsGmailConnected,
     isLoaded,
     setIsLoaded: state.setIsLoaded,
   });
@@ -128,6 +130,7 @@ export function ChatUI() {
     setIsCalendarConnected,
     setIsFormsConnected,
     setIsTasksConnected,
+    setIsGmailConnected,
     setEnableSearch
   );
 
@@ -139,6 +142,7 @@ export function ChatUI() {
     setIsCalendarConnected,
     setIsFormsConnected,
     setIsTasksConnected,
+    setIsGmailConnected,
   });
 
   const isLoading = status === "streaming" || status === "submitted";
@@ -527,7 +531,13 @@ export function ChatUI() {
             className="absolute inset-x-0 bottom-28 z-10 pointer-events-none flex w-full justify-center"
           >
             <div className="w-full xl:w-[85%] 2xl:w-[90%] max-w-[1600px]">
-              <EmailCardCarousel />
+              <EmailCardCarousel
+                isGmailConnected={isGmailConnected}
+                onReply={(email) => {
+                  setInputValue(`@gmail Reply to ${email.subject} from ${email.senderEmail}`);
+                  setMentionedTools(["gmail"]);
+                }}
+              />
             </div>
           </motion.div>
 

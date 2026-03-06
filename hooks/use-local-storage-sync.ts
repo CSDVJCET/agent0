@@ -30,6 +30,7 @@ interface UseLocalStorageSyncProps {
   setIsCalendarConnected: (connected: boolean) => void;
   setIsFormsConnected: (connected: boolean) => void;
   setIsTasksConnected: (connected: boolean) => void;
+  setIsGmailConnected: (connected: boolean) => void;
   isLoaded: boolean;
   setIsLoaded: (loaded: boolean) => void;
 }
@@ -45,6 +46,7 @@ export function useLocalStorageSync({
   setIsCalendarConnected,
   setIsFormsConnected,
   setIsTasksConnected,
+  setIsGmailConnected,
   isLoaded,
   setIsLoaded,
 }: UseLocalStorageSyncProps) {
@@ -91,6 +93,10 @@ export function useLocalStorageSync({
       fetch("/api/auth/google?action=status")
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
+          setIsCalendarConnected(!!data.connected);
+          setIsFormsConnected(!!data.hasFormsScopes);
+          setIsTasksConnected(!!data.hasTasksScopes);
+          setIsGmailConnected(!!data.hasGmailScopes);
           if (data) {
             setIsCalendarConnected(!!data.connected);
             setIsFormsConnected(!!data.hasFormsScopes);
@@ -102,7 +108,7 @@ export function useLocalStorageSync({
       console.error("Failed to load from localStorage", e);
     }
     setIsLoaded(true);
-  }, [setMessages, setSelectedModel, setEnableThinking, setAddedIntegrations, setIsCalendarConnected, setIsFormsConnected, setIsTasksConnected, setIsLoaded]);
+  }, [setMessages, setSelectedModel, setEnableThinking, setAddedIntegrations, setIsCalendarConnected, setIsFormsConnected, setIsTasksConnected, setIsGmailConnected, setIsLoaded]);
 
   // Save model to local storage when it changes
   useEffect(() => {
