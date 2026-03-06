@@ -201,7 +201,6 @@ export function ChatUI() {
     setMentionedTools([]);
     setEnableSearch(true);
     setEnableThinking(true);
-    setIsChatModalOpen(false);
     // Clear the file input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -212,7 +211,7 @@ export function ChatUI() {
       setMessages([]);
       localStorage.removeItem(STORAGE_KEYS.MESSAGES);
     }
-  }, [setMessages, setAttachments, setInputValue, setMentionedTools, setEnableSearch, setEnableThinking, setIsChatModalOpen, fileInputRef, isSignedIn, createNewSession, selectedModel]);
+  }, [setMessages, setAttachments, setInputValue, setMentionedTools, setEnableSearch, setEnableThinking, fileInputRef, isSignedIn, createNewSession, selectedModel]);
 
   // Handle Escape key to close modal
   useEffect(() => {
@@ -501,9 +500,9 @@ export function ChatUI() {
         >
           {/* Left side widgets (hidden on small screens) */}
           <motion.div
-            initial={{ opacity: 0, x: -40 }}
+            initial={{ opacity: 0, x: -60 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ type: "spring", stiffness: 300, damping: 25, delay: 0.1 }}
             className="absolute top-[48%] left-[2%] 2xl:left-[4%] -translate-y-1/2 pointer-events-auto hidden xl:flex flex-col gap-8 scale-[0.765] lg:scale-[0.81] xl:scale-[0.855] origin-left z-20"
           >
             <TodoList />
@@ -511,22 +510,32 @@ export function ChatUI() {
           </motion.div>
 
           {/* Centered At a Glance Text - moved below dynamic island and scaled down */}
-          <div className="absolute inset-x-0 top-[14%] flex flex-col items-center justify-start pointer-events-auto z-0 scale-[0.675] sm:scale-[0.81] origin-top">
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            className="absolute inset-x-0 top-[14%] flex flex-col items-center justify-start pointer-events-auto z-0 scale-[0.675] sm:scale-[0.81] origin-top"
+          >
             <AtAGlance location="Kochi" weatherCondition="cloudy" emailCount={2} meetingCount={2} />
-          </div>
+          </motion.div>
 
           {/* Email Carousel */}
-          <div className="absolute inset-x-0 bottom-28 z-10 pointer-events-none flex w-full justify-center">
+          <motion.div 
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25, delay: 0.15 }}
+            className="absolute inset-x-0 bottom-28 z-10 pointer-events-none flex w-full justify-center"
+          >
             <div className="w-full xl:w-[85%] 2xl:w-[90%] max-w-[1600px]">
               <EmailCardCarousel />
             </div>
-          </div>
+          </motion.div>
 
           {/* Right side widgets (hidden on small screens) */}
           <motion.div
-            initial={{ opacity: 0, x: 40 }}
+            initial={{ opacity: 0, x: 60 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ type: "spring", stiffness: 300, damping: 25, delay: 0.2 }}
             className="absolute top-[48%] right-[2%] 2xl:right-[4%] -translate-y-1/2 pointer-events-auto hidden xl:flex flex-col gap-8 scale-[0.765] lg:scale-[0.81] xl:scale-[0.855] origin-right items-center z-10"
           >
             <AudioWave />
@@ -535,9 +544,9 @@ export function ChatUI() {
 
           {/* Bottom-right Music Widget */}
           <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            initial={{ opacity: 0, scale: 0.8, y: 40 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25, delay: 0.3 }}
             className="absolute bottom-4 right-[2%] 2xl:right-[4%] pointer-events-auto hidden xl:flex scale-[0.52] lg:scale-[0.55] xl:scale-[0.585] origin-bottom-right items-center z-10"
           >
             <Music />
@@ -569,7 +578,7 @@ export function ChatUI() {
               mentionedTools={mentionedTools}
               onToolMentionsChange={setMentionedTools}
               addedIntegrations={addedIntegrations}
-              onUpArrow={() => setIsChatModalOpen(true)}
+              onOpenChat={() => setIsChatModalOpen(true)}
             />
           </div>
         </div>
@@ -590,22 +599,22 @@ export function ChatUI() {
 
             {/* Outer Positioning Wrapper — holds Chat + Gen UI side by side */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.92, y: 40 }}
+              initial={{ opacity: 0, scale: 0.96, x: "-50%", y: "-40%" }}
               animate={{
                 opacity: 1,
                 scale: 1,
-                y: 0,
-                top: attachments.length > 0 ? "40%" : "46%",
+                x: "-50%",
+                y: attachments.length > 0 ? "-60%" : "-54%",
               }}
-              exit={{ opacity: 0, scale: 0.92, y: 40 }}
-              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-              className="fixed left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 flex flex-row items-center"
+              exit={{ opacity: 0, scale: 0.96, x: "-50%", y: "-40%" }}
+              transition={{ type: "spring", bounce: 0, duration: 0.6 }}
+              className="fixed left-1/2 top-1/2 z-50 flex flex-row items-center origin-[50%_0%]"
               style={{ gap: "16px" }}
             >
               {/* Chat Panel — wide rectangle */}
               <motion.div
                 animate={{ width: genUIs.length > 0 ? "60vw" : "85vw" }}
-                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                transition={{ type: "spring", bounce: 0, duration: 0.6 }}
                 className="relative h-[75vh] overflow-hidden rounded-3xl no-horizontal-scroll shrink-0"
                 style={{
                   background: "linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.1) 100%)",
@@ -690,10 +699,10 @@ export function ChatUI() {
               <AnimatePresence>
                 {genUIs.length > 0 && (
                   <motion.div
-                    initial={{ opacity: 0, width: 0, scale: 0.92 }}
+                    initial={{ opacity: 0, width: 0, scale: 0.96 }}
                     animate={{ opacity: 1, width: "27vw", scale: 1 }}
-                    exit={{ opacity: 0, width: 0, scale: 0.92 }}
-                    transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                    exit={{ opacity: 0, width: 0, scale: 0.96 }}
+                    transition={{ type: "spring", bounce: 0, duration: 0.6 }}
                     className="h-[75vh] overflow-hidden rounded-3xl shrink-0"
                     style={{
                       background: "linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.09) 100%)",
