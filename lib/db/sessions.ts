@@ -1,9 +1,10 @@
 // lib/db/sessions.ts
-import { createServiceClient } from '@/lib/supabase'
+import { createServiceClient, isSupabaseServiceConfigured } from '@/lib/supabase'
 import type { ChatSession } from '@/lib/supabase'
 
 /** Upsert the Clerk user into the users table before any session ops */
 export async function ensureUser(userId: string, email?: string | null) {
+  if (!isSupabaseServiceConfigured()) return
   const db = createServiceClient()
   await db.from('users').upsert(
     { id: userId, email: email ?? null, updated_at: new Date().toISOString() },
@@ -12,6 +13,17 @@ export async function ensureUser(userId: string, email?: string | null) {
 }
 
 export async function createSession(userId: string, modelId?: string): Promise<ChatSession> {
+  if (!isSupabaseServiceConfigured()) {
+    const now = new Date().toISOString()
+    return {
+      id: crypto.randomUUID(),
+      user_id: userId,
+      title: 'New Chat',
+      model_id: modelId ?? null,
+      created_at: now,
+      updated_at: now,
+    }
+  }
   const db = createServiceClient()
   const { data, error } = await db
     .from('chat_sessions')
@@ -23,6 +35,7 @@ export async function createSession(userId: string, modelId?: string): Promise<C
 }
 
 export async function getSessionsForUser(userId: string, limit = 20): Promise<ChatSession[]> {
+  if (!isSupabaseServiceConfigured()) return []
   const db = createServiceClient()
   const { data, error } = await db
     .from('chat_sessions')
@@ -35,6 +48,7 @@ export async function getSessionsForUser(userId: string, limit = 20): Promise<Ch
 }
 
 export async function updateSessionTitle(sessionId: string, userId: string, title: string) {
+  if (!isSupabaseServiceConfigured()) return
   const db = createServiceClient()
   const { error } = await db
     .from('chat_sessions')
@@ -45,6 +59,7 @@ export async function updateSessionTitle(sessionId: string, userId: string, titl
 }
 
 export async function deleteSession(sessionId: string, userId: string) {
+  if (!isSupabaseServiceConfigured()) return
   const db = createServiceClient()
   const { error } = await db
     .from('chat_sessions')

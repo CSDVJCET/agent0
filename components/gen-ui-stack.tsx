@@ -32,6 +32,7 @@ import { PresentationResult, PresentationLoading } from "@/components/ai-element
 import { SlidesHeadingConfirmation } from "@/components/ai-elements/slides-heading-confirmation";
 import { ImageGenerationLoading, ImageGenerationResult, ImageGeneration } from "@/components/ai-elements/image-generation";
 import { Weather, WeatherLoading } from "@/components/weather";
+import { MovieCard, MovieCardLoading } from "@/components/movie-card";
 
 export type GenUIItem = {
   id: string;
@@ -167,6 +168,8 @@ export function extractGenUIs(messages: MyUIMessage[], model?: string): GenUIIte
         }
       } else if (toolInvocation.toolName === "displayWeather") {
         component = isCompleted ? <Weather {...toolInvocation.result} /> : <WeatherLoading location={toolInvocation.args?.location} />;
+      } else if (toolInvocation.toolName === "searchMovie") {
+        component = isCompleted ? <MovieCard {...toolInvocation.result} /> : <MovieCardLoading title={toolInvocation.args?.title} />;
       } else if (toolInvocation.toolName === "schedulePresentationHeadings" && isCompleted) {
         const result = toolInvocation.result;
         if (result?.status === "pending_confirmation") {

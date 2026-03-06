@@ -1,5 +1,5 @@
 // lib/db/messages.ts
-import { createServiceClient } from '@/lib/supabase'
+import { createServiceClient, isSupabaseServiceConfigured } from '@/lib/supabase'
 import type { MyUIMessage } from '@/types/chat'
 import type { ChatMessage } from '@/lib/supabase'
 
@@ -8,6 +8,7 @@ export async function saveMessages(
   userId: string,
   messages: MyUIMessage[]
 ): Promise<void> {
+  if (!isSupabaseServiceConfigured()) return
   const db = createServiceClient()
   const rows = messages.map((msg) => ({
     id: msg.id,
@@ -27,6 +28,7 @@ export async function getMessagesForSession(
   sessionId: string,
   userId: string
 ): Promise<MyUIMessage[]> {
+  if (!isSupabaseServiceConfigured()) return []
   const db = createServiceClient()
   const { data, error } = await db
     .from('chat_messages')
