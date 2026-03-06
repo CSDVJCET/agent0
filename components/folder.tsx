@@ -67,15 +67,10 @@ export function Folder() {
   const previewSrc = (i: number): string | undefined => preview[i]?.url;
 
   return (
-    <div className="relative w-[306px] h-[306px] bg-white/20 backdrop-blur-xl border border-white/10 rounded-[25px] flex items-center justify-center overflow-visible">
-      <motion.div
-        className="relative w-full h-full group cursor-pointer scale-[0.8]"
-        initial="initial"
-        whileHover="hover"
-        style={{ perspective: 1000 }}
-      >
+    <>
+      <div className="relative w-[306px] h-[306px] bg-white/20 backdrop-blur-xl border border-white/10 rounded-[25px] flex items-center justify-center overflow-visible" onClick={handleClick}>
         <motion.div
-          className="relative w-full h-full group scale-[0.8]"
+          className="relative w-full h-full group cursor-pointer scale-[0.8]"
           initial="initial"
           whileHover="hover"
           style={{ perspective: 1000 }}
@@ -167,7 +162,7 @@ export function Folder() {
 
               {/* Subtle shine effect */}
               <motion.div
-                className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/40 to-white/0 opacity-0"
+                className="absolute inset-0 bg-linear-to-tr from-white/0 via-white/40 to-white/0 opacity-0"
                 variants={{
                   initial: { opacity: 0, x: "-100%" },
                   hover: { opacity: 1, x: "100%" },
