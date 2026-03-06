@@ -16,6 +16,10 @@ export function isSupabaseConfigured(): boolean {
   )
 }
 
+export function isSupabaseServiceConfigured(): boolean {
+  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
+}
+
 // Client for browser usage with anon key
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
 
@@ -23,6 +27,10 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
 // Uses a short connect timeout so DB failures fail fast instead of blocking for 10 s
 export function createServiceClient(timeoutMs = 4000) {
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? supabaseAnonKey
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+  if (!isSupabaseServiceConfigured()) {
+    throw new Error('Supabase service client is not configured')
+  }
   return createClient<Database>(supabaseUrl, supabaseServiceKey, {
     global: {
       fetch: (url, options) =>

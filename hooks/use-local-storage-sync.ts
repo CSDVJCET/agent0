@@ -79,9 +79,9 @@ export function useLocalStorageSync({
 
       // Fetch installed tools from API
       fetch("/api/tools/installed")
-        .then((res) => res.json())
+        .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
-          if (data.tools && Array.isArray(data.tools)) {
+          if (data?.tools && Array.isArray(data.tools)) {
             setAddedIntegrations(data.tools.map((t: any) => t.id));
           }
         })
@@ -89,11 +89,13 @@ export function useLocalStorageSync({
 
       // Check Google Calendar auth status
       fetch("/api/auth/google?action=status")
-        .then((res) => res.json())
+        .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
-          setIsCalendarConnected(!!data.connected);
-          setIsFormsConnected(!!data.hasFormsScopes);
-          setIsTasksConnected(!!data.hasTasksScopes);
+          if (data) {
+            setIsCalendarConnected(!!data.connected);
+            setIsFormsConnected(!!data.hasFormsScopes);
+            setIsTasksConnected(!!data.hasTasksScopes);
+          }
         })
         .catch((e) => console.error("Failed to check calendar auth status", e));
     } catch (e) {

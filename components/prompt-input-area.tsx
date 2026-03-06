@@ -37,7 +37,7 @@ export type PromptInputAreaProps = {
   onToolMentionsChange?: (tools: string[]) => void;
   addedIntegrations?: string[];
   onRefreshTools?: () => void;
-  onUpArrow?: () => void; // New prop for reopening modal
+  onOpenChat?: () => void; // Replaced onUpArrow
 };
 
 export function PromptInputArea({
@@ -51,7 +51,7 @@ export function PromptInputArea({
   mentionedTools = [],
   onToolMentionsChange,
   addedIntegrations = [],
-  onUpArrow,
+  onOpenChat,
 }: PromptInputAreaProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -212,16 +212,6 @@ export function PromptInputArea({
       }
     }
 
-    // Up arrow to reopen modal when input is empty and cursor at start
-    if (e.key === "ArrowUp" && textareaRef.current) {
-      const { selectionStart } = textareaRef.current;
-      if (selectionStart === 0 && value.trim() === "") {
-        e.preventDefault();
-        onUpArrow?.();
-        return;
-      }
-    }
-
     // Submit on Enter (without Shift)
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -373,6 +363,7 @@ export function PromptInputArea({
                 <textarea
                     ref={textareaRef}
                     value={value}
+                    onClick={onOpenChat}
                     onChange={(e) => onChange(e.target.value)}
                     onKeyDown={handleKeyDown}
                     onScroll={handleScroll}
