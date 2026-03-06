@@ -12,6 +12,7 @@ import { tasksTools } from "@/ai/tasks-tools";
 import { githubTools } from "@/ai/github-tools";
 import { slidesTools } from "@/ai/slides-tools";
 import { imageTools } from "@/ai/image-tools";
+import { movieTools } from "@/ai/movie-tools";
 // PDF tools removed — handled entirely client-side to avoid tool part serialization issues
 import { GMAIL_AGENT_PROMPT } from "@/ai/prompts/gmail";
 import { GITHUB_AGENT_PROMPT } from "@/ai/prompts/github";
@@ -561,6 +562,10 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
       if (lowerToolName === "image") {
         tools.generateImage = imageTools.generateImage;
       }
+      // Movie tool (TMDB)
+      if (lowerToolName === "movie") {
+        tools.searchMovie = movieTools.searchMovie;
+      }
       // PDF tools — handled entirely client-side (no LLM involvement)
       // The @pdf mention is intercepted in chat-ui.tsx before reaching this route
       // Add more tool mappings here as needed
@@ -628,6 +633,10 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
       "For composing emails, ALWAYS use composeEmail to present a draft for user review before sending. " +
       "Chain tools when needed: e.g., searchEmails → getMessageContent → composeEmail for reply workflows. " +
       "After presenting email search results or drafts, DO NOT repeat the full content as text — the tool UI handles display."
+    : "";
+
+  const movieGuidance = mentionedTools.some(t => t.toLowerCase() === "movie")
+    ? " Movie tool instructions: When the user asks about a movie (any language — English, Hindi, Malayalam, Tamil, Telugu, Korean, etc.), ALWAYS call searchMovie with just the bare movie title as the 'title' argument. Do NOT pass '@movie' or '@film' in the title field — strip that prefix. Do NOT answer from memory; always call the tool. After the tool result is rendered, DO NOT repeat the movie details as text."
     : "";
 
   const slidesGuidance = mentionedTools.some(t => ["slides", "presentation", "ppt"].includes(t.toLowerCase()))
@@ -707,7 +716,7 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
 
       const result = streamText({
         model: modelInstance,
-        system: `${systemPrompt}${calendarGuidance}${formsGuidance}${tasksGuidance}${gmailGuidance}${githubGuidance}${slidesGuidance}${memoryBlock}`,
+        system: `${systemPrompt}${calendarGuidance}${formsGuidance}${tasksGuidance}${gmailGuidance}${githubGuidance}${slidesGuidance}${movieGuidance}${memoryBlock}`,
         messages: modelMessages,
         tools: hasCurrentTools ? currentTools : undefined,
         toolChoice: hasCurrentTools ? "auto" : "none",

@@ -73,6 +73,14 @@ function getToolMetadata(id: string) {
       icon: "presentation",
     };
   }
+  if (id === "movie") {
+    return {
+      name: "Movie",
+      description: "Search for movies and get posters, ratings, runtime, genres, and descriptions from TMDB",
+      category: "entertainment",
+      icon: "film",
+    };
+  }
   return {
     name: id,
     description: "Custom tool",
