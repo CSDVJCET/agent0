@@ -1,8 +1,20 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
+
+/** Returns true only when real (non-placeholder) Supabase credentials are present */
+export function isSupabaseConfigured(): boolean {
+  const url = supabaseUrl
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? supabaseAnonKey
+  return (
+    url.startsWith('https://') &&
+    !url.includes('your_supabase') &&
+    key.length > 20 &&
+    !key.includes('your_supabase')
+  )
+}
 
 export function isSupabaseServiceConfigured(): boolean {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
@@ -14,7 +26,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
 // Server-side client with service role key (for API routes)
 // Uses a short connect timeout so DB failures fail fast instead of blocking for 10 s
 export function createServiceClient(timeoutMs = 4000) {
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? supabaseAnonKey
   if (!isSupabaseServiceConfigured()) {
     throw new Error('Supabase service client is not configured')
   }

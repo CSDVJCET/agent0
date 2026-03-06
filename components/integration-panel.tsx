@@ -105,6 +105,13 @@ const INTEGRATION_DETAILS: Record<string, { name: string; description: string; f
       { name: "commentOnPR", description: "Add a comment to a pull request" },
       { name: "listPullRequests", description: "List PRs with state filtering" }
     ]
+  },
+  movie: {
+    name: "Movie",
+    description: "Search for movies and get detailed information from TMDB.",
+    functions: [
+      { name: "searchMovie", description: "Search for a movie by title and return poster, year, runtime, genres, rating, and overview" }
+    ]
   }
 };
 
