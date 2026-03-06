@@ -55,12 +55,9 @@ export function useSessionSync({
     try {
       const res = await fetch('/api/sessions')
       const data = await safeJson<{ sessions: ChatSessionSummary[] }>(res)
-      if (!res.ok) {
-        console.error('Failed to fetch sessions:', res.status)
-        return
-      }
-      const data = await res.json()
-      const list = data?.sessions ?? []
+      if (!data) return
+      
+      const list = data.sessions ?? []
       setSessions(list)
 
       if (list.length > 0) {
@@ -69,13 +66,6 @@ export function useSessionSync({
         const msgRes = await fetch(`/api/sessions/${latest.id}/messages`)
         const msgData = await safeJson<{ messages: MyUIMessage[] }>(msgRes)
         setMessages(msgData?.messages ?? [])
-        const latest = list[0] as ChatSessionSummary
-        setCurrentSessionId(latest.id)
-        const msgRes = await fetch(`/api/sessions/${latest.id}/messages`)
-        if (msgRes.ok) {
-          const msgData = await msgRes.json()
-          setMessages(msgData?.messages ?? [])
-        }
       }
     } catch (e) {
       console.error('Failed to initialise sessions', e)
@@ -104,19 +94,6 @@ export function useSessionSync({
       setCurrentSessionId(data.session.id)
       setMessages([])
       return data.session.id
-      if (!res.ok) {
-        console.error('Failed to create session:', res.status)
-        setMessages([])
-        return null
-      }
-      const data = await res.json()
-      const session = data?.session
-      if (session) {
-        setSessions([session, ...sessions])
-        setCurrentSessionId(session.id)
-      }
-      setMessages([])
-      return session?.id ?? null
     } catch (e) {
       console.error('Failed to create session', e)
       return null
@@ -130,13 +107,11 @@ export function useSessionSync({
       setCurrentSessionId(sessionId)
       const res = await fetch(`/api/sessions/${sessionId}/messages`)
       const data = await safeJson<{ messages: MyUIMessage[] }>(res)
-      if (!res.ok) {
-        console.error('Failed to fetch session messages:', res.status)
+      if (!data) {
         setMessages([])
         return
       }
-      const data = await res.json()
-      setMessages(data?.messages ?? [])
+      setMessages(data.messages ?? [])
     } catch (e) {
       console.error('Failed to switch session', e)
     }
