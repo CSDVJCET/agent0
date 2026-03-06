@@ -4,6 +4,11 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { MicIcon, SquareIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useChat } from "@ai-sdk/react";
+import { useTTS } from "@/hooks/use-tts";
+import { getMessageTextContent } from "@/lib/chat-message-utils";
+import { StripLargeDataChatTransport } from "@/lib/chat-transport";
+import type { MyUIMessage } from "@/types/chat";
 
 interface SpeechRecognition extends EventTarget {
   continuous: boolean;
@@ -83,6 +88,23 @@ export function Voice({ className }: { className?: string }) {
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const finalTranscriptRef = useRef<string>("");
+  const wasRecordingRef = useRef<boolean>(false);
+
+  const { isSpeaking, speak, stop: stopTTS } = useTTS();
+
+  const { messages, sendMessage, status } = useChat<MyUIMessage>({
+    transport: new StripLargeDataChatTransport({ api: "/api/chat" }),
+    experimental_throttle: 50,
+    onFinish: ({ message }) => {
+      const text = getMessageTextContent(message);
+      if (text.trim()) {
+        speak(text);
+      }
+    },
+  });
+
+  const lastAssistantMessage = [...messages].reverse().find((m) => m.role === "assistant");
+  const lastAssistantText = lastAssistantMessage ? getMessageTextContent(lastAssistantMessage) : "";
 
   const canUseMic = useMemo(() => {
     return (
@@ -246,6 +268,7 @@ export function Voice({ className }: { className?: string }) {
           const handleResult = (event: Event) => {
             const speechEvent = event as SpeechRecognitionEvent;
             let interim = "";
+            let hasFinal = false;
 
             for (
               let i = speechEvent.resultIndex;
@@ -259,6 +282,7 @@ export function Voice({ className }: { className?: string }) {
               if (result.isFinal) {
                 const needsSpace = finalTranscriptRef.current.length > 0;
                 finalTranscriptRef.current += (needsSpace ? " " : "") + text;
+                hasFinal = true;
               } else {
                 interim += text;
               }
@@ -266,6 +290,18 @@ export function Voice({ className }: { className?: string }) {
 
             const combined = `${finalTranscriptRef.current}${interim ? ` ${interim}` : ""}`.trim();
             setTranscript(combined);
+
+            // When a final transcript is ready, send it to the AI and stop recording
+            if (hasFinal && finalTranscriptRef.current.trim()) {
+              const textToSend = finalTranscriptRef.current.trim();
+              finalTranscriptRef.current = "";
+              setTranscript("");
+              stopAll();
+              sendMessage({
+                role: "user",
+                parts: [{ type: "text", text: textToSend }],
+              });
+            }
           };
 
           const handleError = (event: Event) => {
@@ -310,11 +346,28 @@ export function Voice({ className }: { className?: string }) {
     }
   }, [isRecording, start, stopAll]);
 
+  // Auto-stop mic when TTS starts speaking; auto-resume when TTS finishes
+  useEffect(() => {
+    if (isSpeaking) {
+      if (isRecording) {
+        wasRecordingRef.current = true;
+        stopAll();
+      }
+    } else {
+      if (wasRecordingRef.current) {
+        wasRecordingRef.current = false;
+        void start();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSpeaking]);
+
   useEffect(() => {
     return () => {
       stopAll();
+      stopTTS();
     };
-  }, [stopAll]);
+  }, [stopAll, stopTTS]);
 
   return (
     <div className={cn("mx-auto w-full max-w-3xl px-4 py-10", className)}>
@@ -366,11 +419,33 @@ export function Voice({ className }: { className?: string }) {
         )}
 
         <div className="rounded-2xl border bg-card p-4">
-          <div className="text-sm font-medium mb-2">Transcript</div>
+          <div className="text-sm font-medium mb-2">You</div>
           <div className="text-sm text-muted-foreground whitespace-pre-wrap break-words min-h-12">
             {transcript || "(no transcript yet)"}
           </div>
         </div>
+
+        {(lastAssistantText || status === "streaming" || status === "submitted") && (
+          <div className="rounded-2xl border bg-card p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-sm font-medium">Assistant</div>
+              {isSpeaking && (
+                <button
+                  type="button"
+                  onClick={stopTTS}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Stop speaking
+                </button>
+              )}
+            </div>
+            <div className="text-sm text-muted-foreground whitespace-pre-wrap break-words min-h-12">
+              {status === "submitted" && !lastAssistantText
+                ? "Thinking…"
+                : lastAssistantText || ""}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

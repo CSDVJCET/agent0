@@ -63,6 +63,8 @@ import {
   ThumbsDownIcon,
   FileIcon,
   AlertCircleIcon,
+  Volume2Icon,
+  SquareIcon,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -76,6 +78,23 @@ import {
 import type { MyUIMessage, PdfOperationResult } from "@/types/chat";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Weather, WeatherLoading } from "@/components/weather";
+import { useTTS } from "@/hooks/use-tts";
+
+function ReadAloudButton({ text }: { text: string }) {
+  const { isSpeaking, speak, stop } = useTTS();
+  return (
+    <MessageAction
+      tooltip={isSpeaking ? "Stop" : "Read aloud"}
+      onClick={() => (isSpeaking ? stop() : speak(text))}
+    >
+      {isSpeaking ? (
+        <SquareIcon className="size-3.5 text-foreground/75" />
+      ) : (
+        <Volume2Icon className="size-3.5 text-foreground/75" />
+      )}
+    </MessageAction>
+  );
+}
 
 function getDisplayTextContent(
   message: MyUIMessage,
@@ -951,6 +970,7 @@ const normalizedToolInvocations = toolInvocations.reduce((acc: any[], ti: any, t
                       >
                         <CopyIcon className="size-3.5 text-foreground/75" />
                       </MessageAction>
+                      {textContent && <ReadAloudButton text={textContent} />}
                       <MessageAction tooltip="Regenerate" onClick={() => onRegenerate()}>
                         <RefreshCwIcon className="size-3.5 text-foreground/75" />
                       </MessageAction>
