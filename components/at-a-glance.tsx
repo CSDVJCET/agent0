@@ -445,8 +445,8 @@ interface LiveWeather {
 export function AtAGlance({
   location = "Your City",
   weatherCondition = "Cloudy",
-  emailCount = 2,
-  meetingCount = 2,
+  emailCount = 0,
+  meetingCount = 0,
 }: {
   location?: string;
   weatherCondition?: string;
@@ -457,11 +457,26 @@ export function AtAGlance({
   // avoiding the hydration mismatch caused by time-dependent SVG coordinates.
   const [time, setTime] = useState<Date | null>(null);
   const [liveWeather, setLiveWeather] = useState<LiveWeather | null>(null);
+  const [liveEmailCount, setLiveEmailCount] = useState<number | null>(null);
+  const [liveMeetingCount, setLiveMeetingCount] = useState<number | null>(null);
 
   useEffect(() => {
     setTime(new Date());
     const id = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(id);
+  }, []);
+
+  // Fetch live email + meeting counts
+  useEffect(() => {
+    fetch("/api/glance/summary")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.error) {
+          setLiveEmailCount(data.emailCount);
+          setLiveMeetingCount(data.meetingCount);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // Fetch current location weather from Open-Meteo
@@ -583,14 +598,14 @@ export function AtAGlance({
       <motion.div variants={lineVariant} className={`${lineClass} mt-1.5`}>
         <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>You got</motion.span>
         <motion.span variants={wordVariant}><MagneticWrap id="gmail"><GmailPlaceholder size={68} /></MagneticWrap></motion.span>
-        <motion.span variants={wordVariant} className={`${vivid} ${textBase}`}>{emailCount} emails</motion.span>
+        <motion.span variants={wordVariant} className={`${vivid} ${textBase}`}>{liveEmailCount ?? emailCount} emails</motion.span>
         <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>and have</motion.span>
       </motion.div>
 
       {/* Line 4 – [Teams] [n] meetings today */}
       <motion.div variants={lineVariant} className={lineClass}>
         <motion.span variants={wordVariant}><MagneticWrap id="teams"><TeamsPlaceholder size={68} /></MagneticWrap></motion.span>
-        <motion.span variants={wordVariant} className={`${vivid} ${textBase}`}>{meetingCount} meetings</motion.span>
+        <motion.span variants={wordVariant} className={`${vivid} ${textBase}`}>{liveMeetingCount ?? meetingCount} meetings</motion.span>
         <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>today</motion.span>
       </motion.div>
     </motion.div>
