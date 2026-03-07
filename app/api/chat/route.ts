@@ -11,7 +11,7 @@ import { gmailTools } from "@/ai/gmail-tools";
 import { tasksTools } from "@/ai/tasks-tools";
 import { githubTools } from "@/ai/github-tools";
 import { slidesTools } from "@/ai/slides-tools";
-import { imageTools } from "@/ai/image-tools";
+import { createImageTools } from "@/ai/image-tools";
 import { movieTools } from "@/ai/movie-tools";
 // PDF tools removed — handled entirely client-side to avoid tool part serialization issues
 import { GMAIL_AGENT_PROMPT } from "@/ai/prompts/gmail";
@@ -559,8 +559,9 @@ Remember: Return ONLY the markdown code block with mermaid syntax. No additional
         }
       }
       // Image generation tool (Cloudflare Workers AI - Flux-1-Schnell)
-      if (lowerToolName === "image") {
-        tools.generateImage = imageTools.generateImage;
+      // Only available to authenticated users — images are scoped to userId in Blob storage
+      if (lowerToolName === "image" && userId) {
+        tools.generateImage = createImageTools(userId).generateImage;
       }
       // Movie tool (TMDB)
       if (lowerToolName === "movie") {
