@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Paperclip, Check, Send, X } from "lucide-react";
+import { Paperclip, Check, Send, X, CalendarPlus, ListChecks } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 
 /** Category color palette — matches /api/gmail/categorize output */
 const CATEGORY_STYLES: Record<string, { bg: string; border: string }> = {
@@ -163,7 +164,7 @@ export function EmailCard({
       layout
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -80, scale: 0.9, transition: { duration: 0.4, ease: "easeInOut" } }}
+      exit={{ opacity: 0, y: -50 }}
       transition={{ duration: 0.4, ease: "easeOut" }}
       onClick={onCardClick}
       className="relative flex flex-col w-full min-w-[450px] max-w-[506px] h-80 bg-white/15 backdrop-blur-2xl border border-white/40 rounded-[32px] p-5 shrink-0 select-none cursor-pointer"
@@ -264,15 +265,15 @@ export function EmailCard({
               </div>
             </motion.div>
           ) : (
-            <motion.p
+            <motion.div
               key="snippet"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="font-['Rubik'] text-[14px] text-black leading-5 tracking-[-0.23px] line-clamp-3"
+              className="font-['Rubik'] text-[14px] text-black leading-[1.6] tracking-[-0.23px] overflow-hidden line-clamp-3 [&_p]:inline [&_p]:m-0"
             >
-              {displayBody}
-            </motion.p>
+              <ReactMarkdown>{displayBody}</ReactMarkdown>
+            </motion.div>
           )}
         </AnimatePresence>
       </div>
@@ -312,6 +313,20 @@ export function EmailCard({
 
           {/* Action buttons */}
           <div className="flex items-center gap-2">
+            <button
+              onClick={(e) => { e.stopPropagation(); /* TODO: Implement */ }}
+              className="flex items-center justify-center bg-black/10 hover:bg-black/20 backdrop-blur-sm transition-colors h-[26px] px-3 rounded-[15px]"
+              title="Add to To-Do"
+            >
+              <ListChecks className="w-3.5 h-3.5 text-black/80" />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); /* TODO: Implement */ }}
+              className="flex items-center justify-center bg-black/10 hover:bg-black/20 backdrop-blur-sm transition-colors h-[26px] px-3 rounded-[15px]"
+              title="Add to Calendar"
+            >
+              <CalendarPlus className="w-3.5 h-3.5 text-black/80" />
+            </button>
             <button
               onClick={handleReplyClick}
               className="flex items-center justify-center bg-black/10 hover:bg-black/20 backdrop-blur-sm transition-colors h-[26px] px-4 rounded-[15px]"

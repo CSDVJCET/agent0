@@ -467,49 +467,43 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
               <motion.div
                 key={email.id}
                 layout
+                layoutId={`email-container-${email.id}`}
                 className="shrink-0 cursor-pointer"
                 data-snap-card
               >
-                <EmailCard
-                  senderName={email.fromName}
-                  senderEmail={email.fromEmail}
-                  subject={email.subject}
-                  bodySnippet={email.snippet}
-                  categories={email.categories}
-                  date={email.date}
-                  hasAttachments={email.hasAttachments}
-                  attachmentCount={email.attachmentCount}
-                  messageId={email.id}
-                  threadId={email.threadId}
-                  isUnread={email.isUnread}
-                  shortTitle={email.shortTitle}
-                  summary={email.summary}
-                  suggestedReply={email.suggestedReply}
-                  onReply={onReply}
-                  onMarkRead={handleMarkRead}
-                  onCardClick={() => handleCardClick(email.id)}
-                />
+                {expandedEmailId === email.id ? (
+                  <ExpandedEmailCard
+                    email={email}
+                    selectedModel={selectedModel}
+                    onClose={handleCloseExpanded}
+                    onMarkRead={handleMarkRead}
+                  />
+                ) : (
+                  <EmailCard
+                    senderName={email.fromName}
+                    senderEmail={email.fromEmail}
+                    subject={email.subject}
+                    bodySnippet={email.snippet}
+                    categories={email.categories}
+                    date={email.date}
+                    hasAttachments={email.hasAttachments}
+                    attachmentCount={email.attachmentCount}
+                    messageId={email.id}
+                    threadId={email.threadId}
+                    isUnread={email.isUnread}
+                    shortTitle={email.shortTitle}
+                    summary={email.summary}
+                    suggestedReply={email.suggestedReply}
+                    onReply={onReply}
+                    onMarkRead={handleMarkRead}
+                    onCardClick={() => handleCardClick(email.id)}
+                  />
+                )}
               </motion.div>
             ))}
           </AnimatePresence>
         </div>
       </div>
-
-      {/* Expanded Email Overlay — rendered in a portal to escape pointer-events-none ancestors */}
-      {isMounted && expandedEmail &&
-        createPortal(
-          <AnimatePresence>
-            <ExpandedEmailCard
-              key={expandedEmail.id}
-              email={expandedEmail}
-              selectedModel={selectedModel}
-              onClose={handleCloseExpanded}
-              onMarkRead={handleMarkRead}
-            />
-          </AnimatePresence>,
-          document.body
-        )
-      }
     </>
   );
 }
@@ -660,28 +654,20 @@ function ExpandedEmailCard({
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.22 }}
-      className="fixed inset-0 z-9999 flex items-center justify-center p-4 pointer-events-auto"
-      onClick={onClose}
-      style={{ backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)", background: "rgba(0,0,0,0.2)" }}
+      layout
+      initial={{ scale: 0.92, opacity: 0, y: 24 }}
+      animate={{ scale: 1, opacity: 1, y: 0 }}
+      exit={{ scale: 0.92, opacity: 0, y: 24 }}
+      transition={{ type: "spring", stiffness: 340, damping: 32 }}
+      onClick={(e) => e.stopPropagation()}
+      className="relative flex flex-col w-[90vw] max-w-[700px] h-[550px] bg-white/22 backdrop-blur-3xl border border-white/40 rounded-[32px] overflow-hidden"
+      style={{
+        fontFamily: "var(--font-rubik), Rubik, sans-serif",
+        boxShadow: "inset 0 1.5px 1px rgba(255,255,255,0.6), 0 24px 80px rgba(0,0,0,0.28)",
+      }}
     >
-      <motion.div
-        initial={{ scale: 0.92, opacity: 0, y: 24 }}
-        animate={{ scale: 1, opacity: 1, y: 0 }}
-        exit={{ scale: 0.92, opacity: 0, y: 24 }}
-        transition={{ type: "spring", stiffness: 340, damping: 32 }}
-        onClick={(e) => e.stopPropagation()}
-        className="relative flex flex-col w-[90vw] max-w-[700px] max-h-[88vh] bg-white/22 backdrop-blur-3xl border border-white/40 rounded-[32px] overflow-hidden"
-        style={{
-          fontFamily: "var(--font-rubik), Rubik, sans-serif",
-          boxShadow: "inset 0 1.5px 1px rgba(255,255,255,0.6), 0 24px 80px rgba(0,0,0,0.28)",
-        }}
-      >
-        {/* Scrollable content */}
-        <div className="overflow-y-auto p-6 flex flex-col gap-4">
+      {/* Scrollable content */}
+      <div className="overflow-y-auto p-6 flex flex-col gap-4">
 
           {/* Close button */}
           <button
@@ -859,7 +845,6 @@ function ExpandedEmailCard({
             </button>
           </div>
         </div>
-      </motion.div>
     </motion.div>
   );
 }
