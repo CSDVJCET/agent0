@@ -291,12 +291,12 @@ function GmailPlaceholder({ size = 68 }: { size?: number }) {
   );
 }
 
-// Teams icon using the actual SVG asset
-function TeamsPlaceholder({ size = 68 }: { size?: number }) {
+// Google Meet icon using the actual SVG asset
+function MeetPlaceholder({ size = 68 }: { size?: number }) {
   const imgSize = Math.round(size * 0.6);
   return (
     <IconBox size={size}>
-      <Image src="/teams.svg" alt="Teams" width={imgSize} height={imgSize} style={{ objectFit: "contain" }} />
+      <Image src="/meet.svg" alt="Google Meet" width={imgSize} height={imgSize} style={{ objectFit: "contain" }} />
     </IconBox>
   );
 }
@@ -602,7 +602,7 @@ export function AtAGlance({
         <motion.span variants={wordVariant} className={`${muted} ${textBase}`}>and have</motion.span>
       </motion.div>
 
-      {/* Line 4 – [Teams] [n] meetings today */}
+      {/* Line 4 – [Meet] [n] meetings today */}
       <motion.div variants={lineVariant} className={lineClass}>
         <motion.span variants={wordVariant}><MagneticWrap id="teams"><TeamsPlaceholder size={68} /></MagneticWrap></motion.span>
         <motion.span variants={wordVariant} className={`${vivid} ${textBase}`}>{liveMeetingCount ?? meetingCount} meetings</motion.span>

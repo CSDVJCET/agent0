@@ -149,6 +149,8 @@ export function ChatUI() {
 
   const modalScrollRef = useRef<HTMLDivElement>(null);
   const [isModalRefHydrated, setIsModalRefHydrated] = useState(false);
+  const [expandedEmailId, setExpandedEmailId] = useState<string | null>(null);
+  const isEmailExpanded = expandedEmailId !== null;
 
   // Reset hydration state when modal closes
   useEffect(() => {
@@ -505,8 +507,8 @@ export function ChatUI() {
           {/* Left side widgets (hidden on small screens) */}
           <motion.div
             initial={{ opacity: 0, x: -60 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ type: "spring", stiffness: 300, damping: 25, delay: 0.1 }}
+            animate={isEmailExpanded ? { opacity: 0, x: -100, scale: 0.9 } : { opacity: 1, x: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25, delay: isEmailExpanded ? 0 : 0.1 }}
             className="absolute top-[48%] left-[2%] 2xl:left-[4%] -translate-y-1/2 pointer-events-auto hidden xl:flex flex-col gap-8 scale-[0.765] lg:scale-[0.81] xl:scale-[0.855] origin-left z-20"
           >
             <TodoList />
@@ -516,7 +518,7 @@ export function ChatUI() {
           {/* Centered At a Glance Text - moved below dynamic island and scaled down */}
           <motion.div 
             initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
+            animate={isEmailExpanded ? { opacity: 0, y: -100, scale: 0.9 } : { opacity: 1, y: 0 }}
             transition={{ type: "spring", stiffness: 300, damping: 25 }}
             className="absolute inset-x-0 top-[14%] flex flex-col items-center justify-start pointer-events-auto z-0 scale-[0.675] sm:scale-[0.81] origin-top"
           >
@@ -533,10 +535,12 @@ export function ChatUI() {
             <div className="w-full xl:w-[85%] 2xl:w-[90%] max-w-[1600px]">
               <EmailCardCarousel
                 isGmailConnected={isGmailConnected}
+                selectedModel={selectedModel.id}
                 onReply={(email) => {
                   setInputValue(`@gmail Reply to ${email.subject} from ${email.senderEmail}`);
                   setMentionedTools(["gmail"]);
                 }}
+                onExpandChange={setExpandedEmailId}
               />
             </div>
           </motion.div>
@@ -544,8 +548,8 @@ export function ChatUI() {
           {/* Right side widgets (hidden on small screens) */}
           <motion.div
             initial={{ opacity: 0, x: 60 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ type: "spring", stiffness: 300, damping: 25, delay: 0.2 }}
+            animate={isEmailExpanded ? { opacity: 0, x: 100 } : { opacity: 1, x: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25, delay: isEmailExpanded ? 0 : 0.2 }}
             className="absolute top-[48%] right-[2%] 2xl:right-[4%] -translate-y-1/2 pointer-events-auto hidden xl:flex flex-col gap-8 scale-[0.765] lg:scale-[0.81] xl:scale-[0.855] origin-right items-center z-10"
           >
             <AudioWave />
@@ -555,8 +559,8 @@ export function ChatUI() {
           {/* Bottom-right Music Widget */}
           <motion.div
             initial={{ opacity: 0, scale: 0.8, y: 40 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ type: "spring", stiffness: 300, damping: 25, delay: 0.3 }}
+            animate={isEmailExpanded ? { opacity: 0, y: 100 } : { opacity: 1, scale: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25, delay: isEmailExpanded ? 0 : 0.3 }}
             className="absolute bottom-4 right-[2%] 2xl:right-[4%] pointer-events-auto hidden xl:flex scale-[0.52] lg:scale-[0.55] xl:scale-[0.585] origin-bottom-right items-center z-10"
           >
             <Music />
