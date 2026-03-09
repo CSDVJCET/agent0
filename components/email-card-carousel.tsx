@@ -2,7 +2,7 @@ import React, { useRef, useCallback, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { animate, motion, AnimatePresence } from "motion/react";
 import { Streamdown } from "streamdown";
-import { EmailCard } from "./email-card";
+import { EmailCard, type EmailActionItem, type EmailCalendarEvent, type EmailTodoItem } from "./email-card";
 import { Mail, X, Send, Check, Sparkles, RefreshCw, CalendarPlus, ListChecks } from "lucide-react";
 
 /** Shape returned by /api/gmail/messages */
@@ -29,6 +29,9 @@ interface SummarizedEmail {
   shortTitle: string;
   summary: string;
   suggestedReply: string;
+  actionItems: EmailActionItem[];
+  todoItems: EmailTodoItem[];
+  calendarEvent: EmailCalendarEvent | null;
 }
 
 /** Merged email data (message + category + AI summary) */
@@ -38,14 +41,45 @@ interface EnrichedEmail extends GmailMessageResponse {
   summary?: string;
   suggestedReply?: string;
   importance?: "high" | "medium" | "low";
+  actionItems?: EmailActionItem[];
+  todoItems?: EmailTodoItem[];
+  calendarEvent?: EmailCalendarEvent | null;
   photoUrl?: string | null;
 }
 
 // ─── LocalStorage cache (model-keyed) ────────────────────────────────────────────────────
-const CACHE_TTL_MS = 30 * 60 * 1000;
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 function getCacheKey(modelId: string) {
-  return `gmail-enriched-emails-v4-${modelId.replace(/[^a-z0-9]/gi, "-")}`;
+  return `gmail-enriched-emails-v5-${modelId.replace(/[^a-z0-9]/gi, "-")}`;
+}
+
+function buildEmailReference(email: EnrichedEmail) {
+  return `From email: "${email.shortTitle || email.subject}" by ${email.fromName}`;
+}
+
+function getTodoKey(item: EmailTodoItem) {
+  return `${item.title}::${item.due || "none"}`;
+}
+
+function formatDateOrDateTime(value?: string) {
+  if (!value) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const date = new Date(`${value}T00:00:00`);
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return parsed.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 interface EmailCache {
@@ -102,7 +136,7 @@ interface EmailCardCarouselProps {
   onExpandChange?: (expandedId: string | null) => void;
 }
 
-export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "gemini-2.0-flash", onReply, onExpandChange }: EmailCardCarouselProps) {
+export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "groq:moonshotai/kimi-k2-instruct-0905", onReply, onExpandChange }: EmailCardCarouselProps) {
   const [emails, setEmails] = useState<EnrichedEmail[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,6 +155,44 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
   const motionStop = useRef<(() => void) | null>(null);
 
   const expandedEmail = expandedEmailId ? emails.find((e) => e.id === expandedEmailId) : null;
+
+  const createTodoFromEmail = useCallback(async (email: EnrichedEmail, item: EmailTodoItem) => {
+    const res = await fetch("/api/tasks/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: item.title,
+        notes: item.notes || buildEmailReference(email),
+        due: item.due,
+        priority: item.priority,
+      }),
+    });
+
+    const data = await res.json();
+    if (data.error) {
+      throw new Error(data.message || "Failed to create task");
+    }
+  }, []);
+
+  const createCalendarEventFromEmail = useCallback(async (email: EnrichedEmail, event: EmailCalendarEvent) => {
+    const res = await fetch("/api/calendar/create-event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: event.title,
+        description: event.description || buildEmailReference(email),
+        startDateTime: event.startDateTime,
+        endDateTime: event.endDateTime,
+        location: event.location,
+        attendees: event.attendees,
+      }),
+    });
+
+    const data = await res.json();
+    if (data.error) {
+      throw new Error(data.message || "Failed to create calendar event");
+    }
+  }, []);
 
   // SSR-safe portal mount
   useEffect(() => setIsMounted(true), []);
@@ -168,6 +240,7 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
                 snippet: m.snippet,
                 from: m.fromName || m.fromEmail,
               })),
+              model: selectedModel,
             }),
           }).then((r) => r.json()),
           fetch("/api/gmail/summarize", {
@@ -208,6 +281,9 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
             summary: sum?.summary,
             suggestedReply: sum?.suggestedReply,
             importance: sum?.importance,
+            actionItems: sum?.actionItems || [],
+            todoItems: sum?.todoItems || [],
+            calendarEvent: sum?.calendarEvent || null,
           };
         });
 
@@ -253,7 +329,12 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
     }
 
     fetchEmails();
-    return () => { cancelled = true; };
+    const intervalId = setInterval(fetchEmails, 60 * 60 * 1000); // refresh every hour
+
+    return () => { 
+      cancelled = true; 
+      clearInterval(intervalId);
+    };
   }, [isGmailConnected, selectedModel]);
 
   // ─── Mark as read handler — removes card after API call ────────────────────
@@ -282,12 +363,45 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
     if (dragMoved.current) return; // Don't expand if user was dragging
     setExpandedEmailId(emailId);
     onExpandChange?.(emailId);
+
+    // Auto-scroll to center the clicked card after a short delay for layout changes
+    setTimeout(() => {
+      const container = scrollRef.current;
+      const el = document.getElementById(`email-wrapper-${emailId}`);
+      if (!container || !el) return;
+      
+      const targetScroll = el.offsetLeft - container.offsetWidth / 2 + el.offsetWidth / 2;
+      
+      if (motionStop.current) { motionStop.current(); motionStop.current = null; }
+      const controls = animate(container.scrollLeft, targetScroll, {
+        type: "spring",
+        stiffness: 260,
+        damping: 30,
+        mass: 0.8,
+        onUpdate: (v) => { if (scrollRef.current) scrollRef.current.scrollLeft = v; },
+      });
+      motionStop.current = () => controls.stop();
+    }, 50);
   }, [onExpandChange]);
 
   const handleCloseExpanded = useCallback(() => {
     setExpandedEmailId(null);
     onExpandChange?.(null);
   }, [onExpandChange]);
+
+  // Handle outside click to close
+  useEffect(() => {
+    if (!expandedEmailId) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      // If clicked inside the carousel container, handle it there (or ignore if on a card)
+      // We want to close if clicked completely outside the carousel too.
+      if (scrollRef.current && !scrollRef.current.contains(e.target as Node)) {
+        handleCloseExpanded();
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [expandedEmailId, handleCloseExpanded]);
 
   // ─── Drag / scroll handlers (unchanged logic) ─────────────────────────────
   const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
@@ -437,6 +551,7 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
       {/* Carousel */}
       <div
         className="relative w-full pointer-events-auto my-4 select-none"
+        onClick={() => { if (expandedEmailId && !dragMoved.current) handleCloseExpanded(); }}
         style={{
           maskImage: "linear-gradient(to right, transparent, black 8%, black 92%, transparent)",
           WebkitMaskImage: "linear-gradient(to right, transparent, black 8%, black 92%, transparent)",
@@ -466,6 +581,7 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
             {emails.map((email) => (
               <motion.div
                 key={email.id}
+                id={`email-wrapper-${email.id}`}
                 layout
                 layoutId={`email-container-${email.id}`}
                 className="shrink-0 cursor-pointer"
@@ -477,6 +593,8 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
                     selectedModel={selectedModel}
                     onClose={handleCloseExpanded}
                     onMarkRead={handleMarkRead}
+                    onCreateTodo={(item) => createTodoFromEmail(email, item)}
+                    onCreateCalendarEvent={(event) => createCalendarEventFromEmail(email, event)}
                   />
                 ) : (
                   <EmailCard
@@ -491,11 +609,17 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
                     messageId={email.id}
                     threadId={email.threadId}
                     isUnread={email.isUnread}
+                    importance={email.importance}
                     shortTitle={email.shortTitle}
                     summary={email.summary}
                     suggestedReply={email.suggestedReply}
+                    actionItems={email.actionItems}
+                    todoItems={email.todoItems}
+                    calendarEvent={email.calendarEvent}
                     onReply={onReply}
                     onMarkRead={handleMarkRead}
+                    onCreateTodo={(item) => createTodoFromEmail(email, item)}
+                    onCreateCalendarEvent={(event) => createCalendarEventFromEmail(email, event)}
                     onCardClick={() => handleCardClick(email.id)}
                   />
                 )}
@@ -525,11 +649,15 @@ function ExpandedEmailCard({
   selectedModel,
   onClose,
   onMarkRead,
+  onCreateTodo,
+  onCreateCalendarEvent,
 }: {
   email: EnrichedEmail;
   selectedModel: string;
   onClose: () => void;
   onMarkRead: (messageId: string) => Promise<void>;
+  onCreateTodo: (item: EmailTodoItem) => Promise<void>;
+  onCreateCalendarEvent: (event: EmailCalendarEvent) => Promise<void>;
 }) {
   const [replyText, setReplyText] = useState("");
   const [replyVisible, setReplyVisible] = useState(false);
@@ -538,10 +666,12 @@ function ExpandedEmailCard({
   const [sent, setSent] = useState(false);
   const [markingRead, setMarkingRead] = useState(false);
   const [taskStates, setTaskStates] = useState<Record<string, "idle" | "loading" | "done">>({});
-  const [calStates, setCalStates] = useState<Record<string, "idle" | "loading" | "done">>({});
+  const [calendarState, setCalendarState] = useState<"idle" | "loading" | "done">("idle");
 
   const relativeTime = email.date ? formatRelativeTime(email.date) : "";
-  const actionItems = parseActionItems(email.summary || "");
+  const actionItems = email.actionItems || [];
+  const todoItems = email.todoItems || [];
+  const calendarEvent = email.calendarEvent || null;
 
   // Initials + color for avatar fallback
   const initials = (email.fromName || email.fromEmail)
@@ -557,7 +687,7 @@ function ExpandedEmailCard({
 
   const handleGenerateReply = async () => {
     setReplyVisible(true);
-    if (email.suggestedReply && !replyText) {
+    if (email.suggestedReply && email.suggestedReply !== "No reply needed." && !replyText) {
       setReplyText(email.suggestedReply);
       return;
     }
@@ -615,41 +745,26 @@ function ExpandedEmailCard({
   };
 
   const handleAddTask = async (actionText: string) => {
+    const targetItem = todoItems.find((item) => getTodoKey(item) === actionText);
+    if (!targetItem) return;
     setTaskStates((s) => ({ ...s, [actionText]: "loading" }));
     try {
-      const res = await fetch("/api/tasks/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: actionText, notes: `From email: "${email.shortTitle || email.subject}" by ${email.fromName}` }),
-      });
-      const data = await res.json();
-      if (!data.error) setTaskStates((s) => ({ ...s, [actionText]: "done" }));
-      else setTaskStates((s) => ({ ...s, [actionText]: "idle" }));
-    } catch { setTaskStates((s) => ({ ...s, [actionText]: "idle" })); }
+      await onCreateTodo(targetItem);
+      setTaskStates((s) => ({ ...s, [actionText]: "done" }));
+    } catch {
+      setTaskStates((s) => ({ ...s, [actionText]: "idle" }));
+    }
   };
 
-  const handleAddCalendar = async (actionText: string) => {
-    setCalStates((s) => ({ ...s, [actionText]: "loading" }));
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(10, 0, 0, 0);
-    const end = new Date(tomorrow);
-    end.setHours(11, 0, 0, 0);
+  const handleAddCalendar = async () => {
+    if (!calendarEvent || calendarState !== "idle") return;
+    setCalendarState("loading");
     try {
-      const res = await fetch("/api/calendar/create-event", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: actionText,
-          description: `From email: "${email.shortTitle || email.subject}" by ${email.fromName}`,
-          startDateTime: tomorrow.toISOString(),
-          endDateTime: end.toISOString(),
-        }),
-      });
-      const data = await res.json();
-      if (!data.error) setCalStates((s) => ({ ...s, [actionText]: "done" }));
-      else setCalStates((s) => ({ ...s, [actionText]: "idle" }));
-    } catch { setCalStates((s) => ({ ...s, [actionText]: "idle" })); }
+      await onCreateCalendarEvent(calendarEvent);
+      setCalendarState("done");
+    } catch {
+      setCalendarState("idle");
+    }
   };
 
   return (
@@ -742,7 +857,7 @@ function ExpandedEmailCard({
               onClick={(e) => e.stopPropagation()}
             >
               <Streamdown>
-                {stripActionItemLines(email.summary || email.snippet)}
+                {email.summary || email.snippet}
               </Streamdown>
             </div>
 
@@ -752,37 +867,86 @@ function ExpandedEmailCard({
                 <p className="font-['Rubik'] text-[11px] font-semibold text-black/45 uppercase tracking-wider mb-2">Action Items</p>
                 <div className="flex flex-col gap-1.5">
                   {actionItems.map((item) => {
-                    const tState = taskStates[item.text] || "idle";
-                    const cState = calStates[item.text] || "idle";
                     return (
-                      <div key={item.text} className="flex items-start gap-2 group">
+                      <div key={`${item.text}-${item.dueLabel || "none"}`} className="flex items-start gap-2">
                         <div className="w-3.5 h-3.5 mt-0.5 rounded border border-black/20 shrink-0 bg-white/60" />
-                        <span className="font-['Rubik'] text-[13px] text-black/80 leading-5 flex-1">{item.text}</span>
+                        <div className="flex-1">
+                          <span className="font-['Rubik'] text-[13px] text-black/80 leading-5 block">{item.text}</span>
+                          {item.dueLabel && (
+                            <span className="font-['Rubik'] text-[11px] text-black/45">Due {item.dueLabel}</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {todoItems.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-black/8">
+                <p className="font-['Rubik'] text-[11px] font-semibold text-black/45 uppercase tracking-wider mb-2">To-Do Suggestions</p>
+                <div className="flex flex-col gap-2">
+                  {todoItems.map((item) => {
+                    const key = getTodoKey(item);
+                    const state = taskStates[key] || "idle";
+                    return (
+                      <div key={key} className="flex items-start gap-2 group">
+                        <div className="w-3.5 h-3.5 mt-0.5 rounded border border-black/20 shrink-0 bg-white/60" />
+                        <div className="flex-1 min-w-0">
+                          <span className="font-['Rubik'] text-[13px] text-black/80 leading-5 block">{item.title}</span>
+                          {(item.due || item.priority) && (
+                            <span className="font-['Rubik'] text-[11px] text-black/45">
+                              {[item.priority ? `${item.priority} priority` : null, formatDateOrDateTime(item.due)].filter(Boolean).join(" · ")}
+                            </span>
+                          )}
+                          {item.notes && (
+                            <p className="font-['Rubik'] text-[11px] text-black/55 mt-1 line-clamp-2">{item.notes}</p>
+                          )}
+                        </div>
                         <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             type="button"
                             title="Add to Tasks"
-                            onClick={(e) => { e.stopPropagation(); handleAddTask(item.text); }}
-                            disabled={tState !== "idle"}
+                            onClick={(e) => { e.stopPropagation(); handleAddTask(key); }}
+                            disabled={state !== "idle"}
                             className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/15 hover:bg-green-500/28 transition-colors disabled:opacity-60 text-green-800"
                           >
-                            {tState === "loading" ? <RefreshCw className="w-3 h-3 animate-spin" /> : tState === "done" ? <Check className="w-3 h-3" /> : <ListChecks className="w-3 h-3" />}
-                            <span className="text-[10px] font-medium">{tState === "done" ? "Added" : "Task"}</span>
-                          </button>
-                          <button
-                            type="button"
-                            title="Add to Calendar"
-                            onClick={(e) => { e.stopPropagation(); handleAddCalendar(item.text); }}
-                            disabled={cState !== "idle"}
-                            className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/15 hover:bg-blue-500/28 transition-colors disabled:opacity-60 text-blue-800"
-                          >
-                            {cState === "loading" ? <RefreshCw className="w-3 h-3 animate-spin" /> : cState === "done" ? <Check className="w-3 h-3" /> : <CalendarPlus className="w-3 h-3" />}
-                            <span className="text-[10px] font-medium">{cState === "done" ? "Added" : "Calendar"}</span>
+                            {state === "loading" ? <RefreshCw className="w-3 h-3 animate-spin" /> : state === "done" ? <Check className="w-3 h-3" /> : <ListChecks className="w-3 h-3" />}
+                            <span className="text-[10px] font-medium">{state === "done" ? "Added" : "Task"}</span>
                           </button>
                         </div>
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            )}
+
+            {calendarEvent && (
+              <div className="mt-3 pt-3 border-t border-black/8">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-['Rubik'] text-[11px] font-semibold text-black/45 uppercase tracking-wider mb-2">Calendar Draft</p>
+                    <p className="font-['Rubik'] text-[14px] text-black/85 leading-5">{calendarEvent.title}</p>
+                    <p className="font-['Rubik'] text-[11px] text-black/45 mt-1">
+                      {formatDateOrDateTime(calendarEvent.startDateTime)}
+                      {calendarEvent.endDateTime ? ` to ${formatDateOrDateTime(calendarEvent.endDateTime)}` : ""}
+                    </p>
+                    {calendarEvent.location && (
+                      <p className="font-['Rubik'] text-[11px] text-black/45 mt-1">{calendarEvent.location}</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    title="Add to Calendar"
+                    onClick={(e) => { e.stopPropagation(); handleAddCalendar(); }}
+                    disabled={calendarState !== "idle"}
+                    className="flex items-center gap-1 px-3 py-1 rounded-full bg-blue-500/15 hover:bg-blue-500/28 transition-colors disabled:opacity-60 text-blue-800 shrink-0"
+                  >
+                    {calendarState === "loading" ? <RefreshCw className="w-3 h-3 animate-spin" /> : calendarState === "done" ? <Check className="w-3 h-3" /> : <CalendarPlus className="w-3 h-3" />}
+                    <span className="text-[10px] font-medium">{calendarState === "done" ? "Added" : "Calendar"}</span>
+                  </button>
                 </div>
               </div>
             )}
@@ -803,33 +967,60 @@ function ExpandedEmailCard({
               </button>
             </div>
 
-            <textarea
-              value={generating ? "" : replyText}
-              onChange={(e) => { setReplyText(e.target.value); setReplyVisible(true); }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full resize-none rounded-2xl bg-white/80 border border-black/10 p-3 font-['Rubik'] text-[14px] text-black leading-5 focus:outline-none focus:border-blue-400/50 placeholder:text-black/30 min-h-[90px]"
-              placeholder={generating ? "Generating reply…" : "Type a reply or click AI Reply…"}
-              disabled={generating}
-            />
-
-            {(replyVisible || replyText) && (
-              <div className="flex items-center justify-end gap-2 mt-2">
-                {sent ? (
-                  <div className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-green-500/20">
-                    <Check className="w-3.5 h-3.5 text-green-700" /><span className="font-['Rubik'] text-green-700 text-[12px]">Sent!</span>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); handleSendReply(); }}
-                    disabled={sending || !replyText.trim()}
-                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-blue-500/80 hover:bg-blue-500 transition-colors disabled:opacity-40"
-                  >
-                    <Send className="w-3.5 h-3.5 text-white" /><span className="font-['Rubik'] text-white text-[12px]">{sending ? "Sending…" : "Send"}</span>
-                  </button>
+            <div className="relative">
+              <AnimatePresence>
+                {(generating || replyText || replyVisible) && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1, backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="absolute -inset-1 bg-linear-to-r from-blue-500/20 via-purple-500/20 to-blue-500/20 rounded-3xl z-0 pointer-events-none"
+                    style={{ backgroundSize: "200% 200%" }}
+                    transition={{ 
+                      opacity: { duration: 0.2 },
+                      scale: { duration: 0.2 },
+                      backgroundPosition: { duration: 5, ease: "linear", repeat: Infinity }
+                    }}
+                  />
                 )}
-              </div>
-            )}
+              </AnimatePresence>
+              <textarea
+                value={generating ? "" : replyText}
+                onChange={(e) => { setReplyText(e.target.value); setReplyVisible(true); }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full resize-none rounded-2xl bg-white/80 backdrop-blur-md border border-black/10 p-3 font-['Rubik'] text-[14px] text-black leading-5 focus:outline-none focus:border-blue-400/50 placeholder:text-black/30 min-h-[90px] relative z-10 shadow-sm"
+                placeholder={generating ? "Generating reply…" : "Type a reply or click AI Reply…"}
+                disabled={generating}
+              />
+            </div>
+
+            <AnimatePresence>
+              {(replyVisible || replyText) && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0, y: -10 }}
+                  animate={{ opacity: 1, height: "auto", y: 0 }}
+                  exit={{ opacity: 0, height: 0, y: -10 }}
+                  className="overflow-hidden"
+                >
+                  <div className="flex items-center justify-end gap-2 mt-2">
+                    {sent ? (
+                      <div className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-green-500/20">
+                        <Check className="w-3.5 h-3.5 text-green-700" /><span className="font-['Rubik'] text-green-700 text-[12px]">Sent!</span>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleSendReply(); }}
+                        disabled={sending || !replyText.trim()}
+                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-blue-500/80 hover:bg-blue-500 transition-colors disabled:opacity-40"
+                      >
+                        <Send className="w-3.5 h-3.5 text-white" /><span className="font-['Rubik'] text-white text-[12px]">{sending ? "Sending…" : "Send"}</span>
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Mark as read */}
@@ -847,24 +1038,6 @@ function ExpandedEmailCard({
         </div>
     </motion.div>
   );
-}
-
-/** Parse `- [ ] ...` checkbox lines from a markdown summary */
-function parseActionItems(summary: string): Array<{ text: string }> {
-  return summary
-    .split("\n")
-    .filter((line) => /^-\s+\[\s*[ x]?\s*\]/.test(line.trim()))
-    .map((line) => ({ text: line.replace(/^-\s+\[\s*[ x]?\s*\]\s*/, "").replace(/\*\*/g, "").trim() }))
-    .filter((item) => item.text.length > 0);
-}
-
-/** Remove checkbox action-item lines (and trailing "## Action Items" header) from markdown */
-function stripActionItemLines(summary: string): string {
-  const filtered = summary
-    .split("\n")
-    .filter((line) => !/^-\s+\[\s*[ x]?\s*\]/.test(line.trim()))
-    .join("\n");
-  return filtered.replace(/##\s+Action Items\s*\n?\s*$/i, "").trim();
 }
 
 /** Deterministic HSL color from a string (for avatar background) */

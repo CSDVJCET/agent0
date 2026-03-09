@@ -3,6 +3,27 @@ import { motion, AnimatePresence } from "motion/react";
 import { Paperclip, Check, Send, X, CalendarPlus, ListChecks } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
+export interface EmailActionItem {
+  text: string;
+  dueLabel?: string;
+}
+
+export interface EmailTodoItem {
+  title: string;
+  notes?: string;
+  due?: string;
+  priority?: "high" | "medium" | "low";
+}
+
+export interface EmailCalendarEvent {
+  title: string;
+  startDateTime: string;
+  endDateTime: string;
+  location?: string;
+  attendees?: string[];
+  description?: string;
+}
+
 /** Category color palette — matches /api/gmail/categorize output */
 const CATEGORY_STYLES: Record<string, { bg: string; border: string }> = {
   work: { bg: "rgba(80,160,221,0.55)", border: "rgba(80,160,221,0.3)" },
@@ -56,18 +77,30 @@ export interface EmailCardProps {
   threadId?: string;
   /** Whether the email is unread */
   isUnread?: boolean;
+  /** Importance/Priority */
+  importance?: "high" | "medium" | "low";
   /** AI-generated short title */
   shortTitle?: string;
   /** AI-generated summary */
   summary?: string;
   /** AI-generated suggested reply */
   suggestedReply?: string;
+  /** AI-derived action items */
+  actionItems?: EmailActionItem[];
+  /** AI-derived to-do items */
+  todoItems?: EmailTodoItem[];
+  /** AI-derived calendar event */
+  calendarEvent?: EmailCalendarEvent | null;
   /** Sender profile picture URL */
   senderProfileUrl?: string;
   /** Callback when reply button is clicked */
   onReply?: (email: { subject: string; senderEmail: string; threadId?: string }) => void;
   /** Callback when mark-as-read button is clicked — removes card from list */
   onMarkRead?: (messageId: string) => Promise<void>;
+  /** Create a to-do item from this email */
+  onCreateTodo?: (item: EmailTodoItem) => Promise<void>;
+  /** Create a calendar event from this email */
+  onCreateCalendarEvent?: (event: EmailCalendarEvent) => Promise<void>;
   /** Callback when card body is clicked (for expand) */
   onCardClick?: () => void;
 }
@@ -84,12 +117,18 @@ export function EmailCard({
   messageId,
   threadId,
   isUnread = false,
+  importance,
   shortTitle,
   summary,
   suggestedReply,
+  actionItems = [],
+  todoItems = [],
+  calendarEvent,
   senderProfileUrl,
   onReply,
   onMarkRead,
+  onCreateTodo,
+  onCreateCalendarEvent,
   onCardClick,
 }: EmailCardProps) {
   const [markingRead, setMarkingRead] = useState(false);
@@ -98,6 +137,8 @@ export function EmailCard({
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
+  const [todoState, setTodoState] = useState<"idle" | "loading" | "done">("idle");
+  const [calendarState, setCalendarState] = useState<"idle" | "loading" | "done">("idle");
 
   const diceBearUrl = `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(senderEmail)}`;
   const gravatarUrl = senderProfileUrl || diceBearUrl;
@@ -105,6 +146,7 @@ export function EmailCard({
 
   const displayTitle = shortTitle || subject;
   const displayBody = summary || bodySnippet;
+  const primaryTodoItem = todoItems[0];
 
   const handleMarkRead = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -120,8 +162,32 @@ export function EmailCard({
   const handleReplyClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setShowReply(true);
-    setReplyText(suggestedReply || "");
+    setReplyText(suggestedReply === "No reply needed." ? "" : (suggestedReply || ""));
     setSent(false);
+  };
+
+  const handleAddTodo = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!primaryTodoItem || !onCreateTodo || todoState !== "idle") return;
+    setTodoState("loading");
+    try {
+      await onCreateTodo(primaryTodoItem);
+      setTodoState("done");
+    } catch {
+      setTodoState("idle");
+    }
+  };
+
+  const handleAddCalendar = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!calendarEvent || !onCreateCalendarEvent || calendarState !== "idle") return;
+    setCalendarState("loading");
+    try {
+      await onCreateCalendarEvent(calendarEvent);
+      setCalendarState("done");
+    } catch {
+      setCalendarState("idle");
+    }
   };
 
   const handleSendReply = async (e: React.MouseEvent) => {
@@ -166,7 +232,7 @@ export function EmailCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -50 }}
       transition={{ duration: 0.4, ease: "easeOut" }}
-      onClick={onCardClick}
+      onClick={(e) => { e.stopPropagation(); onCardClick?.(); }}
       className="relative flex flex-col w-full min-w-[450px] max-w-[506px] h-80 bg-white/15 backdrop-blur-2xl border border-white/40 rounded-[32px] p-5 shrink-0 select-none cursor-pointer"
       style={{
         fontFamily: 'var(--font-rubik), Rubik, sans-serif',
@@ -215,6 +281,11 @@ export function EmailCard({
             </div>
           );
         })}
+        {importance && (
+          <div className={`px-3 py-0.5 rounded-full flex items-center justify-center shrink-0 ${importance === "high" ? "bg-red-400/30 border border-red-400/40" : "bg-amber-400/25 border border-amber-400/35"}`}>
+            <span className="font-['Rubik'] text-[10px] font-medium text-black/70 capitalize">{importance} priority</span>
+          </div>
+        )}
       </div>
 
       {/* Main Content Area (White Box) — flex-grow to fill uniform height */}
@@ -224,20 +295,27 @@ export function EmailCard({
           {showReply ? (
             <motion.div
               key="reply"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-              className="flex-1 flex flex-col gap-2"
+              initial={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
+              animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+              exit={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+              className="flex-1 flex flex-col gap-2 relative"
               onClick={(e) => e.stopPropagation()}
             >
+              {/* Cool AI animated background behind textarea */}
+              <motion.div 
+                className="absolute -inset-1 bg-linear-to-r from-blue-500/20 via-purple-500/20 to-blue-500/20 rounded-3xl z-0"
+                animate={{ backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }}
+                transition={{ duration: 5, ease: "linear", repeat: Infinity }}
+                style={{ backgroundSize: "200% 200%" }}
+              />
               <textarea
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
-                className="flex-1 resize-none rounded-2xl bg-white/60 backdrop-blur-sm border border-black/10 p-3 font-['Rubik'] text-[13px] text-black leading-5 tracking-[-0.23px] focus:outline-none focus:border-blue-400/50 placeholder:text-black/30"
+                className="flex-1 resize-none rounded-2xl bg-white/80 backdrop-blur-md border border-black/10 p-3 font-['Rubik'] text-[13px] text-black leading-5 tracking-[-0.23px] focus:outline-none focus:border-blue-400/50 placeholder:text-black/30 relative z-10 shadow-sm"
                 placeholder="Type your reply..."
               />
-              <div className="flex items-center gap-2 justify-end">
+              <div className="flex items-center gap-2 justify-end relative z-10">
                 <button
                   onClick={handleCancelReply}
                   className="flex items-center justify-center bg-black/10 hover:bg-black/20 transition-colors h-7 px-3 rounded-full"
@@ -313,20 +391,26 @@ export function EmailCard({
 
           {/* Action buttons */}
           <div className="flex items-center gap-2">
-            <button
-              onClick={(e) => { e.stopPropagation(); /* TODO: Implement */ }}
-              className="flex items-center justify-center bg-black/10 hover:bg-black/20 backdrop-blur-sm transition-colors h-[26px] px-3 rounded-[15px]"
-              title="Add to To-Do"
-            >
-              <ListChecks className="w-3.5 h-3.5 text-black/80" />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); /* TODO: Implement */ }}
-              className="flex items-center justify-center bg-black/10 hover:bg-black/20 backdrop-blur-sm transition-colors h-[26px] px-3 rounded-[15px]"
-              title="Add to Calendar"
-            >
-              <CalendarPlus className="w-3.5 h-3.5 text-black/80" />
-            </button>
+            {primaryTodoItem && onCreateTodo && (
+              <button
+                onClick={handleAddTodo}
+                disabled={todoState !== "idle"}
+                className="flex items-center justify-center bg-black/10 hover:bg-black/20 backdrop-blur-sm transition-colors h-[26px] px-3 rounded-[15px] disabled:opacity-55"
+                title={todoItems.length > 1 ? `Add to To-Do (${todoItems.length})` : "Add to To-Do"}
+              >
+                {todoState === "done" ? <Check className="w-3.5 h-3.5 text-black/80" /> : <ListChecks className="w-3.5 h-3.5 text-black/80" />}
+              </button>
+            )}
+            {calendarEvent && onCreateCalendarEvent && (
+              <button
+                onClick={handleAddCalendar}
+                disabled={calendarState !== "idle"}
+                className="flex items-center justify-center bg-black/10 hover:bg-black/20 backdrop-blur-sm transition-colors h-[26px] px-3 rounded-[15px] disabled:opacity-55"
+                title="Add to Calendar"
+              >
+                {calendarState === "done" ? <Check className="w-3.5 h-3.5 text-black/80" /> : <CalendarPlus className="w-3.5 h-3.5 text-black/80" />}
+              </button>
+            )}
             <button
               onClick={handleReplyClick}
               className="flex items-center justify-center bg-black/10 hover:bg-black/20 backdrop-blur-sm transition-colors h-[26px] px-4 rounded-[15px]"
