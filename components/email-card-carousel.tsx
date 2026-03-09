@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { animate, motion, AnimatePresence } from "motion/react";
 import { Streamdown } from "streamdown";
 import { EmailCard, type EmailActionItem, type EmailCalendarEvent, type EmailTodoItem } from "./email-card";
+import { Shimmer } from "./ai-elements/shimmer";
 import { Mail, X, Send, Check, Sparkles, RefreshCw, CalendarPlus, ListChecks } from "lucide-react";
 
 /** Shape returned by /api/gmail/messages */
@@ -48,10 +49,10 @@ interface EnrichedEmail extends GmailMessageResponse {
 }
 
 // ─── LocalStorage cache (model-keyed) ────────────────────────────────────────────────────
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const EMAIL_CACHE_ENABLED = false;
 
 function getCacheKey(modelId: string) {
-  return `gmail-enriched-emails-v5-${modelId.replace(/[^a-z0-9]/gi, "-")}`;
+  return `gmail-enriched-emails-v6-${modelId.replace(/[^a-z0-9]/gi, "-")}`;
 }
 
 function buildEmailReference(email: EnrichedEmail) {
@@ -82,22 +83,15 @@ function formatDateOrDateTime(value?: string) {
   });
 }
 
-interface EmailCache {
-  emails: EnrichedEmail[];
-  timestamp: number;
-  messageIds: string[];
-}
-
 function loadCache(modelId: string): EmailCache | null {
-  if (typeof window === "undefined") return null;
+  if (!EMAIL_CACHE_ENABLED || typeof window === "undefined") {
+    return null;
+  }
+
   try {
     const raw = localStorage.getItem(getCacheKey(modelId));
     if (!raw) return null;
     const cache: EmailCache = JSON.parse(raw);
-    if (Date.now() - cache.timestamp > CACHE_TTL_MS) {
-      localStorage.removeItem(getCacheKey(modelId));
-      return null;
-    }
     return cache;
   } catch {
     return null;
@@ -105,7 +99,7 @@ function loadCache(modelId: string): EmailCache | null {
 }
 
 function saveCache(emails: EnrichedEmail[], messageIds: string[], modelId: string) {
-  if (typeof window === "undefined") return;
+  if (!EMAIL_CACHE_ENABLED || typeof window === "undefined") return;
   try {
     const cache: EmailCache = { emails, timestamp: Date.now(), messageIds };
     localStorage.setItem(getCacheKey(modelId), JSON.stringify(cache));
@@ -115,7 +109,7 @@ function saveCache(emails: EnrichedEmail[], messageIds: string[], modelId: strin
 }
 
 function updateCacheAfterMarkRead(messageId: string, modelId: string) {
-  if (typeof window === "undefined") return;
+  if (!EMAIL_CACHE_ENABLED || typeof window === "undefined") return;
   try {
     const raw = localStorage.getItem(getCacheKey(modelId));
     if (!raw) return;
@@ -123,6 +117,21 @@ function updateCacheAfterMarkRead(messageId: string, modelId: string) {
     cache.emails = cache.emails.filter((e) => e.id !== messageId);
     cache.messageIds = cache.messageIds.filter((id) => id !== messageId);
     localStorage.setItem(getCacheKey(modelId), JSON.stringify(cache));
+  } catch {
+    // ignore
+  }
+}
+
+interface EmailCache {
+  emails: EnrichedEmail[];
+  timestamp: number;
+  messageIds: string[];
+}
+
+function clearCache(modelId: string) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(getCacheKey(modelId));
   } catch {
     // ignore
   }
@@ -155,6 +164,12 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
   const motionStop = useRef<(() => void) | null>(null);
 
   const expandedEmail = expandedEmailId ? emails.find((e) => e.id === expandedEmailId) : null;
+
+  useEffect(() => {
+    if (!EMAIL_CACHE_ENABLED) {
+      clearCache(selectedModel);
+    }
+  }, [selectedModel]);
 
   const createTodoFromEmail = useCallback(async (email: EnrichedEmail, item: EmailTodoItem) => {
     const res = await fetch("/api/tasks/create", {
@@ -661,12 +676,14 @@ function ExpandedEmailCard({
 }) {
   const [replyText, setReplyText] = useState("");
   const [replyVisible, setReplyVisible] = useState(false);
+  const [showReplyAnimation, setShowReplyAnimation] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [markingRead, setMarkingRead] = useState(false);
   const [taskStates, setTaskStates] = useState<Record<string, "idle" | "loading" | "done">>({});
   const [calendarState, setCalendarState] = useState<"idle" | "loading" | "done">("idle");
+  const replyAnimationTimeoutRef = useRef<number | null>(null);
 
   const relativeTime = email.date ? formatRelativeTime(email.date) : "";
   const actionItems = email.actionItems || [];
@@ -685,12 +702,41 @@ function ExpandedEmailCard({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const handleGenerateReply = async () => {
+  useEffect(() => {
+    return () => {
+      if (replyAnimationTimeoutRef.current !== null) {
+        window.clearTimeout(replyAnimationTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const revealReply = (nextReply: string) => {
+    if (replyAnimationTimeoutRef.current !== null) {
+      window.clearTimeout(replyAnimationTimeoutRef.current);
+    }
+
     setReplyVisible(true);
-    if (email.suggestedReply && email.suggestedReply !== "No reply needed." && !replyText) {
-      setReplyText(email.suggestedReply);
+    setReplyText(nextReply);
+
+    if (!nextReply.trim()) {
+      setShowReplyAnimation(false);
+      replyAnimationTimeoutRef.current = null;
       return;
     }
+
+    setShowReplyAnimation(true);
+    replyAnimationTimeoutRef.current = window.setTimeout(() => {
+      setShowReplyAnimation(false);
+      replyAnimationTimeoutRef.current = null;
+    }, 1600);
+  };
+
+  const handleGenerateReply = async () => {
+    if (email.suggestedReply && email.suggestedReply !== "No reply needed." && !replyText) {
+      revealReply(email.suggestedReply);
+      return;
+    }
+    setReplyVisible(true);
     setGenerating(true);
     try {
       const res = await fetch("/api/gmail/summarize", {
@@ -703,7 +749,7 @@ function ExpandedEmailCard({
       });
       const data = await res.json();
       if (!data.error && data.emails?.[0]?.suggestedReply) {
-        setReplyText(data.emails[0].suggestedReply);
+        revealReply(data.emails[0].suggestedReply);
       }
     } finally {
       setGenerating(false);
@@ -727,7 +773,12 @@ function ExpandedEmailCard({
       const data = await res.json();
       if (!data.error) {
         setSent(true);
-        setTimeout(() => { setSent(false); setReplyVisible(false); setReplyText(""); }, 2000);
+        setTimeout(() => {
+          setSent(false);
+          setReplyVisible(false);
+          setReplyText("");
+          setShowReplyAnimation(false);
+        }, 2000);
       }
     } finally {
       setSending(false);
@@ -782,7 +833,10 @@ function ExpandedEmailCard({
       }}
     >
       {/* Scrollable content */}
-      <div className="overflow-y-auto p-6 flex flex-col gap-4">
+      <div
+        className="overflow-y-auto p-6 flex flex-col gap-4 [&::-webkit-scrollbar]:hidden"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+      >
 
           {/* Close button */}
           <button
@@ -962,7 +1016,7 @@ function ExpandedEmailCard({
                 disabled={generating}
                 className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/10 hover:bg-black/20 active:bg-black/25 transition-colors disabled:opacity-50"
               >
-                {generating ? <RefreshCw className="w-3 h-3 text-black/60 animate-spin" /> : <Sparkles className="w-3 h-3 text-black/60" />}
+                <Sparkles className="w-3 h-3 text-black/60" />
                 <span className="font-['Rubik'] text-[11px] text-black/60">{replyText ? "Regenerate" : "AI Reply"}</span>
               </button>
             </div>
@@ -984,28 +1038,68 @@ function ExpandedEmailCard({
                   />
                 )}
               </AnimatePresence>
-              <textarea
-                value={generating ? "" : replyText}
-                onChange={(e) => { setReplyText(e.target.value); setReplyVisible(true); }}
-                onClick={(e) => e.stopPropagation()}
-                className="w-full resize-none rounded-2xl bg-white/80 backdrop-blur-md border border-black/10 p-3 font-['Rubik'] text-[14px] text-black leading-5 focus:outline-none focus:border-blue-400/50 placeholder:text-black/30 min-h-[90px] relative z-10 shadow-sm"
-                placeholder={generating ? "Generating reply…" : "Type a reply or click AI Reply…"}
-                disabled={generating}
-              />
+              {generating ? (
+                <div className="w-full min-h-[90px] rounded-2xl bg-white/80 backdrop-blur-md border border-black/10 p-3 relative z-10 shadow-sm overflow-hidden">
+                  <div className="flex flex-col gap-2.5 pt-1">
+                    <Shimmer className="font-['Rubik'] text-[14px] leading-5" duration={1.8} spread={1.3}>
+                      Drafting a reply that matches this message and thread context.
+                    </Shimmer>
+                    <Shimmer className="font-['Rubik'] text-[14px] leading-5 max-w-[92%]" duration={1.8} spread={1.25}>
+                      Pulling out the intent, tone, and next step before filling the draft.
+                    </Shimmer>
+                    <Shimmer className="font-['Rubik'] text-[14px] leading-5 max-w-[72%]" duration={1.8} spread={1.2}>
+                      Finalizing a polished response.
+                    </Shimmer>
+                  </div>
+                </div>
+              ) : showReplyAnimation && replyText.trim() ? (
+                <div className="w-full min-h-[90px] rounded-2xl bg-white/80 backdrop-blur-md border border-black/10 p-3 relative z-10 shadow-sm overflow-hidden">
+                  <Shimmer
+                    className="whitespace-pre-wrap font-['Rubik'] text-[14px] leading-5"
+                    duration={2.2}
+                    spread={1.1}
+                  >
+                    {replyText}
+                  </Shimmer>
+                </div>
+              ) : (
+                <textarea
+                  value={replyText}
+                  onChange={(e) => {
+                    setShowReplyAnimation(false);
+                    setReplyText(e.target.value);
+                    setReplyVisible(true);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full resize-none rounded-2xl bg-white/80 backdrop-blur-md border border-black/10 p-3 font-['Rubik'] text-[14px] text-black leading-5 focus:outline-none focus:border-blue-400/50 placeholder:text-black/30 min-h-[90px] relative z-10 shadow-sm"
+                  placeholder="Type a reply or click AI Reply…"
+                />
+              )}
             </div>
 
-            <AnimatePresence>
-              {(replyVisible || replyText) && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0, y: -10 }}
-                  animate={{ opacity: 1, height: "auto", y: 0 }}
-                  exit={{ opacity: 0, height: 0, y: -10 }}
-                  className="overflow-hidden"
-                >
-                  <div className="flex items-center justify-end gap-2 mt-2">
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleMarkRead(); }}
+                disabled={markingRead}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-black/10 hover:bg-black/20 transition-colors disabled:opacity-50"
+              >
+                <Check className="w-3.5 h-3.5 text-black/60" />
+                <span className="font-['Rubik'] text-black/60 text-[12px]">{markingRead ? "Marking…" : "Mark as read"}</span>
+              </button>
+
+              <AnimatePresence mode="wait">
+                {(replyVisible || replyText) && (
+                  <motion.div
+                    key={sent ? "reply-sent" : "reply-send"}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 8 }}
+                  >
                     {sent ? (
                       <div className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-green-500/20">
-                        <Check className="w-3.5 h-3.5 text-green-700" /><span className="font-['Rubik'] text-green-700 text-[12px]">Sent!</span>
+                        <Check className="w-3.5 h-3.5 text-green-700" />
+                        <span className="font-['Rubik'] text-green-700 text-[12px]">Sent!</span>
                       </div>
                     ) : (
                       <button
@@ -1014,26 +1108,14 @@ function ExpandedEmailCard({
                         disabled={sending || !replyText.trim()}
                         className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-blue-500/80 hover:bg-blue-500 transition-colors disabled:opacity-40"
                       >
-                        <Send className="w-3.5 h-3.5 text-white" /><span className="font-['Rubik'] text-white text-[12px]">{sending ? "Sending…" : "Send"}</span>
+                        <Send className="w-3.5 h-3.5 text-white" />
+                        <span className="font-['Rubik'] text-white text-[12px]">{sending ? "Sending…" : "Send"}</span>
                       </button>
                     )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* Mark as read */}
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); handleMarkRead(); }}
-              disabled={markingRead}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-black/10 hover:bg-black/20 transition-colors disabled:opacity-50"
-            >
-              <Check className="w-3.5 h-3.5 text-black/60" />
-              <span className="font-['Rubik'] text-black/60 text-[12px]">{markingRead ? "Marking…" : "Mark as read"}</span>
-            </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
     </motion.div>

@@ -45,7 +45,7 @@ const emailSummarySchema = z.object({
       importance: z.enum(["high", "medium", "low"]).describe("Importance ranking for inbox triage."),
       shortTitle: z.string().describe("Concise AI title under 45 characters."),
       summary: z.string().describe("Markdown-friendly summary focused on why the email matters. Do not include a separate action-items section here."),
-      suggestedReply: z.string().describe('Professional 2-4 sentence reply draft. Return exactly "No reply needed." when a reply is unnecessary.'),
+      suggestedReply: z.string().describe('Professional 2-4 sentence reply draft tailored to the sender and request. Return exactly "No reply needed." only for pure FYI, promotional, or automated emails that clearly do not merit any response.'),
       actionItems: z.array(emailActionItemSchema).describe("Concrete recipient actions only when they are actually relevant. Otherwise return an empty array."),
       todoItems: z.array(emailTodoItemSchema).describe("Structured tasks only when the email naturally maps to trackable to-dos. Otherwise return an empty array."),
       calendarEvent: emailCalendarEventSchema.nullable().describe("Structured event draft only when the email contains enough scheduling detail to create one. Otherwise return null."),
@@ -76,9 +76,12 @@ Rules:
 - Only return actionItems when the recipient has something meaningful to do.
 - Only return todoItems when the email naturally maps to trackable tasks.
 - Only return calendarEvent when the email includes enough scheduling detail to create a reasonable event draft.
+- Draft a reply for most human-to-human emails, especially when there is a request, update, invitation, approval, scheduling note, deliverable, question, or follow-up opportunity.
+- When writing suggestedReply, infer a sensible response goal from the subject and preview, acknowledge the sender's context, and include the next step when one is implied.
+- Prefer a brief helpful reply over "No reply needed." when the email appears personal, collaborative, or work-related.
 - For nullable fields (dueLabel, notes, due, priority, location, attendees, description), return null when the information is not present.
 - Empty arrays and null are preferred over low-confidence guesses.
-- If the email is automated, promotional, or informational and does not need a response, return exactly "No reply needed.".
+- Return exactly "No reply needed." only if the email is clearly automated, promotional, bulk informational, or a status update that obviously does not warrant any response.
 - Do not invent dates, attendees, or deadlines that are not reasonably implied by the email.
 
 Importance guidance:

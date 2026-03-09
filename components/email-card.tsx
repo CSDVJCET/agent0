@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Paperclip, Check, Send, X, CalendarPlus, ListChecks } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { Shimmer } from "@/components/ai-elements/shimmer";
 
 export interface EmailActionItem {
   text: string;
@@ -134,11 +135,13 @@ export function EmailCard({
   const [markingRead, setMarkingRead] = useState(false);
   const [showReply, setShowReply] = useState(false);
   const [replyText, setReplyText] = useState("");
+  const [showReplyAnimation, setShowReplyAnimation] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const [todoState, setTodoState] = useState<"idle" | "loading" | "done">("idle");
   const [calendarState, setCalendarState] = useState<"idle" | "loading" | "done">("idle");
+  const replyAnimationTimeoutRef = useRef<number | null>(null);
 
   const diceBearUrl = `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(senderEmail)}`;
   const gravatarUrl = senderProfileUrl || diceBearUrl;
@@ -147,6 +150,34 @@ export function EmailCard({
   const displayTitle = shortTitle || subject;
   const displayBody = summary || bodySnippet;
   const primaryTodoItem = todoItems[0];
+
+  useEffect(() => {
+    return () => {
+      if (replyAnimationTimeoutRef.current !== null) {
+        window.clearTimeout(replyAnimationTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const revealSuggestedReply = (nextReply: string) => {
+    if (replyAnimationTimeoutRef.current !== null) {
+      window.clearTimeout(replyAnimationTimeoutRef.current);
+    }
+
+    setReplyText(nextReply);
+
+    if (!nextReply.trim()) {
+      setShowReplyAnimation(false);
+      replyAnimationTimeoutRef.current = null;
+      return;
+    }
+
+    setShowReplyAnimation(true);
+    replyAnimationTimeoutRef.current = window.setTimeout(() => {
+      setShowReplyAnimation(false);
+      replyAnimationTimeoutRef.current = null;
+    }, 1400);
+  };
 
   const handleMarkRead = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -162,7 +193,9 @@ export function EmailCard({
   const handleReplyClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setShowReply(true);
-    setReplyText(suggestedReply === "No reply needed." ? "" : (suggestedReply || ""));
+    revealSuggestedReply(
+      suggestedReply === "No reply needed." ? "" : (suggestedReply || "")
+    );
     setSent(false);
   };
 
@@ -220,8 +253,13 @@ export function EmailCard({
 
   const handleCancelReply = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (replyAnimationTimeoutRef.current !== null) {
+      window.clearTimeout(replyAnimationTimeoutRef.current);
+      replyAnimationTimeoutRef.current = null;
+    }
     setShowReply(false);
     setReplyText("");
+    setShowReplyAnimation(false);
     setSent(false);
   };
 
@@ -309,12 +347,27 @@ export function EmailCard({
                 transition={{ duration: 5, ease: "linear", repeat: Infinity }}
                 style={{ backgroundSize: "200% 200%" }}
               />
-              <textarea
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                className="flex-1 resize-none rounded-2xl bg-white/80 backdrop-blur-md border border-black/10 p-3 font-['Rubik'] text-[13px] text-black leading-5 tracking-[-0.23px] focus:outline-none focus:border-blue-400/50 placeholder:text-black/30 relative z-10 shadow-sm"
-                placeholder="Type your reply..."
-              />
+              {showReplyAnimation && replyText.trim() ? (
+                <div className="flex-1 min-h-[112px] rounded-2xl bg-white/80 backdrop-blur-md border border-black/10 p-3 relative z-10 shadow-sm overflow-hidden">
+                  <Shimmer
+                    className="whitespace-pre-wrap font-['Rubik'] text-[13px] leading-5 tracking-[-0.23px]"
+                    duration={2.2}
+                    spread={1.15}
+                  >
+                    {replyText}
+                  </Shimmer>
+                </div>
+              ) : (
+                <textarea
+                  value={replyText}
+                  onChange={(e) => {
+                    setShowReplyAnimation(false);
+                    setReplyText(e.target.value);
+                  }}
+                  className="flex-1 resize-none rounded-2xl bg-white/80 backdrop-blur-md border border-black/10 p-3 font-['Rubik'] text-[13px] text-black leading-5 tracking-[-0.23px] focus:outline-none focus:border-blue-400/50 placeholder:text-black/30 relative z-10 shadow-sm"
+                  placeholder="Type your reply..."
+                />
+              )}
               <div className="flex items-center gap-2 justify-end relative z-10">
                 <button
                   onClick={handleCancelReply}
