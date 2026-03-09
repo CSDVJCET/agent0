@@ -522,7 +522,7 @@ export function ChatUI() {
             transition={{ type: "spring", stiffness: 300, damping: 25 }}
             className="absolute inset-x-0 top-[14%] flex flex-col items-center justify-start pointer-events-auto z-0 scale-[0.675] sm:scale-[0.81] origin-top"
           >
-            <AtAGlance location="Kochi" weatherCondition="cloudy" emailCount={2} meetingCount={2} />
+            <AtAGlance location="Kochi" weatherCondition="cloudy" />
           </motion.div>
 
           {/* Email Carousel */}
