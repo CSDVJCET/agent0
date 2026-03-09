@@ -301,6 +301,16 @@ function MeetPlaceholder({ size = 68 }: { size?: number }) {
   );
 }
 
+// Microsoft Teams icon placeholder
+function TeamsPlaceholder({ size = 68 }: { size?: number }) {
+  const imgSize = Math.round(size * 0.6);
+  return (
+    <IconBox size={size}>
+      <Image src="/teams.svg" alt="Microsoft Teams" width={imgSize} height={imgSize} style={{ objectFit: "contain" }} />
+    </IconBox>
+  );
+}
+
 // ─── Weather helpers ─────────────────────────────────────────────────────────
 /** Map a WMO weather code + time-of-day to one of the /public/weather/ images. */
 function getWeatherImage(code: number, isNight: boolean, hour: number, isWindy: boolean): string {
