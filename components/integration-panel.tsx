@@ -112,6 +112,13 @@ const INTEGRATION_DETAILS: Record<string, { name: string; description: string; f
     functions: [
       { name: "searchMovie", description: "Search for a movie by title and return poster, year, runtime, genres, rating, and overview" }
     ]
+  },
+  image: {
+    name: "Image",
+    description: "Generate images from text prompts using Cloudflare Workers AI (Flux-1-Schnell).",
+    functions: [
+      { name: "generateImage", description: "Generate an image from a text prompt using Flux-1-Schnell model" }
+    ]
   }
 };
 
