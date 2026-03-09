@@ -452,6 +452,7 @@ export function ChatUI() {
 
     setInputValue("");
     setAttachments([]);
+    setMentionedTools([]);
     // Clear the file input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
