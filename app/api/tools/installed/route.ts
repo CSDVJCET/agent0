@@ -97,6 +97,14 @@ function getToolMetadata(id: string) {
       icon: "image",
     };
   }
+  if (id === "research") {
+    return {
+      name: "Research",
+      description: "Deep research across Wikipedia, PubMed, academic papers, and news creates reports",
+      category: "utility",
+      icon: "search",
+    };
+  }
   return {
     name: id,
     description: "Custom tool",
