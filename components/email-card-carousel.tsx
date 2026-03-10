@@ -229,8 +229,8 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
       setIsLoading(true);
       setError(null);
       try {
-        // Step 1: Fetch 20 unread messages
-        const msgRes = await fetch("/api/gmail/messages?maxResults=20&q=is:unread");
+        // Step 1: Fetch 20 unread messages from the last 2 days
+        const msgRes = await fetch("/api/gmail/messages?maxResults=20&q=is:unread%20newer_than:2d");
         const msgData = await msgRes.json();
 
         if (msgData.error || !msgData.messages) {
