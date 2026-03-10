@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { MicIcon, SquareIcon, Radio, MapPinIcon, XIcon, Volume2Icon } from "lucide-react";
+import { MicIcon, SquareIcon, Radio, MapPinIcon, XIcon, Volume2Icon, PauseIcon, PlayIcon, RotateCcwIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { useChat } from "@ai-sdk/react";
@@ -102,7 +102,25 @@ export function Voice({ className }: { className?: string }) {
   const overviewPlayingRef = useRef(false);
 
   const { isSpeaking, speak, stop: stopTTS } = useTTS();
-  const { isLoading: overviewLoading, isPlaying: overviewPlaying, script: overviewScript, error: overviewError, location, setLocation, playOverview, stopOverview } = useVoiceOverview();
+  const {
+    isLoading: overviewLoading,
+    isPlaying: overviewPlaying,
+    isPaused: overviewPaused,
+    isCached: overviewCached,
+    canReplay: overviewCanReplay,
+    script: overviewScript,
+    error: overviewError,
+    location,
+    currentTime: overviewCurrentTime,
+    duration: overviewDuration,
+    setLocation,
+    playOverview,
+    pauseOverview,
+    resumeOverview,
+    stopOverview,
+    replayOverview,
+    seekTo: overviewSeekTo,
+  } = useVoiceOverview();
   // Keep refs in sync so animation callbacks can read them without stale closures
   overviewLoadingRef.current = overviewLoading;
   overviewPlayingRef.current = overviewPlaying;
@@ -499,13 +517,14 @@ export function Voice({ className }: { className?: string }) {
     }
   }, [location, playOverview]);
 
-  // Handler: canvas click — toggles recording or overview
+  // Handler: canvas click — toggles recording or overview play/pause
   const handleCanvasClick = useCallback(() => {
-    if (isRecording)      { stopAll();      return; }
+    if (isRecording)      { stopAll();        return; }
     if (overviewLoading)  { return; }
-    if (overviewPlaying)  { stopOverview(); return; }
+    if (overviewPlaying)  { pauseOverview();  return; }
+    if (overviewPaused)   { resumeOverview(); return; }
     handlePlayOverview();
-  }, [isRecording, overviewLoading, overviewPlaying, stopAll, stopOverview, handlePlayOverview]);
+  }, [isRecording, overviewLoading, overviewPlaying, overviewPaused, stopAll, pauseOverview, resumeOverview, handlePlayOverview]);
 
   const handleLocationSubmit = useCallback(() => {
     const trimmed = locationInput.trim();
@@ -604,61 +623,97 @@ export function Voice({ className }: { className?: string }) {
                 : overviewLoading
                   ? "Generating briefing…"
                   : overviewPlaying
-                    ? "Tap to stop"
-                    : "Tap for daily briefing"}
+                    ? "Tap to pause"
+                    : overviewPaused
+                      ? "Tap to resume"
+                      : "Tap for daily briefing"}
             </div>
           </div>
         </motion.div>
 
         {/* Controls */}
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Overview / Briefing button */}
-          <Button
-            onClick={overviewPlaying ? stopOverview : handlePlayOverview}
-            type="button"
-            variant={overviewPlaying ? "destructive" : "default"}
-            disabled={overviewLoading}
-            className="gap-2"
-          >
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Overview controls */}
             {overviewLoading ? (
-              <>
+              <Button type="button" disabled className="gap-2">
                 <div className="size-4 rounded-full border-2 border-current/30 border-t-current animate-spin" />
                 Generating…
-              </>
+              </Button>
             ) : overviewPlaying ? (
               <>
-                <SquareIcon className="size-4" /> Stop Briefing
+                <Button type="button" onClick={pauseOverview} variant="default" className="gap-2">
+                  <PauseIcon className="size-4" /> Pause
+                </Button>
+                <Button type="button" onClick={stopOverview} variant="outline" size="icon" title="Stop">
+                  <SquareIcon className="size-4" />
+                </Button>
+              </>
+            ) : overviewPaused ? (
+              <>
+                <Button type="button" onClick={resumeOverview} variant="default" className="gap-2">
+                  <PlayIcon className="size-4" /> Resume
+                </Button>
+                <Button type="button" onClick={stopOverview} variant="outline" size="icon" title="Stop">
+                  <SquareIcon className="size-4" />
+                </Button>
+              </>
+            ) : overviewCanReplay ? (
+              <>
+                <Button type="button" onClick={replayOverview} variant="default" className="gap-2">
+                  <RotateCcwIcon className="size-4" /> Replay
+                </Button>
+                <Button type="button" onClick={handlePlayOverview} variant="outline" className="gap-2" title="Regenerate new briefing">
+                  <Radio className="size-4" /> Regenerate
+                </Button>
               </>
             ) : (
-              <>
+              <Button type="button" onClick={handlePlayOverview} variant="default" className="gap-2">
                 <Radio className="size-4" /> Play Overview
-              </>
+              </Button>
             )}
-          </Button>
 
-          {/* Mic button */}
-          <Button
-            onClick={toggle}
-            type="button"
-            variant="outline"
-            disabled={overviewLoading || overviewPlaying}
-            className="gap-2"
-          >
-            {isRecording ? (
-              <>
-                <SquareIcon className="size-4" /> Stop
-              </>
-            ) : (
-              <>
-                <MicIcon className="size-4" /> Record
-              </>
+            {/* Mic button */}
+            <Button
+              onClick={toggle}
+              type="button"
+              variant="outline"
+              disabled={overviewLoading || overviewPlaying || overviewPaused}
+              className="gap-2"
+            >
+              {isRecording ? (
+                <><SquareIcon className="size-4" /> Stop</>
+              ) : (
+                <><MicIcon className="size-4" /> Record</>
+              )}
+            </Button>
+
+            {!canUseMic && (
+              <span className="text-sm text-muted-foreground">
+                Microphone not available in this environment.
+              </span>
             )}
-          </Button>
+          </div>
 
-          {!canUseMic && (
-            <span className="text-sm text-muted-foreground">
-              Microphone not available in this environment.
-            </span>
+          {/* Progress bar */}
+          {(overviewPlaying || overviewPaused || (overviewCanReplay && overviewDuration > 0)) && overviewDuration > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground tabular-nums w-10 shrink-0 text-right">
+                {`${Math.floor(overviewCurrentTime / 60)}:${String(Math.floor(overviewCurrentTime % 60)).padStart(2, "0")}`}
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={overviewDuration}
+                step={0.1}
+                value={overviewCurrentTime}
+                onChange={(e) => overviewSeekTo(Number(e.target.value))}
+                className="flex-1 h-1 accent-primary cursor-pointer"
+              />
+              <span className="text-xs text-muted-foreground tabular-nums w-10 shrink-0">
+                {`${Math.floor(overviewDuration / 60)}:${String(Math.floor(overviewDuration % 60)).padStart(2, "0")}`}
+              </span>
+            </div>
           )}
         </div>
 
@@ -669,20 +724,33 @@ export function Voice({ className }: { className?: string }) {
           </div>
         )}
 
-        {/* Overview script (shown while overview plays) */}
-        {(overviewPlaying || overviewScript) && (
+        {/* Overview script */}
+        {(overviewPlaying || overviewPaused || overviewCanReplay || overviewScript) && (
           <div className="rounded-2xl border bg-card p-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Volume2Icon className="size-4 text-muted-foreground" />
                 Daily Briefing
               </div>
-              {overviewPlaying && (
-                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className="size-1.5 rounded-full bg-green-500 animate-pulse" />
-                  Playing
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {overviewCached && (
+                  <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                    cached
+                  </span>
+                )}
+                {overviewPlaying && (
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className="size-1.5 rounded-full bg-green-500 animate-pulse" />
+                    Playing
+                  </span>
+                )}
+                {overviewPaused && (
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className="size-1.5 rounded-full bg-yellow-500" />
+                    Paused
+                  </span>
+                )}
+              </div>
             </div>
             <div className="text-sm text-muted-foreground whitespace-pre-wrap break-words leading-relaxed">
               {overviewScript}
