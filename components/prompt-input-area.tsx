@@ -14,7 +14,8 @@ import {
   GithubIcon,
   ImageIcon,
   FilmIcon,
-  PresentationIcon
+  PresentationIcon,
+  SearchIcon
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -471,6 +472,8 @@ export function PromptInputArea({
                         ? FilmIcon
                         : toolLower === "slides"
                         ? PresentationIcon
+                        : toolLower === "research"
+                        ? SearchIcon
                         : CloudSunIcon;
                     
                     return (
