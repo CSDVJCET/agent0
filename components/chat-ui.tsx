@@ -43,6 +43,7 @@ export function ChatUI() {
     selectedModel, setSelectedModel,
     isModelOpen, setIsModelOpen,
     enableSearch, setEnableSearch,
+    enableUrlContext, setEnableUrlContext,
     enableThinking, setEnableThinking,
     mentionedTools, setMentionedTools,
     attachments, setAttachments,
@@ -102,6 +103,10 @@ export function ChatUI() {
     setSelectedModel,
     enableThinking,
     setEnableThinking,
+    enableSearch,
+    setEnableSearch,
+    enableUrlContext,
+    setEnableUrlContext,
     setAddedIntegrations,
     setIsCalendarConnected,
     setIsFormsConnected,
@@ -206,6 +211,7 @@ export function ChatUI() {
     setInputValue("");
     setMentionedTools([]);
     setEnableSearch(true);
+    setEnableUrlContext(true);
     setEnableThinking(true);
     // Clear the file input
     if (fileInputRef.current) {
@@ -217,7 +223,7 @@ export function ChatUI() {
       setMessages([]);
       localStorage.removeItem(STORAGE_KEYS.MESSAGES);
     }
-  }, [setMessages, setAttachments, setInputValue, setMentionedTools, setEnableSearch, setEnableThinking, fileInputRef, isSignedIn, createNewSession, selectedModel]);
+  }, [setMessages, setAttachments, setInputValue, setMentionedTools, setEnableSearch, setEnableUrlContext, setEnableThinking, fileInputRef, isSignedIn, createNewSession, selectedModel]);
 
   // Handle Escape key to close modal
   useEffect(() => {
@@ -443,7 +449,7 @@ export function ChatUI() {
           sessionId: currentSessionId ?? undefined,
           enableSearch,
           enableThinking: selectedModel.supportsThinking ? enableThinking : false,
-          enableUrlContext: true,
+          enableUrlContext,
           enableCodeExecution: true,
           mentionedTools,
         },
@@ -467,12 +473,12 @@ export function ChatUI() {
         model: selectedModel.id,
         enableSearch,
         enableThinking: selectedModel.supportsThinking ? enableThinking : false,
-        enableUrlContext: true,
+        enableUrlContext,
         enableCodeExecution: true,
         mentionedTools,
       },
     });
-  }, [regenerate, selectedModel, enableSearch, enableThinking, mentionedTools]);
+  }, [regenerate, selectedModel, enableSearch, enableUrlContext, enableThinking, mentionedTools]);
 
   // Prevent hydration mismatch by not rendering until loaded
   if (!isLoaded) return null;

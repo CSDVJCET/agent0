@@ -262,7 +262,7 @@ export async function POST(req: Request) {
       .join(' ')
       .trim()
     if (lastUserText) {
-      extractAndSaveMemories(userId, lastUserText).catch((e) =>
+      extractAndSaveMemories(userId, lastUserText, model).catch((e) =>
         console.error('[MemoryExtractor] Failed:', e)
       )
     }
