@@ -517,14 +517,14 @@ export const listPullRequests = tool({
 
 export const listRepositories = tool({
   description:
-    "List user's repositories or organization repositories. Returns a list of repos with name, description, stars, and URL. " +
+    "List user's repositories including owned and collaborated repos. Returns a list of repos with name, description, stars, and URL. " +
     "ALWAYS call this FIRST before any other GitHub operation when the user hasn't specified a repo. " +
-    "Use the most recently updated repo as the default context.",
+    "Use type='all' to list ALL repos (both owned and collaborated). Use the most recently updated repo as the default context.",
   inputSchema: z.object({
     type: z
-      .enum(["owner", "public", "member"])
-      .default("owner")
-      .describe("Type of repos to list: owner (user's repos), public, or member (org repos)"),
+      .enum(["all", "owner", "public", "member"])
+      .default("all")
+      .describe("Type of repos to list: all (owned + collaborated), owner (only user's own repos), public, or member (collaborated/org repos only)"),
     perPage: z
       .number()
       .int()
@@ -574,6 +574,80 @@ export const listRepositories = tool({
       return {
         success: false,
         error: formatGitHubError(error, "List repositories"),
+      };
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// 7b. List Collaborated Repositories
+// ---------------------------------------------------------------------------
+
+export const listCollaboratedRepositories = tool({
+  description:
+    "List repositories where the authenticated user is a collaborator but NOT the owner. " +
+    "This includes organization repos and repos explicitly shared with the user. " +
+    "Use this when the user asks to see repos they contribute to or collaborate on.",
+  inputSchema: z.object({
+    perPage: z
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .default(30)
+      .describe("Number of results per page (max 100)"),
+    sort: z
+      .enum(["created", "updated", "pushed", "full_name"])
+      .default("updated")
+      .describe("Sort order"),
+    direction: z
+      .enum(["asc", "desc"])
+      .default("desc")
+      .describe("Sort direction"),
+  }),
+  execute: async ({ perPage, sort, direction }) => {
+    try {
+      const octokit = getOctokit();
+
+      // Get authenticated user login to filter out owned repos
+      const { data: authUser } = await octokit.users.getAuthenticated();
+      const authenticatedLogin = authUser.login;
+
+      // type: "member" returns repos where user has push access but is not owner
+      const { data } = await octokit.repos.listForAuthenticatedUser({
+        type: "member",
+        per_page: perPage,
+        sort,
+        direction,
+      });
+
+      const repositories = data
+        .filter((repo) => repo.owner.login !== authenticatedLogin)
+        .map((repo) => ({
+          owner: repo.owner.login,
+          name: repo.name,
+          fullName: repo.full_name,
+          description: repo.description,
+          defaultBranch: repo.default_branch,
+          stars: repo.stargazers_count,
+          language: repo.language,
+          url: repo.html_url,
+          updatedAt: repo.updated_at,
+          private: repo.private,
+          role: "collaborator",
+        }));
+
+      return {
+        success: true,
+        count: repositories.length,
+        repositories,
+        authenticatedAs: authenticatedLogin,
+        message: `Found ${repositories.length} collaborated repositor${repositories.length === 1 ? "y" : "ies"}`,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: formatGitHubError(error, "List collaborated repositories"),
       };
     }
   },
@@ -866,6 +940,7 @@ export const githubTools = {
   commentOnPR,
   listPullRequests,
   listRepositories,
+  listCollaboratedRepositories,
   getRepository,
   listBranches,
   scheduleIssueCreation,

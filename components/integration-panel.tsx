@@ -98,6 +98,8 @@ const INTEGRATION_DETAILS: Record<string, { name: string; description: string; f
     name: "GitHub",
     description: "Manage repositories, issues, branches, and pull requests on GitHub.",
     functions: [
+      { name: "listRepositories", description: "List all owned and collaborated repos (use type='all' for everything)" },
+      { name: "listCollaboratedRepositories", description: "List repos where you are a collaborator but not the owner" },
       { name: "createIssue", description: "Create a new issue with title, body, and labels" },
       { name: "createBranch", description: "Create a branch from a base ref" },
       { name: "createPullRequest", description: "Open a new pull request" },
