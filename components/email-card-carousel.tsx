@@ -514,10 +514,6 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
     return (
       <div
         className="relative w-full pointer-events-auto my-4 select-none"
-        style={{
-          maskImage: "linear-gradient(to right, transparent, black 8%, black 92%, transparent)",
-          WebkitMaskImage: "linear-gradient(to right, transparent, black 8%, black 92%, transparent)",
-        }}
       >
         <div className="flex gap-4 overflow-hidden pb-4 pt-4" style={{ paddingLeft: "calc(50% - 253px)", paddingRight: "calc(50% - 253px)" }}>
           {[0, 1, 2].map((i) => (
@@ -567,10 +563,6 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
       <div
         className="relative w-full pointer-events-auto my-4 select-none"
         onClick={() => { if (expandedEmailId && !dragMoved.current) handleCloseExpanded(); }}
-        style={{
-          maskImage: "linear-gradient(to right, transparent, black 8%, black 92%, transparent)",
-          WebkitMaskImage: "linear-gradient(to right, transparent, black 8%, black 92%, transparent)",
-        }}
       >
         <div
           ref={scrollRef}
