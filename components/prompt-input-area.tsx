@@ -15,7 +15,8 @@ import {
   ImageIcon,
   FilmIcon,
   PresentationIcon,
-  SearchIcon
+  SearchIcon,
+  RefreshCwIcon
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -80,6 +81,7 @@ export function PromptInputArea({
     tasks: "bg-indigo-500/20 text-indigo-600",
     image: "bg-violet-500/20 text-violet-600",
     movie: "bg-amber-500/20 text-amber-600",
+    convert: "bg-indigo-500/20 text-indigo-600",
     default: "bg-neutral-500/20 text-neutral-800", // Default to black-ish/dark neutral as requested
   };
 
@@ -295,7 +297,7 @@ export function PromptInputArea({
             type="file"
             ref={fileInputRef}
             onChange={onFilesSelected}
-            accept="image/*,application/pdf,.txt,.md,.json,.csv"
+            accept="image/*,application/pdf,.txt,.md,.json,.csv,.xlsx,.xls,.docx,.doc,.pptx,.ppt,.tsv,.html,.odt,.ods,.odp"
             multiple
             className="hidden"
           />
@@ -473,6 +475,8 @@ export function PromptInputArea({
                         ? PresentationIcon
                         : toolLower === "research"
                         ? SearchIcon
+                        : toolLower === "convert"
+                        ? RefreshCwIcon
                         : CloudSunIcon;
                     
                     return (

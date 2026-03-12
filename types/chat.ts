@@ -23,6 +23,22 @@ export interface PdfOperationResult {
   }>;
 }
 
+// File conversion result stored in message metadata (never as tool parts)
+export interface ConvertResult {
+  error?: boolean;
+  message?: string;
+  fromFormat?: string;
+  toFormat?: string;
+  originalFileName?: string;
+  originalSize?: string;
+  files?: Array<{
+    fileName: string;
+    dataUrl: string;
+    size: string;
+    sizeBytes: number;
+  }>;
+}
+
 // Define message metadata schema for validation
 export const messageMetadataSchema = z.object({
   createdAt: z.number().optional(),
@@ -39,6 +55,8 @@ export const messageMetadataSchema = z.object({
     .optional(),
   // PDF operation results — stored in metadata, NOT as tool parts
   pdfResult: z.any().optional(),
+  // File conversion results — stored in metadata, NOT as tool parts
+  convertResult: z.any().optional(),
 });
 
 // Infer the type from the schema
