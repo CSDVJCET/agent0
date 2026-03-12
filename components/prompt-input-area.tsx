@@ -370,7 +370,6 @@ export function PromptInputArea({
                 <textarea
                     ref={textareaRef}
                     value={value}
-                    onClick={onOpenChat}
                     onChange={(e) => onChange(e.target.value)}
                     onKeyDown={handleKeyDown}
                     onScroll={handleScroll}
