@@ -46,6 +46,7 @@ export type PromptInputAreaProps = {
   addedIntegrations?: string[];
   onRefreshTools?: () => void;
   onOpenChat?: () => void; // Replaced onUpArrow
+  onFocus?: () => void;
 };
 
 export function PromptInputArea({
@@ -60,6 +61,7 @@ export function PromptInputArea({
   onToolMentionsChange,
   addedIntegrations = [],
   onOpenChat,
+  onFocus,
 }: PromptInputAreaProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -375,7 +377,10 @@ export function PromptInputArea({
                     onChange={(e) => onChange(e.target.value)}
                     onKeyDown={handleKeyDown}
                     onScroll={handleScroll}
-                    onFocus={() => setIsFocused(true)}
+                    onFocus={() => {
+                      setIsFocused(true);
+                      onFocus?.();
+                    }}
                     onBlur={() => setIsFocused(false)}
                     placeholder={mentionedTools.length > 0 ? "Send a message..." : "What would you like to ask me?"}
                     className="relative w-full bg-transparent border-none resize-none focus:ring-0 focus:outline-none text-[20px] px-3 py-1 max-h-[200px] overflow-y-auto placeholder:text-foreground/50 text-foreground font-medium font-sans"
