@@ -736,6 +736,11 @@ export function ChatUI() {
               onToolMentionsChange={setMentionedTools}
               addedIntegrations={addedIntegrations}
               onOpenChat={() => setIsChatModalOpen(true)}
+              onFocus={() => {
+                if (messages.length > 0) {
+                  setIsChatModalOpen(true);
+                }
+              }}
             />
           </div>
         </div>
