@@ -704,7 +704,7 @@ export function ChatUI() {
             initial={{ opacity: 0, scale: 0.8, y: 40 }}
             animate={isEmailExpanded ? { opacity: 0, y: 100 } : { opacity: 1, scale: 1, y: 0 }}
             transition={{ type: "spring", stiffness: 300, damping: 25, delay: isEmailExpanded ? 0 : 0.3 }}
-            className="absolute bottom-4 right-[2%] 2xl:right-[4%] pointer-events-auto hidden xl:flex scale-[0.52] lg:scale-[0.55] xl:scale-[0.585] origin-bottom-right items-center z-10"
+            className="absolute bottom-4 right-[2%] 2xl:right-[4%] pointer-events-auto hidden xl:flex scale-[0.52] lg:scale-[0.55] xl:scale-[0.585] origin-bottom-right items-center z-30"
           >
             <Music />
           </motion.div>
@@ -712,10 +712,10 @@ export function ChatUI() {
 
         {/* Input Area Container */}
         <div className={cn(
-          "absolute inset-x-0 bottom-8 px-4 transition-all duration-300",
+          "absolute inset-x-0 bottom-8 px-4 transition-all duration-300 pointer-events-none",
           isChatModalOpen ? "z-60" : "z-20"
         )}>
-          <div className="max-w-4xl mx-auto w-full flex flex-col items-center gap-3">
+          <div className="max-w-4xl mx-auto w-full flex flex-col items-center gap-3 pointer-events-auto">
             <PromptInputArea
               value={inputValue}
               onChange={setInputValue}
