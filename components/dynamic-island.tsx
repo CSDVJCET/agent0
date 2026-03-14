@@ -31,11 +31,68 @@ export function DynamicIsland({
 }: DynamicIslandProps) {
   const { user, isLoaded } = useUser();
   const [showControls, setShowControls] = React.useState(false);
+  const hideControlsTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isIslandHoveredRef = React.useRef(false);
+  const isModelOpenRef = React.useRef(isModelOpen);
+  const controlsCloseDelayMs = 180;
+
+  React.useEffect(() => {
+    isModelOpenRef.current = isModelOpen;
+  }, [isModelOpen]);
+
+  const clearHideControlsTimeout = React.useCallback(() => {
+    if (hideControlsTimeoutRef.current !== null) {
+      clearTimeout(hideControlsTimeoutRef.current);
+      hideControlsTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleHideControls = React.useCallback(() => {
+    clearHideControlsTimeout();
+    hideControlsTimeoutRef.current = setTimeout(() => {
+      if (isIslandHoveredRef.current || isModelOpenRef.current) {
+        return;
+      }
+      setShowControls(false);
+    }, controlsCloseDelayMs);
+  }, [clearHideControlsTimeout, controlsCloseDelayMs]);
+
+  React.useEffect(() => {
+    return () => {
+      clearHideControlsTimeout();
+    };
+  }, [clearHideControlsTimeout]);
+
+  const handleModelOpenChange = React.useCallback((open: boolean) => {
+    onModelOpenChange?.(open);
+    isModelOpenRef.current = open;
+
+    if (open) {
+      clearHideControlsTimeout();
+      setShowControls(true);
+      return;
+    }
+
+    if (!isIslandHoveredRef.current) {
+      scheduleHideControls();
+    }
+  }, [onModelOpenChange, clearHideControlsTimeout, scheduleHideControls]);
 
   return (
     <div className={cn("fixed top-6 left-1/2 -translate-x-1/2 z-50", className)}>
       <motion.div
-        onMouseLeave={() => setShowControls(false)}
+        onMouseEnter={() => {
+          isIslandHoveredRef.current = true;
+          clearHideControlsTimeout();
+          setShowControls(true);
+        }}
+        onMouseLeave={() => {
+          isIslandHoveredRef.current = false;
+          if (isModelOpenRef.current) {
+            return;
+          }
+          scheduleHideControls();
+        }}
         initial={{ y: -20, opacity: 0, filter: "blur(10px)" }}
         animate={{ y: 0, opacity: 1, filter: "blur(0px)" }}
         transition={{ type: "spring", stiffness: 300, damping: 25 }}
@@ -45,7 +102,11 @@ export function DynamicIsland({
         <motion.button
           whileHover={{ scale: 1.05, backgroundColor: "rgba(255,255,255,0.1)" }}
           whileTap={{ scale: 0.95 }}
-          onMouseEnter={() => setShowControls(true)}
+          onMouseEnter={() => {
+            isIslandHoveredRef.current = true;
+            clearHideControlsTimeout();
+            setShowControls(true);
+          }}
           onClick={onNewChat}
           className="flex items-center justify-center size-10 rounded-full bg-white/5 text-white/90 transition-colors border border-white/5 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] shrink-0"
         >
@@ -56,10 +117,16 @@ export function DynamicIsland({
             {showControls && (
             <motion.div
               key="island-controls"
-              initial={{ opacity: 0, scale: 0.9, width: 0 }}
+              layout
+              initial={{ opacity: 0, scale: 0.94, width: 0 }}
               animate={{ opacity: 1, scale: 1, width: "auto" }}
-              exit={{ opacity: 0, scale: 0.9, width: 0 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
+              exit={{ opacity: 0, scale: 0.96, width: 0 }}
+              transition={{
+                opacity: { duration: 0.14, ease: "easeOut" },
+                scale: { type: "spring", stiffness: 520, damping: 36, mass: 0.45 },
+                width: { type: "spring", stiffness: 560, damping: 38, mass: 0.42 },
+              }}
+              style={{ transformOrigin: "left center" }}
               className="flex items-center overflow-hidden"
             >
               <div className="w-px h-6 bg-white/8 mx-1 shrink-0" />
@@ -72,7 +139,7 @@ export function DynamicIsland({
                     selectedModel={selectedModel}
                     onSelectModel={onSelectModel}
                     isOpen={isModelOpen || false}
-                    onOpenChange={onModelOpenChange || (() => {})}
+                    onOpenChange={handleModelOpenChange}
                     className="h-10 border-none bg-transparent hover:bg-white/8 text-white/90 w-auto min-w-[130px] transition-colors rounded-full px-4 font-medium" 
                   />
                 )}

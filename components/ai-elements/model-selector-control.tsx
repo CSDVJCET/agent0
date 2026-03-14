@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import {
   ModelSelector,
   ModelSelectorTrigger,
@@ -42,6 +43,35 @@ export function ModelSelectorControl({
   onOpenChange,
   className,
 }: ModelSelectorControlProps) {
+  const closeTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearCloseTimeout = React.useCallback(() => {
+    if (closeTimeoutRef.current !== null) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+  }, []);
+
+  const openOnHover = React.useCallback(() => {
+    clearCloseTimeout();
+    if (!isOpen) {
+      onOpenChange(true);
+    }
+  }, [clearCloseTimeout, isOpen, onOpenChange]);
+
+  const scheduleClose = React.useCallback(() => {
+    clearCloseTimeout();
+    closeTimeoutRef.current = setTimeout(() => {
+      onOpenChange(false);
+    }, 120);
+  }, [clearCloseTimeout, onOpenChange]);
+
+  React.useEffect(() => {
+    return () => {
+      clearCloseTimeout();
+    };
+  }, [clearCloseTimeout]);
+
   // Group models by provider
   const googleModels = models.filter((m) => m.provider === "google");
   const groqModels = models.filter((m) => m.provider === "groq");
@@ -54,6 +84,8 @@ export function ModelSelectorControl({
         <Button
           variant="outline"
           size="sm"
+          onMouseEnter={openOnHover}
+          onMouseLeave={scheduleClose}
           className={cn(
             "h-8 gap-2 rounded-full border-dashed px-3 bg-background/50 backdrop-blur-sm",
             className
@@ -69,6 +101,8 @@ export function ModelSelectorControl({
         align="center" 
         sideOffset={12}
         avoidCollisions={true}
+        onMouseEnter={clearCloseTimeout}
+        onMouseLeave={scheduleClose}
         onOpenAutoFocus={(e) => {
           e.preventDefault();
         }}
