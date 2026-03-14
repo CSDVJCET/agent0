@@ -274,7 +274,7 @@ export function EmailCard({
       className="relative flex flex-col w-full min-w-[450px] max-w-[506px] h-80 bg-white/15 backdrop-blur-2xl border border-white/40 rounded-[32px] p-5 shrink-0 select-none cursor-pointer"
       style={{
         fontFamily: 'var(--font-rubik), Rubik, sans-serif',
-        boxShadow: "inset 0 1.5px 1px rgba(255,255,255,0.55), inset 0 -1px 1px rgba(0,0,0,0.06), 0 8px 32px rgba(0,0,0,0.10)",
+        boxShadow: "inset 0 1.5px 1px rgba(255,255,255,0.55), 0 8px 24px rgba(255,255,255,0.08)",
       }}
     >
       {/* Unread indicator dot */}
