@@ -307,6 +307,16 @@ VALID DIAGRAM TYPES (choose the most appropriate):
 - mindmap (for hierarchical concepts)
 - timeline (for chronological events)
 - graph TD / graph LR (simple node-edge graphs)
+- xychart-beta with bar (for bar charts and histogram-style binned counts)
+- xychart-beta with line (for line charts and area-style trend charts)
+- quadrantChart (for scatter plot style X/Y point placement)
+
+CHART MAPPING RULES:
+- Bar chart requests: use xychart-beta with bar
+- Line chart requests: use xychart-beta with line
+- Area chart requests: use xychart-beta with line (area-style trend approximation)
+- Scatter plot requests: use quadrantChart with points
+- Histogram requests: use xychart-beta with bar and bin labels on x-axis
 
 EXAMPLE CORRECT OUTPUT for "login page":
 \`\`\`mermaid
@@ -316,6 +326,15 @@ flowchart TD
     C -->|Yes| D[Dashboard]
     C -->|No| E[Error Message]
     E --> B
+\`\`\`
+
+EXAMPLE CORRECT OUTPUT for "bar chart showing sales for Jan: 120, Feb: 150, Mar: 180":
+\`\`\`mermaid
+xychart-beta
+    title "Monthly Sales"
+    x-axis [Jan, Feb, Mar]
+    y-axis "Sales" 0 --> 200
+    bar [120, 150, 180]
 \`\`\`
 
 Now generate the Mermaid diagram for: ${part.text}

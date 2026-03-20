@@ -73,7 +73,7 @@ const INTEGRATIONS = [
   {
     id: "mermaid",
     name: "Mermaid",
-    description: "Generate mermaid diagram code for flowcharts, sequences, and more.",
+    description: "Generate Mermaid diagrams and charts (bar, line, area-style, scatter, histogram).",
     icon: Network,
     color: "text-cyan-500",
     bgColor: "bg-cyan-500/10",

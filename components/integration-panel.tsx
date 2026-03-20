@@ -78,12 +78,17 @@ const INTEGRATION_DETAILS: Record<string, { name: string; description: string; f
   },
   mermaid: {
     name: "Mermaid",
-    description: "Generate Mermaid diagram code for flowcharts, sequences, and more.",
+    description: "Generate Mermaid diagrams and charts (bar, line, area-style, scatter, histogram).",
     functions: [
       { name: "generateDiagram", description: "Generate Mermaid diagram code based on description" },
       { name: "createFlowchart", description: "Create flowchart diagrams" },
       { name: "createSequenceDiagram", description: "Create sequence diagrams for interactions" },
-      { name: "createGanttChart", description: "Create Gantt charts for project timelines" }
+      { name: "createGanttChart", description: "Create Gantt charts for project timelines" },
+      { name: "createBarChart", description: "Create bar charts for categorical values" },
+      { name: "createLineChart", description: "Create line charts for trends over time" },
+      { name: "createAreaChart", description: "Create area-style trend charts" },
+      { name: "createScatterPlot", description: "Create scatter plot style X/Y point charts" },
+      { name: "createHistogram", description: "Create histogram-style binned frequency charts" }
     ]
   },
   slides: {
