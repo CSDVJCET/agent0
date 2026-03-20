@@ -92,6 +92,7 @@ export function DynamicIsland({
   return (
     <div className={cn("fixed top-6 left-1/2 -translate-x-1/2 z-50 w-max max-w-[min(92vw,960px)]", className)}>
       <motion.div
+        layout
         onMouseEnter={expandControls}
         onMouseLeave={() => {
           isIslandHoveredRef.current = false;
@@ -102,11 +103,16 @@ export function DynamicIsland({
         }}
         initial={{ y: -20, opacity: 0, filter: "blur(10px)" }}
         animate={{ y: 0, opacity: 1, filter: "blur(0px)" }}
-        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+        transition={{ 
+          layout: { duration: 0.4, ease: [0.32, 0.72, 0, 1] },
+          type: "spring", stiffness: 300, damping: 25 
+        }}
         className="inline-flex w-max max-w-full items-center gap-2 p-1.5 rounded-full bg-[#0A0A0A]/40 backdrop-blur-[32px] border border-white/8 shadow-[0_16px_32px_-8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.15),inset_0_-1px_0_rgba(0,0,0,0.2)]"
       >
         {/* Logo / New Chat */}
         <motion.button
+          layout
+          transition={{ layout: { duration: 0.4, ease: [0.32, 0.72, 0, 1] } }}
           whileHover={{ scale: 1.05, backgroundColor: "rgba(255,255,255,0.1)" }}
           whileTap={{ scale: 0.95 }}
           onMouseEnter={expandControls}
@@ -119,11 +125,13 @@ export function DynamicIsland({
         <AnimatePresence initial={false} mode="wait">
             {showControls && (
             <motion.div
+              layout
               key="island-controls"
               initial={{ opacity: 0, scaleX: 0.82, x: -10 }}
               animate={{ opacity: 1, scaleX: 1, x: 0 }}
               exit={{ opacity: 0, scaleX: 0.92, x: -6 }}
               transition={{
+                layout: { duration: 0.4, ease: [0.32, 0.72, 0, 1] },
                 opacity: { duration: 0.12, ease: "easeOut" },
                 scaleX: { type: "spring", stiffness: 540, damping: 34, mass: 0.48 },
                 x: { type: "spring", stiffness: 520, damping: 36, mass: 0.5 },
@@ -163,7 +171,11 @@ export function DynamicIsland({
         </AnimatePresence>
 
         {/* User Section */}
-        <div className="flex items-center gap-3 px-3 pr-1.5 shrink-0">
+        <motion.div 
+          layout
+          transition={{ layout: { duration: 0.4, ease: [0.32, 0.72, 0, 1] } }}
+          className="flex items-center gap-3 px-3 pr-1.5 shrink-0"
+        >
           <span className="text-base font-medium text-white/70 tracking-tight">Hello,</span>
 
           <SignedIn>
@@ -185,7 +197,7 @@ export function DynamicIsland({
               </button>
             </SignInButton>
           </SignedOut>
-        </div>
+        </motion.div>
       </motion.div>
     </div>
   );
