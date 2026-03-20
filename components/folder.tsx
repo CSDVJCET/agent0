@@ -37,7 +37,9 @@ export function Folder() {
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
 
   const fetchImages = () => {
-    fetch("/api/images/list")
+    fetch(`/api/images/list?t=${Date.now()}`, {
+      cache: "no-store",
+    })
       .then((r) => r.json())
       .then((data: { images: CarouselImage[] }) => {
         setImages(data.images ?? []);

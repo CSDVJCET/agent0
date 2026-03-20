@@ -33,11 +33,30 @@ export async function GET() {
       .map((b) => ({
         url: `/api/images/blob?url=${encodeURIComponent(b.url)}`,
         title: b.pathname.split("/").pop() ?? b.pathname,
+        pathname: b.pathname,
       }));
 
-    return Response.json({ images });
+    return Response.json(
+      { images },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      }
+    );
   } catch (err) {
     console.error("[images/list] Failed to list blobs:", err);
-    return Response.json({ images: [] });
+    return Response.json(
+      { images: [] },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      }
+    );
   }
 }

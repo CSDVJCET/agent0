@@ -5,6 +5,7 @@ import { motion, AnimatePresence, PanInfo, Variants } from 'motion/react';
 export interface CarouselImage {
   url: string;
   title: string;
+  pathname?: string;
 }
 
 const FULL_WIDTH_PX = 100;
@@ -85,7 +86,7 @@ export function ThumbnailCarousel({
     fetch('/api/images/delete', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: image.url }),
+      body: JSON.stringify({ pathname: image.pathname }),
     }).catch(console.error);
 
     // Give the particle animation a bit of time to play before removing from state
@@ -179,20 +180,6 @@ export function ThumbnailCarousel({
           </div>
         )}
 
-        {/* Delete Button */}
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={() => handleDelete(images[index])}
-          disabled={isDeleting}
-          className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-xl bg-white/40 text-red-500 border border-white/60 shadow-[0_4px_12px_rgba(0,0,0,0.1)] z-10 hover:bg-white/60 transition-colors"
-          title="Delete image"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-        </motion.button>
-
         {/* Prev Button */}
         <motion.button
           whileHover={{ scale: 1.1 }}
@@ -217,18 +204,33 @@ export function ThumbnailCarousel({
           </svg>
         </motion.button>
 
-        {/* Download Button */}
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={() => handleDownload(images[index].url, images[index].title)}
-          className="absolute bottom-4 right-4 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-xl bg-white/40 text-black/70 border border-white/60 shadow-[0_4px_12px_rgba(0,0,0,0.1)] z-10 hover:bg-white/60 transition-colors"
-          title="Download image"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
-        </motion.button>
+        <div className="absolute bottom-4 right-4 z-10 flex items-center gap-2">
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => handleDelete(images[index])}
+            disabled={isDeleting}
+            className="w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-xl bg-white/40 text-red-500 border border-white/60 shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:bg-white/60 transition-colors disabled:opacity-70"
+            title="Delete image"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </motion.button>
+
+          {/* Download Button */}
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => handleDownload(images[index].url, images[index].title)}
+            className="w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-xl bg-white/40 text-black/70 border border-white/60 shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:bg-white/60 transition-colors"
+            title="Download image"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+          </motion.button>
+        </div>
       </div>
 
       <Thumbnails 
