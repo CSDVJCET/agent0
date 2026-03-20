@@ -35,10 +35,8 @@ function PlaceholderImage({
 export function Folder() {
   const [images, setImages] = useState<CarouselImage[]>([]);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
-  const [isFetching, setIsFetching] = useState(false);
 
   const fetchImages = () => {
-    setIsFetching(true);
     fetch("/api/images/list")
       .then((r) => r.json())
       .then((data: { images: CarouselImage[] }) => {
@@ -46,8 +44,7 @@ export function Folder() {
       })
       .catch((err) => {
         console.error("[Folder] Failed to fetch blob images:", err);
-      })
-      .finally(() => setIsFetching(false));
+      });
   };
 
   // Fetch on mount so previews are ready
@@ -174,7 +171,10 @@ export function Folder() {
               Image Gallery {images.length > 0 && `(${images.length})`}
             </DialogTitle>
           </DialogHeader>
-          <ThumbnailCarousel images={images} />
+          <ThumbnailCarousel 
+            images={images} 
+            onDelete={(item) => setImages(prev => prev.filter(img => img.url !== item.url))}
+          />
         </DialogContent>
       </Dialog>
     </>

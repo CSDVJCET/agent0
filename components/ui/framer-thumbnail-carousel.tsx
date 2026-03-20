@@ -38,7 +38,13 @@ const slideVariants: Variants = {
   }),
 };
 
-export function ThumbnailCarousel({ images }: { images: CarouselImage[] }) {
+export function ThumbnailCarousel({ 
+  images, 
+  onDelete 
+}: { 
+  images: CarouselImage[];
+  onDelete?: (item: CarouselImage) => void;
+}) {
   const [[page, direction], setPage] = useState([0, 0]);
 
   const index = ((page % images.length) + images.length) % images.length;
@@ -59,6 +65,39 @@ export function ThumbnailCarousel({ images }: { images: CarouselImage[] }) {
 
   // Square image area sized to roughly fill 80vh after accounting for dialog chrome (30% bigger than 60vh)
   const imgSize = 'calc(80vh - 8rem)';
+
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [particles, setParticles] = useState<{ angle: number; distance: number; size: number; rotate: number }[]>([]);
+
+  const handleDelete = async (image: CarouselImage) => {
+    // Pre-calculate particles before starting animation
+    setParticles(
+      Array.from({ length: 30 }).map(() => ({
+        angle: Math.random() * Math.PI * 2,
+        distance: Math.random() * 150 + 50,
+        size: Math.random() * 8 + 4,
+        rotate: Math.random() * 360,
+      }))
+    );
+    setIsDeleting(true);
+    
+    // Call the delete API in the background
+    fetch('/api/images/delete', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: image.url }),
+    }).catch(console.error);
+
+    // Give the particle animation a bit of time to play before removing from state
+    setTimeout(() => {
+      setIsDeleting(false);
+      onDelete?.(image);
+      // Adjust page if we deleted the last item and are out of bounds
+      if (index === images.length - 1 && images.length > 1) {
+        setPage([page - 1, -1]);
+      }
+    }, 400); // 400ms for particles
+  };
 
   const handleDownload = async (url: string, title?: string) => {
     try {
@@ -99,23 +138,60 @@ export function ThumbnailCarousel({ images }: { images: CarouselImage[] }) {
       {/* Main Carousel - Square */}
       <div className="relative overflow-hidden rounded-[1.5rem] w-full aspect-square bg-white/10 backdrop-blur-sm border border-white/40 shadow-[inset_0_0_10px_rgba(255,255,255,0.2)]">
         <AnimatePresence initial={false} custom={direction}>
-          <motion.img
-            key={page}
-            src={images[index].url}
-            alt={images[index].title || `Image ${index + 1}`}
-            custom={direction}
-            variants={slideVariants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={1}
-            onDragEnd={handleDragEnd}
-            className="absolute top-0 left-0 w-full h-full object-cover select-none cursor-grab active:cursor-grabbing"
-            draggable={false}
-          />
+          {!isDeleting && (
+            <motion.img
+              key={page}
+              src={images[index].url}
+              alt={images[index].title || `Image ${index + 1}`}
+              custom={direction}
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={1}
+              onDragEnd={handleDragEnd}
+              className="absolute top-0 left-0 w-full h-full object-cover select-none cursor-grab active:cursor-grabbing"
+              draggable={false}
+            />
+          )}
         </AnimatePresence>
+
+        {isDeleting && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
+            {particles.map((p, i) => (
+              <motion.div
+                key={i}
+                initial={{ x: 0, y: 0, scale: 1, opacity: 1, rotate: 0 }}
+                animate={{
+                  x: Math.cos(p.angle) * p.distance,
+                  y: Math.sin(p.angle) * p.distance,
+                  scale: 0,
+                  opacity: 0,
+                  rotate: p.rotate,
+                }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                className="absolute rounded-sm bg-white"
+                style={{ width: p.size, height: p.size, backgroundImage: `url(${images[index].url})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Delete Button */}
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => handleDelete(images[index])}
+          disabled={isDeleting}
+          className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-xl bg-white/40 text-red-500 border border-white/60 shadow-[0_4px_12px_rgba(0,0,0,0.1)] z-10 hover:bg-white/60 transition-colors"
+          title="Delete image"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </motion.button>
 
         {/* Prev Button */}
         <motion.button
