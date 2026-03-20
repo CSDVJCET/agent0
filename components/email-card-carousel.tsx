@@ -162,6 +162,9 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
   const lastTime = useRef(0);
   const velocity = useRef(0);
   const motionStop = useRef<(() => void) | null>(null);
+  const wheelTargetRef = useRef<number | null>(null);
+  const wheelRafRef = useRef<number | null>(null);
+  const wheelSnapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const expandedEmail = expandedEmailId ? emails.find((e) => e.id === expandedEmailId) : null;
 
@@ -170,6 +173,23 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
       clearCache(selectedModel);
     }
   }, [selectedModel]);
+
+  useEffect(() => {
+    return () => {
+      if (motionStop.current) {
+        motionStop.current();
+        motionStop.current = null;
+      }
+      if (wheelRafRef.current !== null) {
+        cancelAnimationFrame(wheelRafRef.current);
+        wheelRafRef.current = null;
+      }
+      if (wheelSnapTimeoutRef.current !== null) {
+        clearTimeout(wheelSnapTimeoutRef.current);
+        wheelSnapTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const createTodoFromEmail = useCallback(async (email: EnrichedEmail, item: EmailTodoItem) => {
     const res = await fetch("/api/tasks/create", {
@@ -418,27 +438,82 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [expandedEmailId, handleCloseExpanded]);
 
-  // ─── Drag / scroll handlers (unchanged logic) ─────────────────────────────
+  // ─── Drag / scroll handlers ───────────────────────────────────────────────
   const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    if (!scrollRef.current || e.deltaY === 0) return;
+    if (!scrollRef.current) return;
+    const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    if (delta === 0) return;
     e.preventDefault();
-    if (motionStop.current) { motionStop.current(); motionStop.current = null; }
+
+    if (motionStop.current) {
+      motionStop.current();
+      motionStop.current = null;
+    }
+
     const container = scrollRef.current;
-    const projected = container.scrollLeft + e.deltaY * 2;
-    const target = findSnapTarget(container, projected);
-    const controls = animate(container.scrollLeft, target, {
-      type: "spring",
-      stiffness: 260,
-      damping: 32,
-      mass: 0.8,
-      onUpdate: (v) => { if (scrollRef.current) scrollRef.current.scrollLeft = v; },
-    });
-    motionStop.current = () => controls.stop();
+    const maxScroll = Math.max(0, container.scrollWidth - container.clientWidth);
+    const currentTarget = wheelTargetRef.current ?? container.scrollLeft;
+    const nextTarget = Math.min(maxScroll, Math.max(0, currentTarget + delta * 1.2));
+    wheelTargetRef.current = nextTarget;
+
+    if (wheelRafRef.current === null) {
+      const tick = () => {
+        const node = scrollRef.current;
+        const targetValue = wheelTargetRef.current;
+        if (!node || targetValue === null) {
+          wheelRafRef.current = null;
+          return;
+        }
+
+        const diff = targetValue - node.scrollLeft;
+        if (Math.abs(diff) < 0.5) {
+          node.scrollLeft = targetValue;
+          wheelRafRef.current = null;
+          return;
+        }
+
+        node.scrollLeft += diff * 0.22;
+        wheelRafRef.current = requestAnimationFrame(tick);
+      };
+
+      wheelRafRef.current = requestAnimationFrame(tick);
+    }
+
+    if (wheelSnapTimeoutRef.current !== null) {
+      clearTimeout(wheelSnapTimeoutRef.current);
+    }
+
+    wheelSnapTimeoutRef.current = setTimeout(() => {
+      const node = scrollRef.current;
+      if (!node) return;
+      const target = findSnapTarget(node, wheelTargetRef.current ?? node.scrollLeft);
+      const controls = animate(node.scrollLeft, target, {
+        type: "spring",
+        stiffness: 220,
+        damping: 34,
+        mass: 0.95,
+        onUpdate: (v) => {
+          if (scrollRef.current) scrollRef.current.scrollLeft = v;
+        },
+      });
+      motionStop.current = () => controls.stop();
+      wheelTargetRef.current = null;
+      wheelSnapTimeoutRef.current = null;
+    }, 140);
   }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!scrollRef.current) return;
     if (motionStop.current) { motionStop.current(); motionStop.current = null; }
+    if (wheelRafRef.current !== null) {
+      cancelAnimationFrame(wheelRafRef.current);
+      wheelRafRef.current = null;
+    }
+    if (wheelSnapTimeoutRef.current !== null) {
+      clearTimeout(wheelSnapTimeoutRef.current);
+      wheelSnapTimeoutRef.current = null;
+    }
+    wheelTargetRef.current = null;
     isDraggingRef.current = true;
     dragMoved.current = false;
     setIsDragging(true);
@@ -455,7 +530,8 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
     const now = performance.now();
     const dt = now - lastTime.current;
     if (dt > 0) {
-      velocity.current = ((lastX.current - e.pageX) / dt) * 1000;
+      const instantVelocity = ((lastX.current - e.pageX) / dt) * 1000;
+      velocity.current = velocity.current * 0.72 + instantVelocity * 0.28;
     }
     lastX.current = e.pageX;
     lastTime.current = now;
@@ -471,7 +547,7 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
     setIsDragging(false);
 
     const container = scrollRef.current;
-    const v = velocity.current;
+    const v = Math.max(-2200, Math.min(2200, velocity.current));
     const DECEL = 1800;
     const coasting = (v * Math.abs(v)) / (2 * DECEL);
     const projected = container.scrollLeft + coasting;
@@ -480,12 +556,13 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
     const controls = animate(container.scrollLeft, target, {
       type: "spring",
       velocity: v,
-      stiffness: 260,
-      damping: 32,
-      mass: 0.8,
+      stiffness: 220,
+      damping: 34,
+      mass: 0.95,
       onUpdate: (latest) => { if (scrollRef.current) scrollRef.current.scrollLeft = latest; },
     });
     motionStop.current = () => controls.stop();
+    velocity.current = 0;
   }, []);
 
   const handleMouseLeave = useCallback(() => {
