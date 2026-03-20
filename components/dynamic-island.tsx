@@ -31,36 +31,105 @@ export function DynamicIsland({
 }: DynamicIslandProps) {
   const { user, isLoaded } = useUser();
   const [showControls, setShowControls] = React.useState(false);
+  const hideControlsTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isIslandHoveredRef = React.useRef(false);
+  const isModelOpenRef = React.useRef(isModelOpen);
+  const controlsCloseDelayMs = 180;
+
+  React.useEffect(() => {
+    isModelOpenRef.current = isModelOpen;
+  }, [isModelOpen]);
+
+  const clearHideControlsTimeout = React.useCallback(() => {
+    if (hideControlsTimeoutRef.current !== null) {
+      clearTimeout(hideControlsTimeoutRef.current);
+      hideControlsTimeoutRef.current = null;
+    }
+  }, []);
+
+  const expandControls = React.useCallback(() => {
+    if (isIslandHoveredRef.current && showControls) {
+      clearHideControlsTimeout();
+      return;
+    }
+
+    isIslandHoveredRef.current = true;
+    clearHideControlsTimeout();
+    setShowControls(true);
+  }, [clearHideControlsTimeout, showControls]);
+
+  const scheduleHideControls = React.useCallback(() => {
+    clearHideControlsTimeout();
+    hideControlsTimeoutRef.current = setTimeout(() => {
+      if (isIslandHoveredRef.current || isModelOpenRef.current) {
+        return;
+      }
+      setShowControls(false);
+    }, controlsCloseDelayMs);
+  }, [clearHideControlsTimeout, controlsCloseDelayMs]);
+
+  React.useEffect(() => {
+    return () => {
+      clearHideControlsTimeout();
+    };
+  }, [clearHideControlsTimeout]);
+
+  const handleModelOpenChange = React.useCallback((open: boolean) => {
+    onModelOpenChange?.(open);
+    isModelOpenRef.current = open;
+
+    if (open) {
+      clearHideControlsTimeout();
+      setShowControls(true);
+      return;
+    }
+
+    if (!isIslandHoveredRef.current) {
+      scheduleHideControls();
+    }
+  }, [onModelOpenChange, clearHideControlsTimeout, scheduleHideControls]);
 
   return (
-    <div className={cn("fixed top-6 left-1/2 -translate-x-1/2 z-50", className)}>
+    <div className={cn("fixed top-6 left-1/2 -translate-x-1/2 z-50 w-max max-w-[min(92vw,960px)]", className)}>
       <motion.div
-        onMouseLeave={() => setShowControls(false)}
+        onMouseEnter={expandControls}
+        onMouseLeave={() => {
+          isIslandHoveredRef.current = false;
+          if (isModelOpenRef.current) {
+            return;
+          }
+          scheduleHideControls();
+        }}
         initial={{ y: -20, opacity: 0, filter: "blur(10px)" }}
         animate={{ y: 0, opacity: 1, filter: "blur(0px)" }}
         transition={{ type: "spring", stiffness: 300, damping: 25 }}
-        className="flex items-center gap-2 p-1.5 rounded-full bg-[#0A0A0A]/40 backdrop-blur-[32px] border border-white/8 shadow-[0_16px_32px_-8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.15),inset_0_-1px_0_rgba(0,0,0,0.2)]"
+        className="inline-flex w-max max-w-full items-center gap-2 p-1.5 rounded-full bg-[#0A0A0A]/40 backdrop-blur-[32px] border border-white/8 shadow-[0_16px_32px_-8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.15),inset_0_-1px_0_rgba(0,0,0,0.2)]"
       >
         {/* Logo / New Chat */}
         <motion.button
           whileHover={{ scale: 1.05, backgroundColor: "rgba(255,255,255,0.1)" }}
           whileTap={{ scale: 0.95 }}
-          onMouseEnter={() => setShowControls(true)}
+          onMouseEnter={expandControls}
           onClick={onNewChat}
           className="flex items-center justify-center size-10 rounded-full bg-white/5 text-white/90 transition-colors border border-white/5 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] shrink-0"
         >
           <TreePine className="size-5" />
         </motion.button>
 
-        <AnimatePresence mode="popLayout">
+        <AnimatePresence initial={false} mode="wait">
             {showControls && (
             <motion.div
               key="island-controls"
-              initial={{ opacity: 0, scale: 0.9, width: 0 }}
-              animate={{ opacity: 1, scale: 1, width: "auto" }}
-              exit={{ opacity: 0, scale: 0.9, width: 0 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-              className="flex items-center overflow-hidden"
+              initial={{ opacity: 0, scaleX: 0.82, x: -10 }}
+              animate={{ opacity: 1, scaleX: 1, x: 0 }}
+              exit={{ opacity: 0, scaleX: 0.92, x: -6 }}
+              transition={{
+                opacity: { duration: 0.12, ease: "easeOut" },
+                scaleX: { type: "spring", stiffness: 540, damping: 34, mass: 0.48 },
+                x: { type: "spring", stiffness: 520, damping: 36, mass: 0.5 },
+              }}
+              style={{ transformOrigin: "left center" }}
+              className="inline-flex max-w-full items-center overflow-hidden will-change-transform"
             >
               <div className="w-px h-6 bg-white/8 mx-1 shrink-0" />
 
@@ -72,7 +141,7 @@ export function DynamicIsland({
                     selectedModel={selectedModel}
                     onSelectModel={onSelectModel}
                     isOpen={isModelOpen || false}
-                    onOpenChange={onModelOpenChange || (() => {})}
+                    onOpenChange={handleModelOpenChange}
                     className="h-10 border-none bg-transparent hover:bg-white/8 text-white/90 w-auto min-w-[130px] transition-colors rounded-full px-4 font-medium" 
                   />
                 )}
