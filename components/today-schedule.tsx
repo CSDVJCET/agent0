@@ -464,48 +464,41 @@ export function TodaySchedule({ className }: TodayScheduleProps) {
               variants={listVariants}
               initial="hidden"
               animate="visible"
-              className="flex items-stretch gap-3 flex-1"
+              className="flex flex-col gap-3 flex-1"
               role="list"
             >
-              {/* Vertical timeline */}
-              <div
-                className="flex flex-col items-center shrink-0"
-                style={{ width: "20px" }}
-                aria-hidden="true"
-              >
-                {events.map((event, i) => (
-                    <div
-                      key={i}
-                      className="flex flex-col items-center"
-                      style={{ flex: 1, minHeight: "58px" }}
-                    >
-                      <TimelineDot isAccent={i === accentIndex} />
-                      {i < events.length - 1 && (
-                        <div
-                          className="flex-1 mt-1"
-                          style={{
-                            width: "1px",
-                            backgroundImage:
-                              "repeating-linear-gradient(to bottom, rgba(255,255,255,0.6) 0px, rgba(255,255,255,0.6) 4px, transparent 4px, transparent 10px)",
-                            minHeight: "14px",
-                          }}
-                        />
-                      )}
-                    </div>
-                ))}
-              </div>
+              {events.map((event, i) => (
+                <div key={i} className="flex gap-3">
+                  {/* Timeline section per event */}
+                  <div
+                    className="flex flex-col items-center shrink-0"
+                    style={{ width: "20px" }}
+                    aria-hidden="true"
+                  >
+                    <TimelineDot isAccent={i === accentIndex} />
+                    {i < events.length - 1 && (
+                      <div
+                        className="flex-1 mt-1"
+                        style={{
+                          width: "1px",
+                          backgroundImage:
+                            "repeating-linear-gradient(to bottom, rgba(255,255,255,0.6) 0px, rgba(255,255,255,0.6) 4px, transparent 4px, transparent 10px)",
+                          minHeight: "14px",
+                        }}
+                      />
+                    )}
+                  </div>
 
-              {/* Cards */}
-              <div className="flex flex-col gap-2 flex-1">
-                {events.map((event, i) => (
-                  <EventCard
-                    key={i}
-                    event={event}
-                    isAccent={i === accentIndex}
-                    index={i}
-                  />
-                ))}
-              </div>
+                  {/* Card */}
+                  <div className="flex-1">
+                    <EventCard
+                      event={event}
+                      isAccent={i === accentIndex}
+                      index={i}
+                    />
+                  </div>
+                </div>
+              ))}
             </motion.div>
           )}
         </AnimatePresence>
