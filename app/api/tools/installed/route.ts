@@ -52,7 +52,7 @@ function getToolMetadata(id: string) {
   if (id === "mermaid") {
     return {
       name: "Mermaid",
-      description: "Generate mermaid diagram code for flowcharts, sequences, and more",
+      description: "Generate Mermaid diagrams and charts (bar, line, area-style, scatter, histogram)",
       category: "utility",
       icon: "network",
     };
