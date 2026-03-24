@@ -3,8 +3,9 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
-import { Blocks, TreePine, Plus } from "lucide-react";
+import { Blocks, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/logo";
 import { UserButton, SignedIn, SignedOut, SignInButton, useUser } from "@clerk/nextjs";
 import { ModelSelectorControl, Model, ModelSelectorControlProps } from "@/components/ai-elements/model-selector-control";
 
@@ -117,9 +118,9 @@ export function DynamicIsland({
           whileTap={{ scale: 0.95 }}
           onMouseEnter={expandControls}
           onClick={onNewChat}
-          className="flex items-center justify-center size-10 rounded-full bg-white/5 text-white/90 transition-colors border border-white/5 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] shrink-0"
+          className="flex items-center justify-center size-10 rounded-full bg-[#0ea5ff] text-white/90 transition-colors border border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] shrink-0 overflow-hidden"
         >
-          <TreePine className="size-5" />
+          <Logo size="sm" className="scale-125" />
         </motion.button>
 
         <AnimatePresence initial={false} mode="wait">

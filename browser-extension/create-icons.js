@@ -1,42 +1,72 @@
-// Simple script to create placeholder icons
+#!/usr/bin/env node
+
+/**
+ * Script to convert logo.svg to PNG icons for the browser extension
+ * Requires: npm install sharp
+ */
+
 const fs = require('fs');
 const path = require('path');
 
-// Create a simple icon template
-const createIcon = (size, filename) => {
-  // For now, create a simple colored square using SVG
-  console.log(`Creating ${filename} (${size}x${size})...`);
-  
-  // Write a simple blue square
+async function createIconsFromSvg() {
   try {
-    // Create SVG and convert manually
-    const svg = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-  <rect width="${size}" height="${size}" fill="#3B82F6"/>
-  <text x="50%" y="50%" font-family="Arial" font-size="${Math.floor(size/2)}" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="middle">A0</text>
-</svg>`;
-    
-    const svgPath = path.join(__dirname, 'icons', `temp_${size}.svg`);
-    fs.writeFileSync(svgPath, svg);
-    console.log(`Created ${svgPath}`);
-    console.log(`Please convert this SVG to PNG manually or use an online converter`);
-    
-  } catch (err) {
-    console.error(`Error creating ${filename}:`, err.message);
-  }
-};
+    const sharp = require('sharp');
+    const logoPath = path.join(__dirname, 'icons', 'logo.svg');
+    const iconsDir = path.join(__dirname, 'icons');
 
-// Create icons directory if it doesn't exist
-const iconsDir = path.join(__dirname, 'icons');
-if (!fs.existsSync(iconsDir)) {
-  fs.mkdirSync(iconsDir, { recursive: true });
+    // Ensure icons directory exists
+    if (!fs.existsSync(iconsDir)) {
+      fs.mkdirSync(iconsDir, { recursive: true });
+    }
+
+    // Check if logo.svg exists
+    if (!fs.existsSync(logoPath)) {
+      console.error('❌ Error: logo.svg not found at', logoPath);
+      console.error('Please ensure logo.svg exists in the icons directory');
+      process.exit(1);
+    }
+
+    // Define icon sizes for browser extension
+    const sizes = [16, 48, 128];
+
+    console.log('🎨 Creating browser extension icons from logo.svg...\n');
+
+    // Create each size
+    for (const size of sizes) {
+      const outputPath = path.join(iconsDir, `icon${size}.png`);
+
+      try {
+        await sharp(logoPath)
+          .resize(size, size, {
+            fit: 'cover',
+            position: 'center'
+          })
+          .png()
+          .toFile(outputPath);
+
+        console.log(`✅ Created icon${size}.png (${size}x${size}px)`);
+      } catch (err) {
+        console.error(`❌ Failed to create icon${size}.png:`, err.message);
+      }
+    }
+
+    console.log('\n✨ Icon generation complete!');
+    console.log('📦 Icons are ready for the browser extension');
+
+  } catch (err) {
+    if (err.code === 'MODULE_NOT_FOUND') {
+      console.error('❌ sharp module not found');
+      console.error('\nTo fix, install sharp:');
+      console.error('  npm install sharp\n');
+      console.error('Then run this script again:');
+      console.error('  node create-icons.js\n');
+      process.exit(1);
+    } else {
+      console.error('❌ Error:', err.message);
+      process.exit(1);
+    }
+  }
 }
 
-// Create icons
-createIcon(16, 'icon16.png');
-createIcon(48, 'icon48.png');
-createIcon(128, 'icon128.png');
-
-console.log('\nNote: SVG files created. For PNG conversion:');
-console.log('1. Use online converter: https://cloudconvert.com/svg-to-png');
-console.log('2. Or install sharp: npm install sharp');
-console.log('3. Or the extension will work without icons (browser shows default)');
+// Run the script
+createIconsFromSvg();

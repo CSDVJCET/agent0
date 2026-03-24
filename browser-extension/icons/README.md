@@ -1,23 +1,60 @@
-# Agent0 Screenshot Extension - Icon Guide
+# Logo & Icon Guide
 
-This folder should contain the extension icons in the following sizes:
+This directory contains the Agent0 logo and browser extension icons.
 
-- **icon16.png** - 16x16 pixels (toolbar icon)
-- **icon48.png** - 48x48 pixels (extension management page)
-- **icon128.png** - 128x128 pixels (Chrome Web Store listing)
+## Files
 
-## Creating Icons
+- **logo.svg** - Master logo file with cloud animation
+- **icon16.png** - 16×16px browser extension icon
+- **icon48.png** - 48×48px browser extension icon
+- **icon128.png** - 128×128px browser extension icon
+- **icon.svg** - Legacy SVG file (placeholder)
 
-You can create icons using any image editor. Here are some options:
+## Generating Icons
 
-### Option 1: Use an Online Generator
-- Visit [Favicon.io](https://favicon.io/) or similar tools
-- Create a simple icon with "A0" or camera symbol
-- Download and resize to the required dimensions
+All icons are generated from `logo.svg` using the icon generation script.
 
-### Option 2: Use Design Tools
-- **Figma**: Create 128x128 artboard, export at different scales
-- **Canva**: Use built-in templates for app icons
+### Generate Extension Icons
+
+From the root directory:
+```bash
+npm run generate:icons
+```
+
+This creates PNG files (16, 48, 128) from the logo.svg using the Sharp library.
+
+### How It Works
+
+The `create-icons.js` script:
+1. Reads `logo.svg` 
+2. Resizes to each required dimension
+3. Centers and crops the output
+4. Saves as PNG with proper compression
+
+## updating the Logo
+
+Edit `logo.svg` and regenerate:
+```bash
+npm run generate:icons
+```
+
+The new icons will be created automatically, and the browser extension will use them after reload.
+
+## Icon Specifications
+
+- **icon16.png**: 16×16 pixels (toolbar, context menus)
+- **icon48.png**: 48×48 pixels (extension page, popups)
+- **icon128.png**: 128×128 pixels (store listings, large displays)
+
+All are embedded in `manifest.json` at different scales for optimal display.
+
+## Logo Design
+
+The logo features:
+- Blue sky background (#0ea5ff)
+- Floating white clouds with CSS animations
+- Clean, simple design that scales well
+- Animated SVG (animation is not preserved in PNG conversion)
 - **Photoshop/GIMP**: Create and export at required sizes
 
 ### Design Suggestions
