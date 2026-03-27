@@ -7,7 +7,7 @@ const GMAIL_API_BASE = "https://www.googleapis.com/gmail/v1";
 /**
  * GET /api/glance/summary
  * Returns live counts for the "At a Glance" widget:
- * - emailCount:   unread inbox emails received today
+ * - emailCount:   unread inbox emails from the last 7 days
  * - meetingCount: today's timed calendar events (fallback: Gmail ICS invites today)
  */
 export async function GET() {
@@ -22,11 +22,13 @@ export async function GET() {
     });
   }
 
-  // Today's date in Gmail `after:` format (YYYY/MM/DD)
+  // Date 7 days ago in Gmail `after:` format (YYYY/MM/DD)
   const today = new Date();
-  const dateStr = `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, "0")}/${String(today.getDate()).padStart(2, "0")}`;
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(today.getDate() - 7);
+  const dateStr = `${sevenDaysAgo.getFullYear()}/${String(sevenDaysAgo.getMonth() + 1).padStart(2, "0")}/${String(sevenDaysAgo.getDate()).padStart(2, "0")}`;
 
-  // ── Email count: unread inbox messages received today ──────────────────────
+  // ── Email count: unread inbox messages received in the last 7 days ─────────
   // Use maxResults=50 and count actual messages[] — resultSizeEstimate is a
   // rough global estimate and does NOT reflect the `after:` date filter.
   let emailCount = 0;

@@ -249,8 +249,8 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
       setIsLoading(true);
       setError(null);
       try {
-        // Step 1: Fetch 20 unread messages from the last 2 days
-        const msgRes = await fetch("/api/gmail/messages?maxResults=20&q=is:unread%20newer_than:2d");
+        // Step 1: Fetch unread inbox messages from the past week
+        const msgRes = await fetch("/api/gmail/messages?maxResults=20&q=is:unread%20is:inbox%20newer_than:7d");
         const msgData = await msgRes.json();
 
         if (msgData.error || !msgData.messages) {
@@ -322,17 +322,16 @@ export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "g
           };
         });
 
-        // Filter: keep high + medium importance, take top 10, sort by importance then date
+        // Keep all unread inbox messages (including low importance), sorted by importance then date.
         const importanceOrder = { high: 0, medium: 1, low: 2 };
         const filtered = enriched
-          .filter((e) => e.importance === "high" || e.importance === "medium" || !e.importance)
           .sort((a, b) => {
             const ia = importanceOrder[a.importance || "low"];
             const ib = importanceOrder[b.importance || "low"];
             if (ia !== ib) return ia - ib;
             return new Date(b.date).getTime() - new Date(a.date).getTime();
           })
-          .slice(0, 10);
+          .slice(0, 20);
 
         // Step 3: Fetch profile pictures from Google People API (best-effort)
         const uniqueEmails = [...new Set(filtered.map((e) => e.fromEmail).filter(Boolean))];
