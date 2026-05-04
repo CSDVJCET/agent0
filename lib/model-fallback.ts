@@ -3,8 +3,13 @@
 export const modelFallbackChains: Record<string, string[]> = {
   // Gemini fallback chain
   "gemini-2.5-pro": [
+    "gemini-3.1-pro-preview",
     "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
+    "groq:llama-3.3-70b-versatile",
+  ],
+  "gemini-3.1-pro-preview": [
+    "gemini-2.5-pro",
+    "gemini-2.5-flash",
     "groq:llama-3.3-70b-versatile",
   ],
   "gemini-2.5-flash": [
@@ -13,8 +18,8 @@ export const modelFallbackChains: Record<string, string[]> = {
     "groq:llama-3.3-70b-versatile",
   ],
   "gemini-2.5-flash-lite": [
-    "gemini-2.0-flash",
     "gemini-3-flash-preview",
+    "gemini-3.1-flash-lite-preview",
     "groq:llama-3.1-8b-instant",
     "cohere:command-a-03-2025",
   ],
@@ -23,15 +28,15 @@ export const modelFallbackChains: Record<string, string[]> = {
     "gemini-2.5-flash-lite",
     "groq:llama-3.3-70b-versatile",
   ],
-  "gemini-2.0-flash": [
-    "gemini-2.5-flash",
+  "gemini-3.1-flash-lite-preview": [
+    "gemini-3-flash-preview",
+    "gemini-2.5-flash-lite",
     "groq:llama-3.1-8b-instant",
-    "cohere:command-a-03-2025",
   ],
 
   // Groq fallback chain
   "groq:llama-3.3-70b-versatile": [
-    "groq:meta-llama/llama-4-maverick-17b-128e-instruct",
+    "groq:openai/gpt-oss-120b",
     "groq:meta-llama/llama-4-scout-17b-16e-instruct",
     "groq:openai/gpt-oss-20b",
   ],
@@ -41,17 +46,7 @@ export const modelFallbackChains: Record<string, string[]> = {
     "cohere:command-r7b-12-2024",
   ],
   "groq:qwen/qwen3-32b": [
-    "groq:moonshotai/kimi-k2-instruct-0905",
-    "groq:openai/gpt-oss-20b",
-    "cohere:command-a-03-2025",
-  ],
-  "groq:moonshotai/kimi-k2-instruct-0905": [
-    "groq:meta-llama/llama-4-maverick-17b-128e-instruct",
-    "groq:openai/gpt-oss-20b",
-    "cohere:command-a-03-2025",
-  ],
-  "groq:meta-llama/llama-4-maverick-17b-128e-instruct": [
-    "groq:meta-llama/llama-4-scout-17b-16e-instruct",
+    "groq:openai/gpt-oss-120b",
     "groq:openai/gpt-oss-20b",
     "cohere:command-a-03-2025",
   ],

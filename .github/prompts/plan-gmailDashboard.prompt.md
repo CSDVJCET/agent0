@@ -38,7 +38,7 @@ Create a new POST endpoint that accepts the raw email messages and returns:
 - `suggestedReply`: AI-generated contextual reply draft
 
 **File**: Create `app/api/gmail/summarize/route.ts`
-**Pattern**: Follow the same structure as `app/api/gmail/categorize/route.ts` — use `generateObject()` with a Zod schema and `google("gemini-2.0-flash")`
+**Pattern**: Follow the same structure as `app/api/gmail/categorize/route.ts` — use `generateObject()` with a Zod schema and `google("gemini-2.5-flash-lite")`
 **Schema**:
 ```typescript
 z.object({

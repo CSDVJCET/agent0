@@ -107,7 +107,7 @@ export function SlidesHeadingConfirmation({
           slideCount: cleanedHeadings.length,
           headings: cleanedHeadings,
           colorScheme: presentationDetails.colorScheme || "auto",
-          model: model || "gemini-2.0-flash-exp",
+          model: model || "gemini-2.5-flash-lite",
         }),
       });
 

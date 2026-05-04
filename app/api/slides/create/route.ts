@@ -93,8 +93,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Use AI agent to generate real content for each slide
-    // Use the selected model from the request, fallback to gemini-2.0-flash-exp
-    const modelId = parsed.model || "gemini-2.0-flash-exp";
+    // Use the selected model from the request, fallback to gemini-2.5-flash-lite
+    const modelId = parsed.model || "gemini-2.5-flash-lite";
     
     // Determine the model instance based on provider
     let modelInstance;

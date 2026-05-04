@@ -145,7 +145,7 @@ interface EmailCardCarouselProps {
   onExpandChange?: (expandedId: string | null) => void;
 }
 
-export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "groq:moonshotai/kimi-k2-instruct-0905", onReply, onExpandChange }: EmailCardCarouselProps) {
+export function EmailCardCarousel({ isGmailConnected = false, selectedModel = "groq:openai/gpt-oss-20b", onReply, onExpandChange }: EmailCardCarouselProps) {
   const [emails, setEmails] = useState<EnrichedEmail[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
