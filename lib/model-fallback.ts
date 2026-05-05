@@ -2,16 +2,7 @@
 // All models support tool calling
 export const modelFallbackChains: Record<string, string[]> = {
   // Gemini fallback chain
-  "gemini-2.5-pro": [
-    "gemini-3.1-pro-preview",
-    "gemini-2.5-flash",
-    "groq:llama-3.3-70b-versatile",
-  ],
-  "gemini-3.1-pro-preview": [
-    "gemini-2.5-pro",
-    "gemini-2.5-flash",
-    "groq:llama-3.3-70b-versatile",
-  ],
+  // Keep flash/preview chains for current supported Gemini models
   "gemini-2.5-flash": [
     "gemini-2.5-flash-lite",
     "gemini-3-flash-preview",

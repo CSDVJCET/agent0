@@ -3,8 +3,6 @@ import type { Model } from "@/components/ai-elements/model-selector-control";
 // Models with their capabilities (tool-calling verified)
 export const MODELS: Model[] = [
   // Google Gemini
-  { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", provider: "google", series: "2.5", supportsThinking: true },
-  { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro (Preview)", provider: "google", series: "3.1", supportsThinking: true },
   { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", provider: "google", series: "2.5", supportsThinking: true },
   { id: "gemini-2.5-flash-lite", name: "Gemini 2.5 Flash Lite", provider: "google", series: "2.5", supportsThinking: true },
   { id: "gemini-3-flash-preview", name: "Gemini 3 Flash (Preview)", provider: "google", series: "3", supportsThinking: true },
