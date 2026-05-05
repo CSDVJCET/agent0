@@ -6,7 +6,7 @@
  * having to ask.
  *
  * Runs as a fire-and-forget parallel call alongside the main chat stream so
- * it never adds latency. Uses gemini-2.0-flash (fast + cheap) with only the
+ * it never adds latency. Uses gemini-2.5-flash-lite (fast + cheap) with only the
  * saveMemory tool enabled, so there is no provider-tool mixing issue.
  */
 
@@ -85,7 +85,7 @@ Do NOT save generic facts, opinions, questions, or commands that are not persona
 export async function extractAndSaveMemories(
   userId: string,
   userMessage: string,
-  modelId = "gemini-2.0-flash"
+  modelId = "gemini-2.5-flash-lite"
 ): Promise<void> {
   if (!userMessage.trim()) return;
 

@@ -84,7 +84,7 @@ It connects to your **Gmail**, **Google Calendar**, **Google Tasks**, **GitHub**
 
 | Feature | Description |
 |---------|-------------|
-| 🧠 **Multi-model support** | Google Gemini 2.5 Pro/Flash, OpenAI, Cohere, Groq, OpenRouter — because having one AI isn't enough |
+| 🧠 **Multi-model support** | Google Gemini (Flash variants), OpenAI, Cohere, Groq, OpenRouter — because having one AI isn't enough |
 | 💭 **Chain-of-thought reasoning** | Watch the AI think out loud. Collapsible, so you can pretend you understood it |
 | 🔍 **Google Search grounding** | Real-time web search so your AI doesn't make things up (as often) |
 | 📎 **File attachments** | Drop images, PDFs, text files — the AI will read them so you don't have to |

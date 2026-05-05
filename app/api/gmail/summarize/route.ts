@@ -97,8 +97,8 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const messages: EmailInput[] = body.messages;
-    // Use the model the user has selected, fall back to Kimi K2
-    const modelId: string = body.model || "groq:moonshotai/kimi-k2-instruct-0905";
+    // Use the model the user has selected, fall back to GPT-OSS 20B
+    const modelId: string = body.model || "groq:openai/gpt-oss-20b";
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json(

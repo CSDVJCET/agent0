@@ -247,7 +247,7 @@ async function fetchTodayNews(dateString: string): Promise<string> {
   }
 }
 
-// ─── Phase B2: Script Generation (Kimi K2 via Groq) ─────────────────────────
+// ─── Phase B2: Script Generation (GPT-OSS 120B via Groq) ─────────────────────────
 
 async function generateOverviewScript(
   weather: WeatherData | null,
@@ -319,7 +319,7 @@ NEWS HEADLINES: ${newsSection}
 Please write the morning overview script using all the above data.`;
 
   const result = await generateText({
-    model: groq("moonshotai/kimi-k2-instruct-0905"),
+    model: groq("openai/gpt-oss-120b"),
     system: systemPrompt,
     prompt: userPrompt,
     maxOutputTokens: 1024,
