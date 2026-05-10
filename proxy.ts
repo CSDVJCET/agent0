@@ -1,6 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
-const isPublicRoute = createRouteMatcher(['/glance'])
+const isPublicRoute = createRouteMatcher(['/glance', '/manifest.json'])
 
 export default clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request)) {
