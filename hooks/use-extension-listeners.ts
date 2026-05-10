@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import type { FileAttachment } from "@/components/ai-elements/attachments-preview";
 
-const PENDING_CONTEXT_TEXT_KEY = "agent0-pending-context-text";
+export const PENDING_CONTEXT_TEXT_KEY = "agent0-pending-context-text";
 
 export function useExtensionListeners(
   setAttachments: React.Dispatch<React.SetStateAction<FileAttachment[]>>,
