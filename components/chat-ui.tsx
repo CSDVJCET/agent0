@@ -30,7 +30,7 @@ import { useChatState } from "@/hooks/use-chat-state";
 import { useLocalStorageSync } from "@/hooks/use-local-storage-sync";
 import { useSessionSync } from "@/hooks/use-session-sync";
 import { useFileHandlers } from "@/hooks/use-file-handlers";
-import { useExtensionListeners } from "@/hooks/use-extension-listeners";
+import { PENDING_CONTEXT_TEXT_KEY, useExtensionListeners } from "@/hooks/use-extension-listeners";
 import { useIntegrationHandlers } from "@/hooks/use-integration-handlers";
 import { MODELS, DEFAULT_SUGGESTIONS, STORAGE_KEYS } from "@/lib/chat-constants";
 import { useUser } from "@clerk/nextjs";
@@ -258,6 +258,15 @@ export function ChatUI() {
       document.body.style.paddingRight = originalPaddingRight || "";
     };
   }, [isChatModalOpen]);
+
+  useEffect(() => {
+    if (inputValue.trim() !== "") return;
+    try {
+      sessionStorage.removeItem(PENDING_CONTEXT_TEXT_KEY);
+    } catch {
+      // Ignore storage failures.
+    }
+  }, [inputValue]);
 
   // Simplified handleSubmit using AI SDK's new API
   const handleSubmit = async (value: { text: string; files: any[] }) => {

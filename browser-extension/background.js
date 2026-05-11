@@ -467,6 +467,12 @@ async function handleSendSelectedText(info, tab) {
         await chrome.scripting.executeScript({
           target: { tabId: targetTab.id },
           func: (selectionData) => {
+            try {
+              sessionStorage.setItem('agent0-pending-context-text', `${selectionData.selectedText || ''}\n\n`);
+            } catch {
+              // Ignore storage failures.
+            }
+            window.__agent0PendingContextText = selectionData;
             window.postMessage(
               {
                 type: 'AGENT0_CONTEXT_TEXT',

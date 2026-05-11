@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import type { FileAttachment } from "@/components/ai-elements/attachments-preview";
 
+export const PENDING_CONTEXT_TEXT_KEY = "agent0-pending-context-text";
+
 export function useExtensionListeners(
   setAttachments: React.Dispatch<React.SetStateAction<FileAttachment[]>>,
   setInputValue: React.Dispatch<React.SetStateAction<string>>,
@@ -25,21 +27,54 @@ export function useExtensionListeners(
       textarea.dispatchEvent(new Event("input", { bubbles: true }));
     };
 
+    const findPromptTextarea = () =>
+      document.querySelector("textarea") as HTMLTextAreaElement | null;
+
+    const applyContextText = (selectedText: string) => {
+      const trimmed = selectedText.trim();
+      if (!trimmed) return;
+
+      const existing = findPromptTextarea()?.value ?? "";
+      const nextValue = `${trimmed}\n\n${existing}`;
+
+      try {
+        sessionStorage.setItem(PENDING_CONTEXT_TEXT_KEY, nextValue);
+      } catch {
+        // Ignore storage failures and fall back to state only.
+      }
+
+      setInputValue(nextValue);
+
+      const textarea = findPromptTextarea();
+      if (textarea) setControlledTextareaValue(textarea, nextValue);
+
+      requestAnimationFrame(() => {
+        const focusedTextarea = findPromptTextarea();
+        if (focusedTextarea) {
+          setControlledTextareaValue(focusedTextarea, nextValue);
+          focusedTextarea.focus();
+        }
+      });
+    };
+
     const handleExtensionMessage = (event: MessageEvent) => {
+      const messageType = event.data?.type;
+      const isAgent0Message = typeof messageType === "string" && messageType.startsWith("AGENT0_");
+
       console.log('Received message event:', {
-        type: event.data?.type,
+        type: messageType,
         origin: event.origin,
         windowOrigin: window.location.origin,
         data: event.data
       });
       
-      // Only accept same-origin messages
-      if (event.origin !== window.location.origin) {
+      // Allow Agent0 extension messages even if the browser reports a different origin.
+      if (!isAgent0Message && event.origin !== window.location.origin) {
         console.log('Rejected message - origin mismatch');
         return;
       }
 
-      if (event.data?.type === 'AGENT0_SCREENSHOT') {
+      if (messageType === 'AGENT0_SCREENSHOT') {
         const { screenshot, pageUrl, pageTitle, selectedText } = event.data.data;
         
         const filename = `${pageTitle || 'Screenshot'}.png`;
@@ -74,19 +109,14 @@ export function useExtensionListeners(
           pageUrl,
           hasSelectedText: !!selectedText
         });
-      } else if (event.data?.type === 'AGENT0_CONTEXT_TEXT') {
+      } else if (messageType === 'AGENT0_CONTEXT_TEXT') {
         const data = event.data?.data || {};
         const selectedText = typeof data.selectedText === "string" ? data.selectedText.trim() : "";
         if (!selectedText) return;
 
-        const context = `${selectedText}\n\n`;
-        const textarea = document.querySelector('textarea[placeholder="Send a message..."]') as HTMLTextAreaElement | null;
-        if (!textarea) return;
-
-        const existing = textarea.value || "";
-        setControlledTextareaValue(textarea, `${context}${existing}`);
-        textarea.focus();
-      } else if (event.data?.type === 'AGENT0_SUMMARIZE_PAGE') {
+        applyContextText(selectedText);
+        delete (window as any).__agent0PendingContextText;
+      } else if (messageType === 'AGENT0_SUMMARIZE_PAGE') {
         console.log('Received AGENT0_SUMMARIZE_PAGE message:', event.data);
         
         const { pageUrl, pageTitle, pageContent, fileData, fileName } = event.data.data;
@@ -152,6 +182,16 @@ export function useExtensionListeners(
     console.log('Adding message event listener');
     window.addEventListener('message', handleExtensionMessage);
     window.addEventListener('message', handleAuthMessage);
+
+    try {
+      const pendingContextText = sessionStorage.getItem(PENDING_CONTEXT_TEXT_KEY);
+      if (pendingContextText) {
+        sessionStorage.removeItem(PENDING_CONTEXT_TEXT_KEY);
+        applyContextText(pendingContextText);
+      }
+    } catch {
+      // Ignore storage access errors.
+    }
     
     // Check for any pending summarization data that arrived before the listener was ready
     if ((window as any).__agent0PendingSummarization) {
@@ -166,6 +206,22 @@ export function useExtensionListeners(
           data: {
             type: 'AGENT0_SUMMARIZE_PAGE',
             data: pendingData
+          }
+        } as MessageEvent);
+      }, 100);
+    }
+
+    if ((window as any).__agent0PendingContextText) {
+      console.log('Found pending context text, processing now...');
+      const pendingContextText = (window as any).__agent0PendingContextText;
+      delete (window as any).__agent0PendingContextText;
+
+      setTimeout(() => {
+        handleExtensionMessage({
+          origin: window.location.origin,
+          data: {
+            type: 'AGENT0_CONTEXT_TEXT',
+            data: pendingContextText,
           }
         } as MessageEvent);
       }, 100);
